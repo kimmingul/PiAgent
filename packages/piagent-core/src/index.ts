@@ -5,6 +5,8 @@ import { ChatError, CHAT_CAPABILITY } from './chat.js';
 import type { ChatSession } from './chat.js';
 import { CONTEXT_CAPABILITY } from './context.js';
 import { WORKSPACE_CAPABILITY } from './workspace.js';
+import { Authentication } from './authentication.js';
+export { Authentication, authProof, equalProof } from './authentication.js';
 export { WorkspaceReader } from './workspace.js';
 export { ChatSession } from './chat.js';
 
@@ -28,7 +30,7 @@ function capabilities(value: unknown): value is string[] {
 export class Session {
   private adapter: AdapterInfo | undefined;
   private negotiated: string[] = [];
-  constructor(private readonly chat?: ChatSession) {}
+  constructor(private readonly chat?: ChatSession, private readonly authentication?: Authentication) {}
 
   async handleAsync(body: Uint8Array): Promise<RpcResponse | undefined> {
     const fallback = this.handle(body);
@@ -67,6 +69,8 @@ export class Session {
     if (!('id' in value)) return undefined; // Notifications never initialize state.
     if (id === null) return failure(null, -32600, 'Invalid Request');
     const params = value['params'] ?? {};
+    if (this.authentication && (!this.authentication.ready || ['core.auth.challenge', 'adapter.auth'].includes(value['method'])))
+      return this.authentication.handle(id, value['method'], params);
     switch (value['method']) {
       case 'adapter.hello': return this.hello(id, params);
       case 'core.ping': {

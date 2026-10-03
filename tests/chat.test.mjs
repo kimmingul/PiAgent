@@ -15,7 +15,7 @@ async function setup(options = {}) {
   const daemon = await startDaemon({ pipeName: `piagent-chat-${randomUUID()}`,
     omp: { executable: process.execPath, executableArgs: [fixture], cwd: process.cwd(), requestTimeoutMs: 300, shutdownTimeoutMs: 100 }, ...options });
   const clients = [];
-  return { daemon, async client(caps) { const client = await PipeClient.connect(daemon.path); clients.push(client);
+  return { daemon, async client(caps) { const client = await PipeClient.connect(daemon.path, {authenticate:false}); clients.push(client);
     assert.ok((await client.request('adapter.hello', hello(caps))).result); return client; },
     async close() { clients.forEach(client => client.close()); await daemon.close(); } };
 }
@@ -120,7 +120,7 @@ test('chat stays unavailable when OMP is unconfigured or capability was not nego
   const env = await setup(); const unavailable = await setup({ omp: undefined });
   try {
     const plain = await env.client(['core.ping']); assert.equal((await plain.request('chat.open')).error.code, -32005);
-    const client = await PipeClient.connect(unavailable.daemon.path);
+    const client = await PipeClient.connect(unavailable.daemon.path, {authenticate:false});
     try { assert.equal((await client.request('adapter.hello', hello())).error.code, -32004); } finally { client.close(); }
   } finally { await env.close(); await unavailable.close(); }
 });

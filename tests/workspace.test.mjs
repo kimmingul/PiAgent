@@ -70,7 +70,7 @@ test('workspace tool registration, errors, cancellation and capability gating cr
     omp: { executable: process.execPath, executableArgs: [fixture], cwd: env.root } });
   try {
     for (const enabled of [false, true]) {
-      const client = await PipeClient.connect(daemon.path); clients.push(client);
+      const client = await PipeClient.connect(daemon.path, {authenticate:false}); clients.push(client);
       const caps = ['core.ping', 'chat.v1', ...(enabled ? ['workspace.read.v1'] : [])];
       assert.ok((await client.request('adapter.hello', { protocolVersions: [1], capabilities: caps, requiredCapabilities: caps,
         adapter: { kind: 'test', version: '0.4.0', ideVersion: 'test', instanceId: randomUUID() } })).result);

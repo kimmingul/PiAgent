@@ -1,5 +1,9 @@
 # Visual Studio adapter
 
+0.5.0: hello 전에 current-user credential을 자동 발견하고 Core/adapter 상호 HMAC 인증을 수행한다.
+credential과 proof는 WebView로 전달하지 않는다. daemon과 adapter를 함께 업데이트한다.
+기본 경로와 PIAGENT_AUTH_FILE 설정은 [SECURITY.md](../../docs/SECURITY.md)를 따른다.
+
 0.4.0: Chat은 `workspace.read.v1`을 선택적으로 협상한다. Core --workspace가 지정되면
 연결 상태에 읽기 root를 표시하고 파일 조회 시작/완료를 보여준다. 쓰기 도구는 없다.
 

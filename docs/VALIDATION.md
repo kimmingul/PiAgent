@@ -1,4 +1,20 @@
-# PiAgent 0.4.0 validation
+# PiAgent 0.5.0 validation
+
+## Secure transport (0.5.0)
+
+- Core: 33 tests passed with native ARM64 and emulated x64 Node. Adapter: 10 tests passed.
+- New tests verify actual protected pipe DACL (one user allow + network deny), private token ACL,
+  concurrent authenticated peers, duplicate listener rejection, reconnect, malformed/expired/replayed
+  proof rejection, credential junction/hard-link rejection, and a non-extendable 10-second auth deadline.
+- C# VS and Delphi Win32/Win64 harnesses authenticate and ping; wrong credentials fail without downgrade.
+  Secure C# workspace chat also verifies exact Unicode file results, concurrent ping and cancellation.
+- Default secure CLI runs from the standalone release outside the npm workspace and authenticates its probe.
+- Actual OMP 18.5.0 over the secure pipe invoked workspace_search and workspace_read_file and completed
+  an explanation of SelectionExample.cs. No model calls run in automated tests.
+- Current-user ACL and PIPE_REJECT_REMOTE_CLIENTS are configured at pipe creation. An actual second-user
+  account or remote-machine connection has not been exercised; this is not executable attestation or a sandbox.
+- VS 2022/2026 MSBuild and Win32/Win64 BPL builds succeeded. New BPLs use version directories so the user's
+  currently loaded older BPL is not overwritten. Actual 0.5.0 IDE UI has not yet been exercised.
 
 ## Read-only workspace tools (0.4.0)
 
@@ -79,5 +95,5 @@ and loader DLLs are included with their license, while VS IDE SDK assemblies are
 
 File/IDE-changing tools, approval UI, Git checkpoints/restore, usage aggregation, RAD WebView host,
 persistent session restoration and OMP protocol v2 chunk reassembly remain future capabilities.
-Chat is ephemeral; 0.4.0 optionally enables bounded read-only workspace tools. Named Pipe identity/ACL hardening is still required before
-exposing privileged IDE/file capabilities.
+Chat is ephemeral; 0.4.0 optionally enables bounded read-only workspace tools. 0.5.0 provides current-user pipe ACL and mutual
+credential authentication. Approval/checkpoint and additional authorization remain required for future file-changing tools.

@@ -1,5 +1,9 @@
 # PiAgent
 
+0.5.0은 **현재 사용자 전용 Named Pipe와 상호 인증**을 추가한다. CLI는 기본적으로 secure
+Windows pipe host를 사용하며 VS/Delphi adapter가 pipe별 credential을 자동 발견한다.
+[설정과 보안 범위](docs/SECURITY.md). Node.js 외에 .NET 8 이상 runtime이 필요하다.
+
 0.4.0은 **workspace 파일 읽기·검색**을 추가한다. Core에 --workspace를 명시하면 VS Chat에서
 프로젝트 파일을 찾고 읽어 설명받을 수 있다. [실행 방법과 제한](docs/WORKSPACE-TOOLS.md).
 
@@ -27,6 +31,7 @@ Windows x64 / ARM64에서는 동일 JS 산출물을 실행하며 native addon이
 ```powershell
 npm ci --ignore-scripts
 npm run build
+npm run build:transport
 npm run typecheck
 npm test
 ```
@@ -83,7 +88,7 @@ npm test는 node:test로 protocol, 실제 Windows Named Pipe, standalone CLI와 
 Windows에서 모든 테스트가 실행되어야 한다. OMP의 live smoke는 설치 상태에 의존하므로 opt-in이다.
 
 2026-10-03 이 PC(Windows ARM64)에서 Node 24.21.0 ARM64와 x64(Windows emulation)로
-0.4.0 Core 테스트 27개를 각 runtime에서 통과했다. adapter 테스트 8개도 통과했다.
+0.5.0 Core 테스트 33개와 adapter 테스트 10개를 제공한다. runtime별 검증은 docs/VALIDATION.md를 따른다.
 x64 runtime은 공식 SHA-256으로 검증한 테스트용 바이너리다.
 Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/get_state smoke도 통과했다.
 원하는 runtime으로 재검증하려면:
@@ -93,8 +98,8 @@ Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/
 ```
 
 x86/Win64 Delphi transport harness의 Core 통신과 BPL build를 검증했다.
-x86 Core runtime 배포는 미래 범위다. 현재 pipe 인증/사용자 전용 ACL은 개발 skeleton 수준이며,
-IDE/file 변경 기능을 추가하기 전에 강화한다. 큰 숫자 RPC ID는 문자열로 보내야 한다.
+x86 Core runtime 배포는 미래 범위다. pipe 인증/사용자 전용 ACL의 범위는 docs/SECURITY.md를 따른다.
+파일 변경 승인과 checkpoint는 후속 단계다. 큰 숫자 RPC ID는 문자열로 보내야 한다.
 
 D:\source\RADAgent는 읽기 전용 reference다. session/approval/checkpoint/usage/WebView의
 다음 단계 설계는 ARCHITECTURE.md와 ui/README.md에 기록했다. 기존 Rust source와 Cargo 파일은

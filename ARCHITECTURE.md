@@ -1,5 +1,8 @@
 # PiAgent architecture
 
+0.5.0: Windows pipe host가 current-user DACL, remote-client 거부와 name ownership을 담당한다.
+TypeScript Core는 연결별 mutual HMAC 인증 뒤 기존 RPC를 허용한다. [보안 계약](docs/SECURITY.md).
+
 0.4.0은 명시적 --workspace root와 `workspace.read.v1` 협상으로 Core의 읽기·literal 검색
 서비스를 OMP host-tools로 등록한다. adapter는 root를 정하지 않는다. 기본 OMP 도구는 비활성화되고
 Core의 제한된 두 도구만 실행된다. [Workspace 도구 계약](docs/WORKSPACE-TOOLS.md)을 따른다.
@@ -65,7 +68,8 @@ Rust source/build graph를 남겨 두지 않으며 npm workspace가 유일한 �
 
 npm workspace local package links와 TypeScript project references로 dependency 순서를 구성한다.
 ESM / NodeNext이며 strict, exactOptionalPropertyTypes, noUncheckedIndexedAccess를 켠다.
-런타임 제3자 dependency와 native addon은 없다. TypeScript와 Node 타입만 개발 dependency다.
+TypeScript Core에는 런타임 제3자 npm dependency와 native addon이 없다. Windows secure transport는
+transport/PiAgent.PipeHost의 C#/.NET 8 helper를 사용한다. OS pipe byte relay만 맡고 IDE/agent 로직은 넣지 않는다.
 Core에는 ToolsAPI, COM, HWND, VS SDK, IDE 종류에 따른 분기가 없다. adapter.kind는 opaque
 metadata이며 IDE 차이는 adapter capability로 표현한다. 현재 adapter capability는 기록만 한다.
 
@@ -76,7 +80,8 @@ metadata이며 IDE 차이는 adapter capability로 표현한다. 현재 adapter 
 OMP 시작/ready 실패 또는 예상 밖 종료는 연결을 정리하고 CLI를 비정상 종료시킨다.
 OMP 실행 경로나 workspace는 IDE wire request에서 받지 않는다.
 
-node:net이 listener와 pipe instance를 관리한다. 같은 endpoint의 중복 bind는 실패한다.
+secure transport에서는 C# pipe host가 listener를 관리하고 TypeScript Duplex로 byte relay한다.
+development fixture에서는 node:net이 관리한다. 같은 endpoint의 중복 listener는 실패한다.
 기본 최대 16 connection이며 초과 peer는 닫는다. 각 connection은 별도 Session으로
 hello 성공 전 ping을 거절한다. read/idle deadline 30초, 각 write deadline 30초,
 출력 대기량 2 MiB 제한이다. 부분 frame의 trickle bytes는 read deadline을 연장하지 않는다.
@@ -163,11 +168,13 @@ UTF-8와 고정 u32 header라 pointer size와 무관하며 x86 BPL/VSIX client�
 x86 Core runtime 배포는 Node 공식 runtime 제공 여부와 별도 검증이 필요한 미래 범위다.
 OMP는 core architecture와 독립적으로 설치된 실행파일을 사용한다. 자동 다운로드는 없다.
 
-현재 Node 기본 pipe security descriptor를 사용하고 readableAll/writableAll을 열지 않는다.
-Node net API로 사용자 SID DACL / peer identity / PIPE_REJECT_REMOTE_CLIENTS를 직접 설정하지
-않으므로, 기존 Rust 옵션의 remote-client 거절 보장은 유지됐다고 주장하지 않는다.
-현재 pipe에는 ping과 opt-in 도구 없는 채팅을 노출한다. privileged IDE/file 작업 전에 사용자 전용 ACL, endpoint
-identity/authentication과 remote 연결 차단 정책을 구현·검증해야 한다. metadata는 인증이 아니다.
+CLI는 secure pipe host를 기본 사용한다. host는 생성 시 사용자 SID 전용 protected DACL,
+network logon deny와 PIPE_REJECT_REMOTE_CLIENTS를 적용하며 첫 listener 이름 소유를 확보한다.
+host/Core는 상속된 stdin/stdout으로 byte stream만 전달하고 TCP listener를 만들지 않는다.
+Core의 Authentication은 연결별 nonce와 domain-separated HMAC으로 credential 소유를 검증한다.
+adapter.kind 등 metadata는 executable attestation이 아니다. 같은 사용자·관리자·악성 동시 filesystem
+변경까지 격리하는 sandbox는 아니다. 파일 쓰기 승인과 checkpoint는 후속 범위다.
+개발용 --dev-pipe/API test fixture는 Node 기본 pipe security를 사용하며 secure transport와 별개다.
 
 기준: [Node LTS releases](https://nodejs.org/en/about/previous-releases),
 [node:net](https://nodejs.org/api/net.html), [node:child_process](https://nodejs.org/api/child_process.html).

@@ -49,5 +49,5 @@ Windows device 이름, trailing dot/space, symlink/junction 및 hard-linked file
 credentials/secrets 이름 및 pem/key/pfx/p12/kdbx suffix를 제외한다. 이 목록은 모든 비밀을
 탐지하는 redaction 체계가 아니다. 읽기 root는 모델에 전달할 수 있는 프로젝트로 지정해야 한다.
 경계 검사는 OS sandbox나 악의적인 동시 filesystem 교체에 대한 원자적 방어를 제공하지 않는다.
-Named Pipe identity/ACL hardening은 아직 후속 범위이며 이 기능은 신뢰된 로컬 개발 환경용이다.
-권한이 필요한 쓰기 도구를 추가하기 전에 인증·승인·checkpoint를 구현해야 한다.
+0.5.0 CLI의 Named Pipe ACL/상호 인증은 [SECURITY.md](SECURITY.md)를 따른다.
+권한이 필요한 쓰기 도구를 추가하기 전에 승인·checkpoint를 구현해야 한다.

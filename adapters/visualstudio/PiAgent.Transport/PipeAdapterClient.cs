@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace PiAgent.Transport;
@@ -21,11 +22,13 @@ public sealed class PipeAdapterClient : IDisposable
     private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JObject>> pending = new();
     private bool ready;
+    private readonly string pipeName;
     public event Action<JObject>? Notification;
     public event Action<Exception>? Disconnected;
     public PipeAdapterClient(string pipeName)
     {
         if (!Regex.IsMatch(pipeName, @"\A[a-zA-Z0-9_-]{1,128}\z")) throw new ArgumentException("Invalid pipe name");
+        this.pipeName = pipeName;
         pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
     }
     public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false)
@@ -38,6 +41,8 @@ public sealed class PipeAdapterClient : IDisposable
                 await pipe.ConnectAsync(5000, deadline.Token).ConfigureAwait(false);
         }
         _ = ReadLoopAsync();
+        try { await AuthenticateAsync(cancellation).ConfigureAwait(false); }
+        catch { Dispose(); throw; }
         var offered = chat ? new JArray("core.ping", "chat.v1") : new JArray("core.ping");
         if (selectionContext) { if (!chat) throw new ArgumentException("Selection context requires chat"); offered.Add("context.selection.v1"); }
         var required = (JArray)offered.DeepClone();
@@ -45,13 +50,39 @@ public sealed class PipeAdapterClient : IDisposable
         var result = await CallAsync("adapter.hello", new JObject {
             ["protocolVersions"] = new JArray(1), ["capabilities"] = offered,
             ["requiredCapabilities"] = required,
-            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.4.0", ["ideVersion"] = ideVersion,
+            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.5.0", ["ideVersion"] = ideVersion,
                 ["instanceId"] = instanceId, ["capabilities"] = new JArray() }
         }, cancellation).ConfigureAwait(false);
         if ((int?)result["protocolVersion"] != 1 || result["capabilities"] is not JArray capabilities
             || !required.Values<string>().All(capability => capabilities.Values<string>().Contains(capability)))
         { Dispose(); throw new InvalidDataException("Required protocol/capability was not negotiated"); }
         ready = true; return result;
+    }
+    private string Proof(string token, string role, string clientNonce, string serverNonce)
+    {
+        var key = Enumerable.Range(0, 32).Select(index => Convert.ToByte(token.Substring(index * 2, 2), 16)).ToArray();
+        using var hmac = new HMACSHA256(key);
+        return BitConverter.ToString(hmac.ComputeHash(Encoding.UTF8.GetBytes("piagent." + role + ".v1\n" + pipeName + "\n" + clientNonce + "\n" + serverNonce))).Replace("-", "").ToLowerInvariant();
+    }
+    private async Task AuthenticateAsync(CancellationToken cancellation)
+    {
+        var explicitPath = Environment.GetEnvironmentVariable("PIAGENT_AUTH_FILE");
+        var path = explicitPath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiAgent", "security", pipeName, "token");
+        if (explicitPath == null && !File.Exists(path) && Environment.GetEnvironmentVariable("PIAGENT_DEV_PIPE") == "1") return;
+        string token;
+        try { token = File.ReadAllText(path); } catch { throw new IOException("Cannot read authentication credential"); }
+        if (!Regex.IsMatch(token, @"\A[0-9a-f]{64}\z")) throw new IOException("Invalid authentication credential");
+        var bytes = new byte[32]; using (var random = RandomNumberGenerator.Create()) random.GetBytes(bytes);
+        var nonce = BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+        var challenge = await CallAsync("core.auth.challenge", new JObject { ["clientNonce"] = nonce }, cancellation).ConfigureAwait(false);
+        var server = (string?)challenge["serverNonce"]; var actual = (string?)challenge["serverProof"];
+        if ((string?)challenge["scheme"] != "hmac-sha256.v1" || server == null || !Regex.IsMatch(server, @"\A[0-9a-f]{64}\z")
+            || actual == null || !Regex.IsMatch(actual, @"\A[0-9a-f]{64}\z")) throw new IOException("Core authentication failed");
+        var expected = Proof(token, "server", nonce, server); var difference = 0;
+        for (var index = 0; index < 64; index++) difference |= actual[index] ^ expected[index];
+        if (difference != 0) throw new IOException("Core authentication failed");
+        var reply = await CallAsync("adapter.auth", new JObject { ["proof"] = Proof(token, "client", nonce, server) }, cancellation).ConfigureAwait(false);
+        if ((bool?)reply["authenticated"] != true) throw new IOException("Adapter authentication failed");
     }
     public async Task<JObject> PingAsync(string nonce, CancellationToken cancellation)
     {

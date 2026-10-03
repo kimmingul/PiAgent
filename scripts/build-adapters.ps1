@@ -16,6 +16,9 @@ if (-not $BdsRoot) {
 }
 Push-Location $workspacePath
 try {
+    $releaseVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+    & dotnet build transport/PiAgent.PipeHost -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'Secure pipe host build failed' }
     & dotnet build adapters/visualstudio/PiAgent.Transport.Smoke/PiAgent.Transport.Smoke.csproj -c Release
     if ($LASTEXITCODE -ne 0) { throw 'C# transport build failed' }
     & npm run build
@@ -25,7 +28,7 @@ try {
     foreach ($platform in @('Win32', 'Win64')) {
         $compilerName = if ($platform -eq 'Win32') { 'dcc32.exe' } else { 'dcc64.exe' }
         $compiler = Join-Path $BdsRoot "bin\$compilerName"
-        $output = Join-Path $workspacePath "adapters\radstudio\bin\$platform"
+        $output = Join-Path $workspacePath "adapters\radstudio\bin\$platform\$releaseVersion"
         New-Item -ItemType Directory -Path $output -Force | Out-Null
         Push-Location adapters/radstudio/src
         try {

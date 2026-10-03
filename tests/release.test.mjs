@@ -21,7 +21,8 @@ test('release runs outside the workspace without npm install and verifies file h
       for (const [path, expected] of Object.entries(manifest.sha256))
         assert.equal(createHash('sha256').update(await readFile(join(output, path))).digest('hex'), expected);
       const pipe = `piagent-release-${randomUUID()}`;
-      daemon = spawn(process.execPath, ['core.mjs', '--pipe', pipe], { cwd: output, windowsHide: true });
+      const authFile = join(scratch, 'private', 'token');
+      daemon = spawn(process.execPath, ['core.mjs', '--pipe', pipe, '--auth-file', authFile], { cwd: output, windowsHide: true });
       closed = new Promise(resolve => daemon.once('close', resolve));
       let stderr = '';
       daemon.stderr.on('data', bytes => { stderr += bytes.toString(); });
@@ -29,7 +30,7 @@ test('release runs outside the workspace without npm install and verifies file h
       for (let tries = 0; !stderr.includes('listening') && tries < 200; tries++) await delay(10);
       assert.ok(stderr.includes('listening'), stderr);
       const probe = spawn(process.execPath, ['probe.mjs', pipe, 'release-adapter', 'release'],
-        { cwd: output, windowsHide: true });
+        { cwd: output, windowsHide: true, env: {...process.env, PIAGENT_AUTH_FILE: authFile} });
       let result = '', errors = '';
       probe.stdout.on('data', bytes => { result += bytes.toString(); });
       probe.stderr.on('data', bytes => { errors += bytes.toString(); });

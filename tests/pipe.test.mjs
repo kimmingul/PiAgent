@@ -18,11 +18,11 @@ test('Windows pipe RAD/VS profiles, capability intersection, reconnect, isolatio
   const pipeName = `piagent-test-${randomUUID()}`;
   const daemon = await startDaemon({ pipeName }); const clients = [];
   try {
-    const rad = await PipeClient.connect(daemon.path); clients.push(rad);
+    const rad = await PipeClient.connect(daemon.path, {authenticate:false}); clients.push(rad);
     assert.equal((await rad.request('core.ping')).error.code, -32002);
     assert.deepEqual((await rad.request('adapter.hello', hello('rad-studio', '13.2'))).result.capabilities, ['core.ping']);
     for (const ideVersion of ['2022', '2026']) {
-      const vs = await PipeClient.connect(daemon.path); clients.push(vs);
+      const vs = await PipeClient.connect(daemon.path, {authenticate:false}); clients.push(vs);
       assert.equal((await vs.request('core.ping')).error.code, -32002);
       assert.equal((await vs.request('adapter.hello', hello('visual-studio', ideVersion))).result.protocolVersion, 1);
       const responses = await Promise.all(Array.from({ length: 8 }, (_, nonce) => vs.request('core.ping', { nonce: `한글 🚀 ${nonce}` })));
@@ -31,7 +31,7 @@ test('Windows pipe RAD/VS profiles, capability intersection, reconnect, isolatio
     }
     await assert.rejects(startDaemon({ pipeName }));
     rad.close();
-    const fresh = await PipeClient.connect(daemon.path); clients.push(fresh);
+    const fresh = await PipeClient.connect(daemon.path, {authenticate:false}); clients.push(fresh);
     assert.equal((await fresh.request('core.ping')).error.code, -32002);
     assert.ok((await fresh.request('adapter.hello', hello('rad-studio', '13.2'))).result);
   } finally { for (const client of clients) client.close(); await daemon.close(); }
@@ -57,7 +57,7 @@ test('Windows pipe accepts split/coalesced frames and recovers after JSON parse 
 
 test('Windows pipe oversized/truncated peers and frame deadline leave other clients usable', windows, async () => {
   const daemon = await startDaemon({ pipeName: `piagent-bad-${randomUUID()}`, ioTimeoutMs: 500 });
-  const good = await PipeClient.connect(daemon.path);
+  const good = await PipeClient.connect(daemon.path, {authenticate:false});
   try {
     await good.request('adapter.hello', hello('test-ide', 'test'));
     for (const badBytes of [Buffer.from([2, 0, 0, 0, 1]), (() => {
@@ -82,13 +82,13 @@ test('Windows pipe oversized/truncated peers and frame deadline leave other clie
 test('CLI starts as a standalone daemon and releases the pipe on termination', windows, async () => {
   const pipeName = `piagent-cli-${randomUUID()}`;
   const cli = fileURLToPath(new URL('../packages/piagent-daemon/dist/cli.js', import.meta.url));
-  const child = spawn(process.execPath, [cli, '--pipe', pipeName], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [cli, '--pipe', pipeName, '--dev-pipe'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = new Promise(resolve => child.once('close', resolve)); let stderr = '';
   child.stderr.on('data', bytes => { stderr += bytes.toString(); }); child.stdout.resume();
   try {
     for (let tries = 0; !stderr.includes('listening') && tries < 100; tries++) await delay(10);
     assert.ok(stderr.includes('listening'), stderr);
-    const client = await PipeClient.connect(pipePath(pipeName));
+    const client = await PipeClient.connect(pipePath(pipeName), {authenticate:false});
     try {
       assert.ok((await client.request('adapter.hello', hello('test-ide', 'cli'))).result);
       assert.equal((await client.request('core.ping')).result.pong, true);

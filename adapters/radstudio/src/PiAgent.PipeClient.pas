@@ -11,6 +11,8 @@ type
     FSequence: Integer;
     FDeadline: UInt64;
     FReady: Boolean;
+    FName: string;
+    procedure Authenticate;
     procedure Transfer(Writing: Boolean; var Buffer; Count: Cardinal);
     function Call(const Method: string; Params: TJSONObject): TJSONObject;
   public
@@ -22,9 +24,11 @@ type
 
 implementation
 
-uses System.RegularExpressions;
+uses System.RegularExpressions, System.IOUtils, System.Hash;
 
 const MaxFrameBytes = 1048576;
+
+function BCryptGenRandom(Algorithm: THandle; Buffer: PByte; Length, Flags: Cardinal): LongInt; stdcall; external 'bcrypt.dll';
 
 constructor TPiPipeClient.Create(const Name: string; CancelHandle: THandle);
 var Path: string; Started: UInt64; ErrorCode: Cardinal;
@@ -32,6 +36,7 @@ begin
   inherited Create;
   FPipe := INVALID_HANDLE_VALUE;
   FCancel := CancelHandle;
+  FName := Name;
   if not TRegEx.IsMatch(Name, '^[a-zA-Z0-9_-]{1,128}$') then
     raise Exception.Create('Invalid pipe name');
   Path := '\\.\pipe\' + Name;
@@ -48,6 +53,42 @@ begin
     if FCancel <> 0 then WaitForSingleObject(FCancel, 20) else Sleep(20);
   until GetTickCount64 - Started >= 5000;
   raise Exception.Create('Core connection timeout');
+end;
+
+procedure TPiPipeClient.Authenticate;
+var FileName, Token, Nonce, Server, Actual, Expected: string; Key, Bytes: TBytes;
+  Challenge, Reply: TJSONObject; I, Difference: Integer;
+  function Hex(const Data: TBytes): string;
+  var B: Byte;
+  begin Result := ''; for B in Data do Result := Result + LowerCase(IntToHex(B, 2)); end;
+  function Proof(const Role: string): string;
+  begin Result := Hex(THashSHA2.GetHMACAsBytes('piagent.' + Role + '.v1' + #10 + FName + #10 + Nonce + #10 + Server, Key)); end;
+begin
+  FileName := GetEnvironmentVariable('PIAGENT_AUTH_FILE');
+  if FileName = '' then
+  begin
+    FileName := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'PiAgent\security\' + FName + '\token');
+    if not TFile.Exists(FileName) and (GetEnvironmentVariable('PIAGENT_DEV_PIPE') = '1') then Exit;
+  end;
+  try Token := TFile.ReadAllText(FileName, TEncoding.UTF8);
+  except raise Exception.Create('Cannot read authentication credential'); end;
+  if not TRegEx.IsMatch(Token, '\A[0-9a-f]{64}\z') then raise Exception.Create('Invalid authentication credential');
+  SetLength(Key, 32); for I := 0 to 31 do Key[I] := StrToInt('$' + Copy(Token, I * 2 + 1, 2));
+  SetLength(Bytes, 32);
+  if BCryptGenRandom(0, @Bytes[0], 32, 2) <> 0 then raise Exception.Create('Secure random generation failed');
+  Nonce := Hex(Bytes);
+  Challenge := Call('core.auth.challenge', TJSONObject.Create.AddPair('clientNonce', Nonce));
+  try
+    Server := Challenge.GetValue<string>('serverNonce', ''); Actual := Challenge.GetValue<string>('serverProof', '');
+    if (Challenge.GetValue<string>('scheme', '') <> 'hmac-sha256.v1') or not TRegEx.IsMatch(Server, '\A[0-9a-f]{64}\z')
+      or not TRegEx.IsMatch(Actual, '\A[0-9a-f]{64}\z') then raise Exception.Create('Core authentication failed');
+    Expected := Proof('server'); Difference := 0;
+    for I := 1 to 64 do Difference := Difference or (Ord(Actual[I]) xor Ord(Expected[I]));
+    if Difference <> 0 then raise Exception.Create('Core authentication failed');
+  finally Challenge.Free; end;
+  Reply := Call('adapter.auth', TJSONObject.Create.AddPair('proof', Proof('client')));
+  try if not Reply.GetValue<Boolean>('authenticated', False) then raise Exception.Create('Adapter authentication failed');
+  finally Reply.Free; end;
 end;
 
 destructor TPiPipeClient.Destroy;
@@ -143,12 +184,13 @@ function TPiPipeClient.Hello(const IdeVersion, InstanceId: string): string;
 var Params, Adapter, Reply: TJSONObject; Caps: TJSONArray;
 begin
   if FReady then raise Exception.Create('Already initialized');
+  Authenticate;
   Params := TJSONObject.Create;
   Params.AddPair('protocolVersions', TJSONArray.Create.Add(1));
   Params.AddPair('capabilities', TJSONArray.Create.Add('core.ping'));
   Params.AddPair('requiredCapabilities', TJSONArray.Create.Add('core.ping'));
   Adapter := TJSONObject.Create;
-  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.1.0');
+  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.5.0');
   Adapter.AddPair('ideVersion', IdeVersion); Adapter.AddPair('instanceId', InstanceId);
   Adapter.AddPair('capabilities', TJSONArray.Create);
   Params.AddPair('adapter', Adapter);

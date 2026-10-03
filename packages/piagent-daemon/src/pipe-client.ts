@@ -3,6 +3,10 @@ import type { Socket } from 'node:net';
 import { encodeFrame, FrameDecoder, isObject } from '@piagent/protocol';
 import type { RpcResponse } from '@piagent/protocol';
 import { EventEmitter } from 'node:events';
+import { readFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { authProof, equalProof } from '@piagent/core';
+import { credentialPath } from './secure-pipe.js';
 
 /** Small protocol simulator client, not an IDE adapter SDK. */
 export class PipeClient extends EventEmitter {
@@ -39,7 +43,7 @@ export class PipeClient extends EventEmitter {
     socket.on('close', () => this.rejectAll(new Error('Pipe disconnected')));
   }
 
-  static async connect(path: string): Promise<PipeClient> {
+  static async connect(path: string, options: { authFile?: string; authenticate?: boolean } = {}): Promise<PipeClient> {
     const socket = createConnection(path);
     const client = new PipeClient(socket);
     await new Promise<void>((resolve, reject) => {
@@ -47,7 +51,29 @@ export class PipeClient extends EventEmitter {
       socket.once('connect', () => { clearTimeout(timer); resolve(); });
       socket.once('error', error => { clearTimeout(timer); reject(error); });
     });
-    return client;
+    try {
+      if (options.authenticate !== false) {
+        const name = path.split('\\').at(-1)!;
+        const explicit = options.authFile ?? process.env['PIAGENT_AUTH_FILE'];
+        let token: string;
+        try { token = await readFile(explicit ?? credentialPath(name), 'utf8'); }
+        catch { throw new Error('Cannot read authentication credential'); }
+        await client.authenticate(name, token);
+      }
+      return client;
+    } catch (error) { client.close(); throw error; }
+  }
+
+  async authenticate(name: string, token: string): Promise<void> {
+    if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Invalid authentication credential');
+    const clientNonce = randomBytes(32).toString('hex');
+    const response = await this.request('core.auth.challenge', { clientNonce });
+    const result = response.result;
+    if (!isObject(result) || result['scheme'] !== 'hmac-sha256.v1' || typeof result['serverNonce'] !== 'string'
+      || !/^[a-f0-9]{64}$/.test(result['serverNonce'])
+      || !equalProof(result['serverProof'], authProof(token, 'server', name, clientNonce, result['serverNonce']))) throw new Error('Core authentication failed');
+    const reply = await this.request('adapter.auth', { proof: authProof(token, 'client', name, clientNonce, result['serverNonce']) });
+    if (!isObject(reply.result) || reply.result['authenticated'] !== true) throw new Error('Adapter authentication failed');
   }
 
   request(method: string, params: unknown = {}): Promise<RpcResponse> {

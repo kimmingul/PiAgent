@@ -1,7 +1,7 @@
 <Project>
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.4.0</Version>
+    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.5.0</Version>
     <AssemblyName>PiAgent.Vsix</AssemblyName><RootNamespace>PiAgent.Vsix</RootNamespace>
     <GeneratePkgDefFile>true</GeneratePkgDefFile><IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CreateVsixContainer>true</CreateVsixContainer><DeployExtension>false</DeployExtension>

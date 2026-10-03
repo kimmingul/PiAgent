@@ -1,6 +1,6 @@
 {
   "name": "piagent",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -12,13 +12,14 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
-    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
-    "test:adapters": "npm run build && node --test --test-concurrency=1 tests/adapters.integration.mjs",
+    "test": "npm run build && npm run build:transport && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test:adapters": "npm run build && npm run build:transport && node --test --test-concurrency=1 tests/adapters.integration.mjs",
     "start": "node packages/piagent-daemon/dist/cli.js",
     "probe": "node packages/piagent-daemon/dist/adapter-probe.js",
     "omp:smoke": "node scripts/omp-smoke.mjs",
-    "package": "npm run build && node scripts/package-core.mjs",
-    "package:adapters": "npm run build && node scripts/package-core.mjs --adapters"
+    "package": "npm run build && npm run build:transport && node scripts/package-core.mjs",
+    "package:adapters": "npm run build && npm run build:transport && node scripts/package-core.mjs --adapters",
+    "build:transport": "dotnet build transport/PiAgent.PipeHost -c Release"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

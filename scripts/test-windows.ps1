@@ -7,6 +7,8 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
 $workspacePath = Split-Path $PSScriptRoot -Parent
 Push-Location $workspacePath
 try {
+    & dotnet build transport/PiAgent.PipeHost -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'Secure pipe host build failed' }
     & $NodeExecutable -p 'process.version + " / " + process.arch'
     if ($LASTEXITCODE -ne 0) { throw 'Node runtime failed' }
     & $NodeExecutable node_modules/typescript/bin/tsc -b

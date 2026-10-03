@@ -10,6 +10,10 @@ const components = ['protocol', 'core', 'omp', 'daemon'];
 export async function packageCore(destination, { adapters = false } = {}) {
   const output = resolve(destination);
   await mkdir(output); // Refuse to overwrite a previous release or user directory.
+  const hostTarget = join(output, 'transport/PiAgent.PipeHost/bin/Release/net8.0-windows');
+  await mkdir(hostTarget, { recursive: true });
+  for (const suffix of ['dll', 'deps.json', 'runtimeconfig.json'])
+    await cp(join(repository, 'transport/PiAgent.PipeHost/bin/Release/net8.0-windows', `PiAgent.PipeHost.${suffix}`), join(hostTarget, `PiAgent.PipeHost.${suffix}`));
   for (const component of components) {
     const source = join(repository, 'packages', `piagent-${component}`);
     const target = join(output, 'node_modules', '@piagent', component);
@@ -30,13 +34,15 @@ export async function packageCore(destination, { adapters = false } = {}) {
   await cp(join(repository, 'docs/VALIDATION.md'), join(output, 'docs/VALIDATION.md'));
   await cp(join(repository, 'docs/SELECTION-CONTEXT.md'), join(output, 'docs/SELECTION-CONTEXT.md'));
   await cp(join(repository, 'docs/WORKSPACE-TOOLS.md'), join(output, 'docs/WORKSPACE-TOOLS.md'));
+  await cp(join(repository, 'docs/SECURITY.md'), join(output, 'docs/SECURITY.md'));
   await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
-    'No npm install, TypeScript compiler, native addon or workspace checkout is needed.\n\n' +
+    'Secure transport also requires .NET 8+ runtime; no npm install, TypeScript compiler or native Node addon is needed.\n\n' +
     'Start: node core.mjs --pipe piagent-dev\n' +
     'Check: node probe.mjs piagent-dev test-adapter release\n' +
     'Optional OMP: node core.mjs --pipe piagent-dev --omp C:\\path\\omp.exe --cwd C:\\workspace\n' +
     'Stop with Ctrl+C. OMP requires a separately installed executable.\n\n' +
+    'The default CLI uses a local-only, current-user pipe and mutual HMAC authentication. See docs/SECURITY.md.\n' +
     (adapters ? 'Adapter installers and installation instructions are in adapters/.\n' : '') +
     'This release implements handshake/capability/ping, selection context and opt-in read-only OMP workspace tools.\n' +
     'Add --workspace C:\\project to enable bounded file reading/search. See docs/WORKSPACE-TOOLS.md.\n' +
@@ -55,7 +61,7 @@ export async function packageCore(destination, { adapters = false } = {}) {
     await cp(join(repository, 'adapters/visualstudio/PiAgent.Vsix/bin/Release/net472/PiAgent.Vsix.vsix'),
       join(output, 'adapters/visualstudio/PiAgent.Vsix.vsix'));
     for (const platform of ['Win32', 'Win64']) {
-      const source = join(repository, 'adapters/radstudio/bin', platform);
+      const source = join(repository, 'adapters/radstudio/bin', platform, version);
       const packages = (await readdir(source)).filter(name => /^PiAgent\d+\.bpl$/i.test(name));
       if (packages.length !== 1) throw new Error(`Expected one ${platform} PiAgent BPL; rebuild adapters.`);
       const target = join(output, 'adapters/radstudio', platform);

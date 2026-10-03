@@ -10,7 +10,8 @@ Core ↔ OMP: `omp --mode rpc-ui` stdin/stdout UTF-8 JSONL / type 기반 OMP pro
 
 기본 endpoint: `\\.\pipe\piagent-dev`. CLI는 짧은 이름을 받는다.
 이름은 ASCII 영숫자, -, _만 1~128자다. remote UNC endpoint를 CLI에 받지 않는다.
-OS-level remote-client 차단/peer authentication은 현재 Node transport가 보장하지 않는다.
+0.5.0 CLI는 current-user ACL과 remote-client 차단을 적용한 Windows pipe host를 기본 사용한다.
+연결별 HMAC 인증이 먼저 필요하다. 전체 nonce/proof 계약은 [SECURITY.md](docs/SECURITY.md)를 따른다.
 
 Frame = `uint32 little-endian bodyLength` 4 bytes + UTF-8 JSON body.
 bodyLength는 문자 수가 아닌 byte 수로 1~1,048,576이다. BOM, trailing NUL과 줄 구분자는 없다.
@@ -36,7 +37,8 @@ Unknown envelope/hello 필드는 확장을 위해 무시하며 ping의 unknown p
 
 ## State / version / capability negotiation
 
-`Connected → adapter.hello 성공 → Ready → disconnect`.
+secure: `Connected → core.auth.challenge → adapter.auth → adapter.hello 성공 → Ready → disconnect`.
+development pipe: `Connected → adapter.hello 성공 → Ready → disconnect`.
 hello 실패는 Connected를 유지한다. 성공 후 재호출은 -32003. reconnect는 새 Session이다.
 PiAgent supported versions는 [1]이다. offered protocolVersions에 1이 있어야 선택한다.
 제품 version은 wire protocolVersion과 별개이며 향후 incompatible contract는 새 version으로 올린다.
@@ -54,7 +56,8 @@ hello params:
 
 Capability array는 최대 64개, 중복 금지, 각 이름은 1~128 UTF-8 bytes이며 regex
 `[a-zA-Z][a-zA-Z0-9._-]*`를 따른다. null은 생략과 다르며 거절한다.
-Core 지원 capability는 core.ping뿐이다. capabilities 응답은 요청과 지원의 교집합이다.
+Core는 core.ping 및 설정에 따라 chat.v1/context.selection.v1/workspace.read.v1을 지원한다.
+capabilities 응답은 요청과 지원의 교집합이다. secure transport 인증은 선택 capability가 아닌 선행 조건이다.
 Unknown optional capability는 제외하고, required 미지원은 -32004이며 missingCapabilities를
 반환한다. capability 미협상 상태에서 core.ping 호출은 -32005이다.
 adapterCapabilities 응답은 선언 metadata 확인일 뿐, Core의 호출 지원/인증을 뜻하지 않는다.
@@ -99,8 +102,10 @@ nonce는 선택적 UTF-8 1,024 bytes 이하 문자열(빈 문자열 허용), 추
 | -32003 | Already initialized | 성공 후 hello 재호출 |
 | -32004 | Required capability unavailable | missingCapabilities 반환 |
 | -32005 | Capability not negotiated | 협상하지 않은 core.ping 호출 |
+| -32020 | Authentication required/failed | secure pipe에서 인증 전 요청·잘못된 proof·만료·재시도 |
 
-Unknown method는 hello 전에도 -32601이다. ping은 handshake → capability → params 순서로
+secure pipe는 인증 전 모든 유효 request를 -32020으로 거부한다. 인증 후 또는 development pipe에서는
+unknown method는 hello 전에도 -32601이다. ping은 handshake → capability → params 순서로
 검사한다. RPC 오류 후 연결은 유지하지만 framing/I/O/deadline 오류는 peer를 닫는다.
 disconnect 시 미완료 request는 client에서 실패 처리하고 자동 replay하지 않는다.
 현재 event subscription, IDE calls, OMP passthrough, chunking, compression과 세션 복원은 없다.

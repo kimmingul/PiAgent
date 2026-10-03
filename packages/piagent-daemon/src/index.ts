@@ -1,6 +1,8 @@
 import { createServer } from 'node:net';
-import type { Socket } from 'node:net';
-import { Session, ChatSession, WorkspaceReader } from '@piagent/core';
+import type { Duplex } from 'node:stream';
+import { Session, ChatSession, WorkspaceReader, Authentication } from '@piagent/core';
+import { securePipe, credentialPath, defaultBroker } from './secure-pipe.js';
+export { credentialPath, defaultBroker } from './secure-pipe.js';
 import type { OmpOptions } from '@piagent/omp';
 import { encodeFrame, FrameDecoder, MAX_FRAME_BYTES } from '@piagent/protocol';
 export { PipeClient } from './pipe-client.js';
@@ -17,10 +19,11 @@ export interface DaemonOptions {
   onDiagnostic?: (error: Error) => void;
   omp?: OmpOptions;
   workspaceRoot?: string;
+  secure?: { brokerPath?: string; authFile?: string };
 }
 
 export async function startDaemon(options: DaemonOptions = {}): Promise<{
-  path: string; close: () => Promise<void>;
+  path: string; securityDescriptor?: string; close: () => Promise<void>;
 }> {
   if (process.platform !== 'win32') throw new Error('PiAgent daemon requires Windows Named Pipes');
   if (options.workspaceRoot && !options.omp) throw new Error('Workspace tools require OMP');
@@ -32,16 +35,16 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     || !Number.isSafeInteger(maxConnections) || maxConnections < 1 || maxConnections > 256) {
     throw new Error('Invalid daemon limits');
   }
-  const sockets = new Set<Socket>();
+  const sockets = new Set<Duplex>();
   const cleanup = new Set<Promise<void>>();
-  const chats = new Map<Socket, ChatSession>();
-  const retire = (socket: Socket): void => {
+  const chats = new Map<Duplex, ChatSession>();
+  const retire = (socket: Duplex): void => {
     const chat = chats.get(socket); if (!chat) return;
     chats.delete(socket);
     const done = chat.dispose().catch(error => options.onDiagnostic?.(error));
     cleanup.add(done); void done.finally(() => cleanup.delete(done));
   };
-  const server = createServer(socket => {
+  const accept = (socket: Duplex, token?: string): void => {
     if (sockets.size >= maxConnections) { socket.destroy(); return; }
     sockets.add(socket);
     const frames = new FrameDecoder();
@@ -63,7 +66,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     };
     const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace) : undefined;
     if (chat) chats.set(socket, chat);
-    const session = new Session(chat);
+    const session = new Session(chat, token ? new Authentication(token, options.pipeName ?? 'piagent-dev') : undefined);
+    const authTimer = token ? setTimeout(() => { if (!session.ready) close(new Error('Authentication/handshake deadline exceeded')); }, 10_000) : undefined;
     let inFlight = 0;
     const nextReadDeadline = (): void => {
       clearTimeout(readTimer);
@@ -89,25 +93,39 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     socket.on('error', error => options.onDiagnostic?.(error));
     socket.on('close', () => {
       clearTimeout(readTimer);
+      clearTimeout(authTimer);
       for (const timer of writeTimers) clearTimeout(timer);
       sockets.delete(socket);
       retire(socket);
     });
-  });
-  server.on('error', error => options.onDiagnostic?.(error));
-  await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error): void => reject(error);
-    server.once('error', onError);
-    server.listen(path, () => { server.off('error', onError); resolve(); });
-  });
+  };
+  let closeTransport: () => Promise<void>;
+  let securityDescriptor: string | undefined;
+  if (options.secure) {
+    const host = await securePipe(options.pipeName ?? 'piagent-dev', options.secure.authFile ?? credentialPath(options.pipeName ?? 'piagent-dev'),
+      options.secure.brokerPath ?? defaultBroker, accept, options.onDiagnostic);
+    closeTransport = host.close;
+    securityDescriptor = host.securityDescriptor;
+  } else {
+    const server = createServer(accept);
+    server.on('error', error => options.onDiagnostic?.(error));
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: Error): void => reject(error);
+      server.once('error', onError);
+      server.listen(path, () => { server.off('error', onError); resolve(); });
+    });
+    closeTransport = () => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
   let closing: Promise<void> | undefined;
   return {
     path,
+    ...(securityDescriptor ? { securityDescriptor } : {}),
     close: () => {
-      closing ??= new Promise<void>((resolve, reject) => {
+      closing ??= (async () => {
         for (const socket of sockets) { retire(socket); socket.destroy(); }
-        server.close(error => error ? reject(error) : resolve());
-      }).then(async () => { await Promise.all([...cleanup]); });
+        await closeTransport();
+        await Promise.all([...cleanup]);
+      })();
       return closing;
     },
   };

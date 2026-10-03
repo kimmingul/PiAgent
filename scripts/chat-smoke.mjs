@@ -1,15 +1,20 @@
 // Opt-in real model call. Existing OMP credentials remain inside the OMP process.
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { startDaemon, PipeClient } from '@piagent/daemon';
 const [executable, cwd, message = 'Reply with exactly: PiAgent chat verified', mode] = process.argv.slice(2);
 if (mode !== undefined && mode !== 'workspace') throw new Error('Optional mode must be workspace');
 if (!executable || !cwd) throw new Error('Usage: node scripts/chat-smoke.mjs <omp.exe> <scratch-workspace> [message]');
-const daemon = await startDaemon({ pipeName: `piagent-live-chat-${randomUUID()}`, omp: { executable: resolve(executable), cwd: resolve(cwd) },
-  ...(mode === 'workspace' ? { workspaceRoot: resolve(cwd) } : {}) });
+const scratch = await mkdtemp(join(tmpdir(), 'piagent-live-security-'));
+const authFile = join(scratch, 'private', 'token');
+let daemon;
 let client; let heartbeat; let timer;
 try {
-  client = await PipeClient.connect(daemon.path);
+  daemon = await startDaemon({ pipeName: `piagent-live-chat-${randomUUID()}`, secure: {authFile}, omp: { executable: resolve(executable), cwd: resolve(cwd) },
+    ...(mode === 'workspace' ? { workspaceRoot: resolve(cwd) } : {}) });
+  client = await PipeClient.connect(daemon.path, {authFile});
   const rpc = async (method, params = {}) => { const reply = await client.request(method, params); if (reply.error) throw new Error(reply.error.message); return reply.result; };
   await rpc('adapter.hello', { protocolVersions: [1], capabilities: ['core.ping', 'chat.v1', ...(mode === 'workspace' ? ['workspace.read.v1'] : [])], requiredCapabilities: ['chat.v1'],
     adapter: { kind: 'test-ide', version: '0.2.0', ideVersion: 'live-smoke', instanceId: randomUUID() } });
@@ -31,4 +36,8 @@ try {
   await rpc('chat.prompt', { sessionId, message }); await completed;
   if (mode === 'workspace' && !tools.length) throw new Error('No workspace tool was invoked');
   console.log(JSON.stringify({ terminal, text, ...(mode === 'workspace' ? { tools } : {}) })); await rpc('chat.close', { sessionId });
-} finally { clearInterval(heartbeat); clearTimeout(timer); client?.close(); await daemon.close(); }
+} finally {
+  clearInterval(heartbeat); clearTimeout(timer); client?.close(); await daemon?.close();
+  if (!scratch.startsWith(join(tmpdir(), 'piagent-live-security-'))) throw new Error('Invalid cleanup path');
+  await rm(scratch, {recursive:true,force:true});
+}

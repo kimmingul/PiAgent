@@ -13,8 +13,42 @@ import { startDaemon, pipePath } from '@piagent/daemon';
 const execute = promisify(execFile);
 const file = path => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const csharp = file('adapters/visualstudio/PiAgent.Transport.Smoke/bin/Release/net10.0/PiAgent.Transport.Smoke.dll');
-const delphi = platform => file(`adapters/radstudio/bin/${platform}/PipeSmoke.exe`);
+const delphi = platform => file(`adapters/radstudio/bin/${platform}/0.5.0/PipeSmoke.exe`);
 const windows = { skip: process.platform !== 'win32', timeout: 15_000 };
+
+test('secure C# VS and Delphi Win32/Win64 authenticate before handshake and reject wrong credentials', { ...windows, timeout: 30_000 }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piagent-adapter-security-'));
+  const name = `piagent-secure-adapters-${randomUUID()}`, authFile = join(root, 'private', 'token');
+  const daemon = await startDaemon({pipeName: name, secure: {authFile}});
+  try {
+    const wrong = join(root, 'wrong-token'); await writeFile(wrong, '00'.repeat(32));
+    for (const [executable, args] of [['dotnet', [csharp, name, '2026']], [delphi('Win32'), [name]], [delphi('Win64'), [name]]]) {
+      const result = await execute(executable, args, {windowsHide:true,timeout:8000,encoding:'utf8',env:{...process.env,PIAGENT_AUTH_FILE:authFile}});
+      const [hello, pong] = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+      assert.equal(hello.protocolVersion,1); assert.equal(pong.pong,true);
+      await assert.rejects(execute(executable, args, {windowsHide:true,timeout:8000,encoding:'utf8',env:{...process.env,PIAGENT_AUTH_FILE:wrong}}),
+        error => /Core authentication failed/.test((error.stdout ?? '') + (error.stderr ?? '')));
+    }
+  } finally {
+    await daemon.close(); assert.ok(root.startsWith(join(tmpdir(), 'piagent-adapter-security-'))); await rm(root,{recursive:true,force:true});
+  }
+});
+
+test('secure VS workspace chat preserves streaming, ping, cancellation and tool results', { ...windows, timeout: 25_000 }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piagent-adapter-security-'));
+  const name = `piagent-secure-chat-${randomUUID()}`, authFile = join(root, 'private', 'token');
+  let daemon;
+  try {
+    await writeFile(join(root,'Example.cs'),'first\n안녕 🚀 needle\nlast');
+    daemon = await startDaemon({pipeName:name,secure:{authFile},workspaceRoot:root,
+      omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
+    const result = JSON.parse((await execute('dotnet',[csharp,name,'2026','workspace'],
+      {windowsHide:true,timeout:12000,encoding:'utf8',env:{...process.env,PIAGENT_AUTH_FILE:authFile}})).stdout.trim());
+    assert.equal(JSON.parse(result.text).text,'안녕 🚀 needle'); assert.equal(result.cancelled,true);
+  } finally {
+    await daemon?.close(); assert.ok(root.startsWith(join(tmpdir(),'piagent-adapter-security-'))); await rm(root,{recursive:true,force:true});
+  }
+});
 
 test('C# VS chat optionally negotiates and invokes read-only workspace tools', windows, async () => {
   const root = await mkdtemp(join(tmpdir(), 'piagent-adapter-workspace-'));
@@ -55,7 +89,7 @@ test('C# duplex chat streams Unicode text while pinging and cooperatively cancel
 });
 
 async function run(executable, args) {
-  return execute(executable, args, { windowsHide: true, timeout: 8_000, encoding: 'utf8' });
+  return execute(executable, args, { windowsHide: true, timeout: 8_000, encoding: 'utf8', env: {...process.env, PIAGENT_DEV_PIPE:'1'} });
 }
 test('C# VS adapter transport negotiates and pings Node Core for VS 2022/2026 metadata', windows, async () => {
   const name = `piagent-csharp-${randomUUID()}`;
