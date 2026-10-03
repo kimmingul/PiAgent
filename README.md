@@ -111,7 +111,8 @@ adapter 테스트 6개는 실제 Core 연결, Unicode nonce, 취소와 oversized
 [RAD Studio adapter](adapters/radstudio/README.md). VSIX는 VS 2022/2026의 별도 PiAgentTest
 프로필에 설치했다. VS 2026 업데이트(18.10.3) 후 PiAgentTest에서 실제 package load, Tools 메뉴 실행과
 PiAgent Output의 handshake/capability/ping OK를 확인했다. 0.2.0 Chat UI의 실제 질문/응답 스트리밍,
-취소·새 대화·IDE 종료 시 OMP 정리도 확인했다. VS 2022의 실제 메뉴 검증은 아직 남아 있다.
+취소·새 대화·IDE 종료 시 OMP 정리도 확인했다. VS 2022 PiAgentTest에서도 실제 메뉴 hello/ping,
+채팅 스트리밍·완료·새 대화·IDE 종료 시 OMP 정리를 확인했다.
 RAD Studio의 실제 host 검증 결과는 adapter README에 기록한다.
 자세한 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md)에 있다.
 

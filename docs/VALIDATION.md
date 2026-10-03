@@ -16,10 +16,16 @@
   clicks into the separate msedgewebview2 process. No alternative UI automation APIs were used.
 - RAD Studio 13.2: previous Win32/Win64 BPL handshake/ping host verification remains valid;
   the Delphi transport is unchanged and the current Core remains backward compatible.
-- VS 2022 Community 17.14.35, instance 8967bed4: existing PiAgentTest VSIX installation and transport
-  verification are complete. VSIX 0.2.0 also builds with VS 2022 MSBuild without warnings/errors.
-  The actual IDE remains at initial authentication/setup; user action is
-  required before package/menu host verification. It is not counted as successful host verification.
+- VS 2022 Community 17.14.35, instance 8967bed4, isolated PiAgentTest profile:
+  after user login, VSIX 0.2.0 builds without warnings/errors, loads its package and exposes both Tools commands.
+  Check Core Connection reported `PiAgent: handshake/capability/ping OK`.
+  Open Chat connected, streamed `PiAgent VS 2022 verified` and showed completed.
+  New conversation cleared the transcript and created a fresh session.
+  Normal test IDE exit removed both owned OMP children (PIDs 30920 and 18284 in this run).
+  VS 2022 initially failed because its Newtonsoft.Json binding lacks JToken.ToString(Formatting).
+  Both transport and WebView bridge now use the compatible overload with an explicit converter array;
+  the six adapter tests and actual VS 2022 flow passed after rebuilding/reinstalling.
+  The default VS 2022 profile and the user's open IDE were not changed.
 
 Local diagnostic files are in .tools/ide-validation (ignored by Git). Model responses and keys are
 not committed. No LLM calls are performed by the automated test suite.

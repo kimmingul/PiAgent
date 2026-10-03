@@ -76,7 +76,8 @@ public sealed class PipeAdapterClient : IDisposable
         try
         {
             var body = utf8.GetBytes(new JObject { ["jsonrpc"] = "2.0", ["id"] = id,
-                ["method"] = method, ["params"] = parameters }.ToString(Formatting.None));
+                // VS 2022 can bind Newtonsoft.Json to a version without the one-argument overload.
+                ["method"] = method, ["params"] = parameters }.ToString(Formatting.None, Array.Empty<JsonConverter>()));
             if (body.Length == 0 || body.Length > MaxFrameBytes) throw new InvalidDataException("Invalid frame length");
             var header = new byte[4];
             for (var i = 0; i < 4; i++) header[i] = (byte)((uint)body.Length >> (i * 8));

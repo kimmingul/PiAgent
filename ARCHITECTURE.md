@@ -116,7 +116,9 @@ VS 2022와 2026 MSBuild로 VSIX를 생성했고 RAD Studio 13.2 compiler로 Win3
 생성했다. 콘솔 harness의 transport 통신과 VS 2022/2026 PiAgentTest 프로필 설치를 검증했다.
 VS 2026 18.10.3 PiAgentTest에서 실제 package load와 메뉴의 Core hello/ping을 검증했다.
 0.2.0의 WebView Chat에서도 실제 OMP 응답·취소·새 대화·IDE 종료 정리를 검증했다.
-VS 2022 실제 메뉴 검증은 아직 남아 있다. RAD 실제 host 결과는 adapter README에 기록한다.
+VS 2022 PiAgentTest에서도 실제 메뉴 hello/ping, WebView 채팅 스트리밍·완료·새 대화·종료 정리를
+검증했다. Newtonsoft.Json 직렬화는 VS 2022가 제공하는 버전과 호환되는 overload를 사용한다.
+RAD 실제 host 결과는 adapter README에 기록한다.
 둘 다 daemon과 다른 bitness일 수 있다. IDE 버전은 core가 판정하지 않는다.
 
 두 adapter의 PiAgent: Check Core Connection 메뉴는 worker에서 connect → hello → ping을

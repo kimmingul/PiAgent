@@ -47,9 +47,15 @@ PiAgentTest 프로필에 설치했다. VSIXInstaller는 두 설치의 commit/ena
 PiAgentTest에서 실제 Tools 메뉴를 실행해 PiAgent Output의 handshake/capability/ping OK를 확인했다.
 ActivityLog에도 PiAgentPackage의 Begin/End package load가 기록되었다.
 결과 로그: .tools/ide-validation/vs2026-piagent-output.txt 및 vs2026-updated-activity.xml.
-기본 프로필의 기존 사용자 설정은 변경하지 않았다. VS 2022 실제 메뉴 실행은 아직 미검증이다.
+기본 프로필의 기존 사용자 설정은 변경하지 않았다.
 
 0.2.0은 VS 2026 PiAgentTest에서 WebView2 Chat 생성·연결, 실제 모델 질문/스트리밍 응답 완료,
 응답 중 취소, 새 대화 및 IDE 정상 종료 때 OMP child 정리를 확인했다. docs/VALIDATION.md에 기록한다.
 테스트 VSIX를 교체한 뒤 이전 설치 경로를 참조하면, IDE를 닫고 같은 devenv.exe로
 /RootSuffix PiAgentTest /UpdateConfiguration을 실행한 뒤 재시작한다. 기본 프로필에는 적용하지 않는다.
+
+VS 2022 17.14.35 PiAgentTest에서도 package load, Tools의 handshake/capability/ping OK,
+WebView 채팅 스트리밍·응답 완료·새 대화·IDE 종료 때 OMP 정리를 확인했다.
+VS 2022의 Newtonsoft.Json binding에는 JToken.ToString(Formatting) overload가 없어,
+transport와 WebView bridge에서 converter array를 명시하는 호환 overload를 사용한다.
+수정 후 adapter 테스트 6개도 다시 통과했다.

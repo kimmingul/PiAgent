@@ -129,7 +129,7 @@ public sealed class ChatControl : UserControl, IDisposable
     private void Post(JObject message)
     {
         if (!disposed && pageReady && browser.CoreWebView2 != null)
-            browser.CoreWebView2.PostWebMessageAsJson(message.ToString(Formatting.None));
+            browser.CoreWebView2.PostWebMessageAsJson(message.ToString(Formatting.None, Array.Empty<JsonConverter>()));
     }
     private void Disconnect(string message)
     {
