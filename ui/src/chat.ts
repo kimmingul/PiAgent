@@ -46,7 +46,10 @@ bridge.addEventListener('message', event => {
     controls();
   } else if (frame['type'] === 'session') {
     connected = true; busy = false; sessionId = String(frame['sessionId']); turnId = ''; sequence = 0;
-    transcript.replaceChildren(); status.textContent = '연결됨 · 텍스트 채팅'; controls(); input.focus();
+    transcript.replaceChildren(); status.textContent = frame['readOnly'] === true
+      ? `연결됨 · 읽기 전용 workspace: ${String(frame['workspaceUri'])}` : '연결됨 · 텍스트 채팅';
+    element('toolScope').textContent = frame['readOnly'] === true ? '파일 읽기·검색 · 파일 변경 도구 없음' : '텍스트 채팅 · 파일 변경 도구 없음';
+    controls(); input.focus();
   } else if (frame['type'] === 'disconnected') {
     connected = false; error(String(frame['message'] ?? '연결 종료')); turnId = ''; controls();
   } else if (frame['type'] === 'error') { error(String(frame['message'])); }
@@ -56,7 +59,9 @@ bridge.addEventListener('message', event => {
     sequence = data['sequence']; const kind = data['kind'];
     if (kind === 'started') { turnId = String(data['turnId']); busy = true; status.textContent = '응답 중…'; }
     else if (data['turnId'] === turnId) {
-      if (kind === 'delta') {
+      if (kind === 'tool_started' || kind === 'tool_completed') {
+        status.textContent = `${kind === 'tool_started' ? '파일 조회 중' : '파일 조회 완료'} · ${String(data['text'])}`;
+      } else if (kind === 'delta') {
         assistant ??= line('PiAgent', ''); const text = String(data['text'] ?? '');
         if (total < 2_000_000) { const part = text.slice(0, 2_000_000 - total); assistant.append(document.createTextNode(part)); total += part.length; }
         transcript.scrollTop = transcript.scrollHeight;

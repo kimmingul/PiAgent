@@ -129,14 +129,14 @@ protocolVersion 생략은 legacy v1로 간주하며 current version이 1이 아�
 ```
 
 manager의 request(command, fields)는 get_state, get_available_commands, get_session_stats,
-new_session, prompt, abort를 허용한다. 고유 string ID로 pending 요청을 관리하고 response.id와 command를 함께
+new_session, prompt, abort, set_host_tools를 허용한다. 고유 string ID로 pending 요청을 관리하고 response.id와 command를 함께
 검사한다. 최대 64개 pending, 기본 request timeout 5초, ready timeout 10초다.
 실패 응답·timeout·child exit·stop은 pending Promise를 reject한다.
 response 성공은 명령 응답이며 agent 턴 완료가 아니다. 그 외 event는 raw frame으로 전달한다.
 stdin EOF로 종료를 요청하고 기본 2초 deadline 후 직접 자식을 kill한다. 자동 restart는 없다.
 
-chat session은 아래 정규화 계약으로 OMP prompt/event를 연결한다. host_tool_call 응답/승인,
-checkpoint와 usage 집계는 후속 범위다. raw OMP frame은 PiAgent pipe RPC envelope로 직접 전송하지 않는다.
+chat session은 아래 정규화 계약으로 OMP prompt/event를 연결한다. 0.4.0은 읽기 전용 host_tool_call/result를
+구현한다. 쓰기 도구 승인, checkpoint와 usage 집계는 후속 범위다. raw OMP frame은 pipe RPC로 직접 전송하지 않는다.
 
 ## Chat capability: chat.v1 (0.2.0)
 
@@ -147,17 +147,18 @@ chat 메서드는 JSON-RPC request이며 notification으로 보낸 요청은 실
 
 | Method | params | result |
 | --- | --- | --- |
-| chat.open | {} | {sessionId, toolsEnabled:false} |
+| chat.open | {} | {sessionId, toolsEnabled, workspaceUri?, readOnly?} |
 | chat.prompt | {sessionId, message} | {sessionId, turnId, accepted:true} |
 | chat.cancel | {sessionId, turnId} | {requested:true} |
 | chat.close | {sessionId} | {closed:true} |
 
 세션 ID/턴 ID는 Core가 만든 불투명 문자열이다. 세션은 pipe connection 소유이며 다른
 connection에서 사용할 수 없다. connection마다 한 세션, 세션마다 한 active turn이다.
-workspace는 daemon --cwd로 고정한다. adapter/UI가 실행파일·명령·cwd를 지정할 수 없다.
+OMP cwd는 daemon --cwd, 읽기 root는 선택적 --workspace로 고정한다. adapter/UI가 실행파일·명령·cwd/root를 지정할 수 없다.
 open은 OMP ready → new_session 응답 후 완료하고 이전 auto-resume 대화를 상속하지 않는다.
 OMP에는 --no-tools --no-extensions --no-skills --no-rules --no-lsp --no-session --no-title
---no-pty를 전달한다. 이번 버전에서는 도구 실행, 이미지, slash commands를 열지 않는다.
+--no-pty를 전달한다. 기본 도구·이미지·slash commands는 열지 않는다. workspace capability를 협상한 경우만
+Core의 두 read-only host tools를 등록한다. 그 외 세션은 toolsEnabled:false다.
 message는 비어 있지 않은 일반 텍스트이며 UTF-8 64 KiB 이하이다.
 
 Core → adapter notification 예:
@@ -168,13 +169,13 @@ Core → adapter notification 예:
 {"jsonrpc":"2.0","method":"chat.event","params":{"sessionId":"opaque-session","turnId":"opaque-turn","sequence":3,"kind":"completed"}}
 ```
 
-kind는 started/delta/completed/cancelled/error/closed이다. sequence는 세션 내 단조 증가한다.
+kind는 started/delta/completed/cancelled/error/closed/tool_started/tool_completed이다. sequence는 세션 내 단조 증가한다.
 closed의 turnId는 null이다. 이벤트가 prompt 응답보다 먼저 올 수 있다. accepted는 접수이며
 완료가 아니다. UI는 started로 turnId를 받아 delta를 표시하고 terminal event로 busy를 해제한다.
 message_update.assistantMessageEvent.text_delta만 텍스트 delta로 변환한다.
 agent_end는 isTerminal:false를 제외하고 terminal이다. data.agentInvoked:false 응답과
 prompt_result.agentInvoked:false도 완료로 처리한다. thinking/raw frames는 UI에 전달하지 않는다.
-setStatus 같은 정보성 OMP UI 요청은 무시한다. select/confirm/input/editor 또는 host tool 요청은
+setStatus 같은 정보성 OMP UI 요청은 무시한다. select/confirm/input/editor 또는 미협상 host tool 요청은
 unsupported error로 턴을 종료하고 세션을 닫는다. 임의 승인 응답을 보내지 않는다.
 
 cancel은 OMP abort를 보내며 그 응답이 턴 종료를 의미하지 않는다. terminal event를 기다리고,
@@ -189,6 +190,10 @@ VS chat은 20초마다 ping해 idle connection을 유지한다. RPC는 기본 5�
 권한·영속 복원·tool approval·checkpoint는 별도 capability로 후속 확장한다.
 
 ## Adapter 구현 메모
+
+0.4.0: 선택 capability `workspace.read.v1`은 `chat.v1`과 함께 협상한다. chat.open의
+toolsEnabled/readOnly/workspaceUri 및 chat.event의 tool_started/tool_completed를 추가한다.
+read-only host-tool schemas, lifecycle와 제한은 [Workspace 도구 계약](docs/WORKSPACE-TOOLS.md)에 있다.
 
 0.3.0은 선택적 `context.selection.v1` capability를 추가한다. `chat.v1`과 함께 협상한 경우만
 chat.prompt의 context 필드를 허용한다. 자세한 schema·제한·소유권은

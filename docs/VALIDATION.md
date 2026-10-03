@@ -1,4 +1,18 @@
-# PiAgent 0.3.0 validation
+# PiAgent 0.4.0 validation
+
+## Read-only workspace tools (0.4.0)
+
+- Core: 27 tests passed with ARM64 and x64 Node (x64 under Windows emulation). Adapter: 8 tests passed.
+- Actual OMP 18.5.0: set_host_tools registered only workspace_search/workspace_read_file while built-in
+  tools remained disabled. A live scratch-workspace prompt invoked both tools, found/read SelectionExample.cs
+  and returned a completed explanation of Double. The smoke command asserts at least one tool invocation.
+- Tests verify UTF-8/Unicode, range/output limits, literal search, traversal/ADS/device paths, secret exclusions,
+  binary/oversized files, junctions/hard links, capability gating, cancelled-call suppression and duplicate-ID retirement.
+- VS 2022 and VS 2026 MSBuild succeeded; VS 2022 0.4.0 host UI has not been exercised.
+- VS 2026 18.10.3 PiAgentTest: installed 0.4.0, connected to the configured scratch workspace,
+  confirmed its read-only URI and file-read/search scope in Chat, then asked to find Double and read
+  SelectionExample.cs. The UI completed a Korean explanation of the function.
+  Normal test IDE exit removed its owned OMP child (PID 22536); the user's default IDE stayed open.
 
 ## Selection context (0.3.0)
 
@@ -65,5 +79,5 @@ and loader DLLs are included with their license, while VS IDE SDK assemblies are
 
 File/IDE-changing tools, approval UI, Git checkpoints/restore, usage aggregation, RAD WebView host,
 persistent session restoration and OMP protocol v2 chunk reassembly remain future capabilities.
-Current chat is ephemeral and tool-free. Named Pipe identity/ACL hardening is still required before
+Chat is ephemeral; 0.4.0 optionally enables bounded read-only workspace tools. Named Pipe identity/ACL hardening is still required before
 exposing privileged IDE/file capabilities.

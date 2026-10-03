@@ -102,7 +102,7 @@ export class OmpProcess extends EventEmitter {
 
   request(command: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     if (this.currentState !== 'ready' || this.child === undefined) return Promise.reject(new Error('OMP is not ready'));
-    if (!['get_state', 'get_available_commands', 'get_session_stats', 'abort', 'new_session', 'prompt'].includes(command)) {
+    if (!['get_state', 'get_available_commands', 'get_session_stats', 'abort', 'new_session', 'prompt', 'set_host_tools'].includes(command)) {
       return Promise.reject(new Error('OMP command not enabled in this slice'));
     }
     if ('id' in fields || 'type' in fields) return Promise.reject(new Error('Reserved OMP fields'));
@@ -128,6 +128,16 @@ export class OmpProcess extends EventEmitter {
   stop(): Promise<void> {
     this.stopping ??= this.stopChild();
     return this.stopping;
+  }
+
+  /** Host-tool replies are not RPC commands and have no response/timeout entry. */
+  async hostToolResult(id: string, text: string, isError = false): Promise<void> {
+    if (this.currentState !== 'ready' || !this.child || !id || Buffer.byteLength(id) > 256) throw new Error('Invalid host reply state/id');
+    const body = Buffer.from(JSON.stringify({ type: 'host_tool_result', id, ...(isError ? { isError: true } : {}),
+      result: { content: [{ type: 'text', text }] } }) + '\n');
+    if (body.length > MAX_FRAME_BYTES || this.child.stdin.writableLength > 2 * MAX_FRAME_BYTES) throw new Error('Host reply exceeds limit');
+    const child = this.child;
+    await new Promise<void>((resolve, reject) => child.stdin.write(body, error => error ? reject(error) : resolve()));
   }
 
   private async stopChild(): Promise<void> {

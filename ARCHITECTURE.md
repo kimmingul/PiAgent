@@ -1,5 +1,9 @@
 # PiAgent architecture
 
+0.4.0은 명시적 --workspace root와 `workspace.read.v1` 협상으로 Core의 읽기·literal 검색
+서비스를 OMP host-tools로 등록한다. adapter는 root를 정하지 않는다. 기본 OMP 도구는 비활성화되고
+Core의 제한된 두 도구만 실행된다. [Workspace 도구 계약](docs/WORKSPACE-TOOLS.md)을 따른다.
+
 0.3.0은 VS adapter의 선택 코드 스냅샷을 `context.selection.v1`로 전달한다.
 Core는 URI·언어·범위·코드만 검증하고 OMP prompt에 포함한다. 파일 조회와 IDE SDK 호출은
 하지 않는다. VS UI thread의 캡처와 host 보관, UI 미리보기/전송은 adapter 책임이다.
@@ -90,7 +94,7 @@ Job Object 정리는 아직 없다. OMP child가 추가 프로세스를 띄우�
 현재 bridge는 OMP JSONL v1만 유지한다. ready.protocolVersion=1 및 v1 support가 있어야
 사용한다(legacy ready의 version 필드 생략은 v1). v2-only/current-v2와 rpc_chunk는 명시적으로
 거절한다. `negotiate_protocol`/64 MiB chunk 재조립은 후속 구현이다. ready 후 get_state,
-get_available_commands, get_session_stats, new_session, prompt, abort를 programmatic API에서 허용한다.
+get_available_commands, get_session_stats, new_session, prompt, abort, set_host_tools를 programmatic API에서 허용한다.
 유효한 OMP event는 frame event로 전달하고 stderr/diagnostic은 별도 event다.
 Adapter pipe로 OMP raw command를 전달하는 메서드는 아직 없다.
 

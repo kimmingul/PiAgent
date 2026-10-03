@@ -144,7 +144,8 @@ public sealed class ChatControl : UserControl, IDisposable
         var result = await client!.RequestAsync("chat.open", new JObject(), lifetime.Token);
         sessionId = (string?)result["sessionId"] ?? throw new InvalidDataException("Missing session ID"); turnId = null;
         selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null });
-        Post(new JObject { ["type"] = "session", ["sessionId"] = sessionId });
+        Post(new JObject { ["type"] = "session", ["sessionId"] = sessionId,
+            ["workspaceUri"] = result["workspaceUri"], ["readOnly"] = result["readOnly"] });
     }
     private void Post(JObject message)
     {

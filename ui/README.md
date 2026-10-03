@@ -1,5 +1,8 @@
 # Shared WebView UI
 
+0.4.0은 session의 readOnly/workspaceUri와 tool_started/tool_completed를 표시한다.
+UI/adapter가 읽기 root를 공급하지 않으며 도구 실행은 Core 책임이다.
+
 RADAgent의 composer/host bridge 패턴을 참고해 최소 입력·응답·취소 UI를 TypeScript로 작성했다.
 reference repository는 수정하지 않는다. 전체 RADAgent UI 포팅은 하지 않는다.
 

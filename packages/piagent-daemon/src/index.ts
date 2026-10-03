@@ -1,6 +1,6 @@
 import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
-import { Session, ChatSession } from '@piagent/core';
+import { Session, ChatSession, WorkspaceReader } from '@piagent/core';
 import type { OmpOptions } from '@piagent/omp';
 import { encodeFrame, FrameDecoder, MAX_FRAME_BYTES } from '@piagent/protocol';
 export { PipeClient } from './pipe-client.js';
@@ -16,12 +16,15 @@ export interface DaemonOptions {
   maxConnections?: number;
   onDiagnostic?: (error: Error) => void;
   omp?: OmpOptions;
+  workspaceRoot?: string;
 }
 
 export async function startDaemon(options: DaemonOptions = {}): Promise<{
   path: string; close: () => Promise<void>;
 }> {
   if (process.platform !== 'win32') throw new Error('PiAgent daemon requires Windows Named Pipes');
+  if (options.workspaceRoot && !options.omp) throw new Error('Workspace tools require OMP');
+  const workspace = options.workspaceRoot ? await WorkspaceReader.create(options.workspaceRoot) : undefined;
   const path = pipePath(options.pipeName ?? 'piagent-dev');
   const deadline = options.ioTimeoutMs ?? 30_000;
   const maxConnections = options.maxConnections ?? 16;
@@ -58,7 +61,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
         });
       } catch (error) { close(error instanceof Error ? error : new Error(String(error))); }
     };
-    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event })) : undefined;
+    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace) : undefined;
     if (chat) chats.set(socket, chat);
     const session = new Session(chat);
     let inFlight = 0;

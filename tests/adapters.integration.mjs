@@ -6,12 +6,31 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { startDaemon, pipePath } from '@piagent/daemon';
 const execute = promisify(execFile);
 const file = path => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const csharp = file('adapters/visualstudio/PiAgent.Transport.Smoke/bin/Release/net10.0/PiAgent.Transport.Smoke.dll');
 const delphi = platform => file(`adapters/radstudio/bin/${platform}/PipeSmoke.exe`);
 const windows = { skip: process.platform !== 'win32', timeout: 15_000 };
+
+test('C# VS chat optionally negotiates and invokes read-only workspace tools', windows, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piagent-adapter-workspace-'));
+  let daemon;
+  try {
+    await writeFile(join(root, 'Example.cs'), 'first\n안녕 🚀 needle\nlast');
+    daemon = await startDaemon({ pipeName: `piagent-workspace-csharp-${randomUUID()}`, workspaceRoot: root,
+      omp: { executable: process.execPath, executableArgs: [file('tests/fixtures/chat-omp.mjs')], cwd: root } });
+    const result = JSON.parse((await run('dotnet', [csharp, daemon.path.split('\\').at(-1), '2026', 'workspace'])).stdout.trim());
+    assert.equal(JSON.parse(result.text).text, '안녕 🚀 needle'); assert.equal(result.cancelled, true);
+  } finally {
+    await daemon?.close();
+    assert.ok(root.startsWith(join(tmpdir(), 'piagent-adapter-workspace-')));
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('C# adapter selection capability delivers the exact Unicode snapshot to OMP', windows, async () => {
   const name = `piagent-context-csharp-${randomUUID()}`;

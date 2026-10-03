@@ -40,14 +40,16 @@ public sealed class PipeAdapterClient : IDisposable
         _ = ReadLoopAsync();
         var offered = chat ? new JArray("core.ping", "chat.v1") : new JArray("core.ping");
         if (selectionContext) { if (!chat) throw new ArgumentException("Selection context requires chat"); offered.Add("context.selection.v1"); }
+        var required = (JArray)offered.DeepClone();
+        if (chat) offered.Add("workspace.read.v1"); // Optional; the daemon owner must opt in with --workspace.
         var result = await CallAsync("adapter.hello", new JObject {
             ["protocolVersions"] = new JArray(1), ["capabilities"] = offered,
-            ["requiredCapabilities"] = offered.DeepClone(),
-            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.3.0", ["ideVersion"] = ideVersion,
+            ["requiredCapabilities"] = required,
+            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.4.0", ["ideVersion"] = ideVersion,
                 ["instanceId"] = instanceId, ["capabilities"] = new JArray() }
         }, cancellation).ConfigureAwait(false);
         if ((int?)result["protocolVersion"] != 1 || result["capabilities"] is not JArray capabilities
-            || !offered.Values<string>().All(capability => capabilities.Values<string>().Contains(capability)))
+            || !required.Values<string>().All(capability => capabilities.Values<string>().Contains(capability)))
         { Dispose(); throw new InvalidDataException("Required protocol/capability was not negotiated"); }
         ready = true; return result;
     }

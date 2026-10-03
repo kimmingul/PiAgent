@@ -13,7 +13,7 @@ var version = args.Length > 1 ? args[1] : "2022";
 using var client = new PipeAdapterClient(name);
 using var cancellation = new CancellationTokenSource();
 var mode = args.Length > 2 ? args[2] : "normal";
-if (mode == "chat" || mode == "context")
+if (mode == "chat" || mode == "context" || mode == "workspace")
 {
     var completed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
     var cancelled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -29,8 +29,10 @@ if (mode == "chat" || mode == "context")
     };
     cancellation.CancelAfter(10000);
     await client.InitializeAsync("visual-studio", version, "chat-smoke", cancellation.Token, chat: true, selectionContext: mode == "context");
-    var session = (string?)(await client.RequestAsync("chat.open", new JObject(), cancellation.Token))["sessionId"];
-    var prompt = new JObject { ["sessionId"] = session, ["message"] = "hello" };
+    var opened = await client.RequestAsync("chat.open", new JObject(), cancellation.Token);
+    if (mode == "workspace" && (bool?)opened["readOnly"] != true) throw new IOException("Workspace capability not enabled");
+    var session = (string?)opened["sessionId"];
+    var prompt = new JObject { ["sessionId"] = session, ["message"] = mode == "workspace" ? "workspace-read" : "hello" };
     if (mode == "context") prompt["context"] = new JObject {
         ["documentUri"] = "file:///D:/workspace/Example.cs", ["language"] = "CSharp",
         ["selection"] = new JObject { ["text"] = "// 안녕 🚀", ["startLine"] = 1, ["startColumn"] = 1, ["endLine"] = 1, ["endColumn"] = 9 }
