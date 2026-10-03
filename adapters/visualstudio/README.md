@@ -1,8 +1,9 @@
 # Visual Studio adapter
 
-C# VSIX 최소 vertical slice: Tools → PiAgent: Check Core Connection.
+C# VSIX: Tools → PiAgent: Check Core Connection / PiAgent: Open Chat.
 명령은 background worker에서 Core에 connect/hello/capability negotiation/ping을 수행하고
-연결을 닫는다. 결과는 PiAgent Output pane에 표시한다. IDE 변경 도구나 WebView UI는 아직 없다.
+연결을 닫는다. 결과는 PiAgent Output pane에 표시한다. Open Chat은 WPF ToolWindowPane 안의
+WebView2에서 shared TypeScript UI를 실행한다. 연결별 텍스트 채팅이며 IDE 변경 도구는 아직 없다.
 
 PiAgent.Transport는 VS SDK에 의존하지 않는 netstandard2.0 library다. strict UTF-8,
 1 MiB length-prefix framing, request ID 검증, 5초 deadline과 cancellation을 제공한다.
@@ -13,7 +14,8 @@ PiAgent.Transport는 VS SDK에 의존하지 않는 netstandard2.0 library다. st
 루트에서 scripts/build-adapters.ps1을 실행하거나 VS MSBuild로 PiAgent.Vsix/PiAgent.Vsix.csproj을
 restore/build한다. SDK 17.14 기반이며 manifest는 VS 2022/2026 amd64와 arm64를 대상으로 한다.
 빌드 산출물: PiAgent.Vsix/bin/Release/net472/PiAgent.Vsix.vsix.
-Microsoft IDE SDK assembly는 재배포하지 않으며 자체 DLL과 Newtonsoft.Json / MIT notice만 포함한다.
+Microsoft IDE SDK assembly는 재배포하지 않는다. 자체 DLL, Newtonsoft.Json과 WebView2 SDK DLL/loader 및
+라이선스를 포함한다. WebView2 Runtime 자체는 배포하지 않는다. VSIX manifest 버전 확인을 위해 Rebuild한다.
 
 ## IDE에서 확인
 
@@ -23,7 +25,10 @@ Microsoft IDE SDK assembly는 재배포하지 않으며 자체 DLL과 Newtonsoft
 4. PiAgent Output pane의 handshake/capability/ping OK 또는 오류를 확인한다.
 
 다른 endpoint는 IDE 실행 전에 PIAGENT_PIPE_NAME 환경 변수로 지정한다.
-Core 자동 실행/설치, persistent connection/reconnect/heartbeat, IDE capability 호출은 아직 없다.
+Core 자동 실행/설치와 IDE capability 호출은 아직 없다. 채팅은 persistent connection과 20초 ping을 사용한다.
+Open Chat → 연결 → 질문 전송 → 응답/취소가 최소 흐름이다. Core에는 --omp/--cwd를 지정해야 한다.
+채팅에는 chat.v1 capability가 필수이며 없는 daemon에서는 연결 오류를 표시한다. 새 대화로 세션을 교체한다.
+WebView2는 local-origin만 허용하고 UI는 response를 HTML로 해석하지 않는다.
 VSIX를 자동 설치하거나 사용자의 기존 VS 설정을 변경하는 script는 제공하지 않는다.
 
 기존 설정과 분리한 테스트 설치는 VSIXInstaller의 /rootSuffix:PiAgentTest와 /instanceIds:<instanceId>를
@@ -34,7 +39,7 @@ VSIX를 자동 설치하거나 사용자의 기존 VS 설정을 변경하는 scr
 
 VS 2022와 VS 2026 MSBuild로 DLL/pkgdef/VSCT resource/VSIX 생성과 payload를 확인했다.
 npm run test:adapters는 실제 Node Core를 대상으로 VS 2022/2026 metadata, Unicode pong,
-취소 및 oversized response를 동일 C# transport로 확인한다.
+취소 및 oversized response, 동시 ping/채팅 스트리밍/cooperative abort를 동일 C# transport로 확인한다.
 VS 2022 (17.14.37411.7, instance 8967bed4) / VS 2026 (18.7.11925.98, instance 4dee894c)의
 PiAgentTest 프로필에 설치했다. VSIXInstaller는 두 설치의 commit/enabled 완료를 보고했다.
 로그: .tools/ide-validation 및 Windows TEMP의 dd_VSIXInstaller 로그.
@@ -43,3 +48,8 @@ PiAgentTest에서 실제 Tools 메뉴를 실행해 PiAgent Output의 handshake/c
 ActivityLog에도 PiAgentPackage의 Begin/End package load가 기록되었다.
 결과 로그: .tools/ide-validation/vs2026-piagent-output.txt 및 vs2026-updated-activity.xml.
 기본 프로필의 기존 사용자 설정은 변경하지 않았다. VS 2022 실제 메뉴 실행은 아직 미검증이다.
+
+0.2.0은 VS 2026 PiAgentTest에서 WebView2 Chat 생성·연결, 실제 모델 질문/스트리밍 응답 완료,
+응답 중 취소, 새 대화 및 IDE 정상 종료 때 OMP child 정리를 확인했다. docs/VALIDATION.md에 기록한다.
+테스트 VSIX를 교체한 뒤 이전 설치 경로를 참조하면, IDE를 닫고 같은 devenv.exe로
+/RootSuffix PiAgentTest /UpdateConfiguration을 실행한 뒤 재시작한다. 기본 프로필에는 적용하지 않는다.

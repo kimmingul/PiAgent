@@ -18,7 +18,9 @@ Push-Location $workspacePath
 try {
     & dotnet build adapters/visualstudio/PiAgent.Transport.Smoke/PiAgent.Transport.Smoke.csproj -c Release
     if ($LASTEXITCODE -ne 0) { throw 'C# transport build failed' }
-    & $MsBuildPath adapters/visualstudio/PiAgent.Vsix/PiAgent.Vsix.csproj /restore /p:Configuration=Release /v:minimal /nologo
+    & npm run build
+    if ($LASTEXITCODE -ne 0) { throw 'Core/UI TypeScript build failed' }
+    & $MsBuildPath adapters/visualstudio/PiAgent.Vsix/PiAgent.Vsix.csproj /restore /t:Rebuild /p:Configuration=Release /v:minimal /nologo
     if ($LASTEXITCODE -ne 0) { throw 'VSIX build failed' }
     foreach ($platform in @('Win32', 'Win64')) {
         $compilerName = if ($platform -eq 'Win32') { 'dcc32.exe' } else { 'dcc64.exe' }

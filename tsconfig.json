@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "ui" },
     { "path": "packages/piagent-protocol" },
     { "path": "packages/piagent-core" },
     { "path": "packages/piagent-omp" },

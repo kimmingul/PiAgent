@@ -1,8 +1,17 @@
 {
   "name": "@piagent/daemon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "dependencies": { "@piagent/protocol": "0.1.0", "@piagent/core": "0.1.0", "@piagent/omp": "0.1.0" }
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@piagent/protocol": "0.2.0",
+    "@piagent/core": "0.2.0",
+    "@piagent/omp": "0.2.0"
+  }
 }

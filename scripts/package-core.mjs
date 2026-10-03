@@ -26,6 +26,8 @@ export async function packageCore(destination, { adapters = false } = {}) {
   await writeFile(join(output, 'probe.mjs'), "import './node_modules/@piagent/daemon/dist/adapter-probe.js';\n");
   for (const document of ['ARCHITECTURE.md', 'PROTOCOL.md'])
     await cp(join(repository, document), join(output, document));
+  await mkdir(join(output, 'docs'));
+  await cp(join(repository, 'docs/VALIDATION.md'), join(output, 'docs/VALIDATION.md'));
   await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
     'No npm install, TypeScript compiler, native addon or workspace checkout is needed.\n\n' +
@@ -34,14 +36,18 @@ export async function packageCore(destination, { adapters = false } = {}) {
     'Optional OMP: node core.mjs --pipe piagent-dev --omp C:\\path\\omp.exe --cwd C:\\workspace\n' +
     'Stop with Ctrl+C. OMP requires a separately installed executable.\n\n' +
     (adapters ? 'Adapter installers and installation instructions are in adapters/.\n' : '') +
-    'This release implements handshake/capability/ping and the OMP process skeleton.\n' +
-    'Chat UI and full agent features are outside this vertical slice.\n');
+    'This release implements handshake/capability/ping and isolated tool-free OMP chat.\n' +
+    'For VS Chat, start with --omp and --cwd, then Tools > PiAgent: Open Chat > Connect.\n' +
+    'The VS adapter uses an installed WebView2 Runtime. Full agent tools remain a future scope.\n');
   if (adapters) {
     for (const ide of ['visualstudio', 'radstudio']) {
       const target = join(output, 'adapters', ide);
       await mkdir(target, { recursive: true });
       await cp(join(repository, 'adapters', ide, 'README.md'), join(target, 'README.md'));
     }
+    // Inspect the built manifest before packaging; VSSDK incremental caches can be stale.
+    const manifest = await readFile(join(repository, 'adapters/visualstudio/PiAgent.Vsix/obj/Release/net472/extension.vsixmanifest'), 'utf8');
+    if (!manifest.includes(`Version="${version}"`)) throw new Error('VSIX version is stale; rebuild adapters.');
     await cp(join(repository, 'adapters/visualstudio/PiAgent.Vsix/bin/Release/net472/PiAgent.Vsix.vsix'),
       join(output, 'adapters/visualstudio/PiAgent.Vsix.vsix'));
     for (const platform of ['Win32', 'Win64']) {

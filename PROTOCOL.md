@@ -22,7 +22,7 @@ partial bytes는 deadline을 연장하지 않는다. output queue는 2 MiB, 기�
 ## JSON-RPC profile와 ID migration
 
 단일 request object만 받는다. Batch는 -32600. jsonrpc='2.0', method=string이며
-params가 있으면 object/array여야 한다. 현재 두 method는 object params만 지원한다.
+params가 있으면 object/array여야 한다. 현재 제공하는 method는 object params만 지원한다.
 ID는 string 또는 `Number.isSafeInteger` 범위의 integer(-9007199254740991~9007199254740991).
 null, boolean, 실수, 범위를 벗어난 숫자는 거절한다. 문자열 ID를 권장하며 응답에 그대로 반환한다.
 이전 Rust skeleton의 signed i64 숫자 ID는 JS 정확도 범위로 좁혔다. 기존 큰 숫자 ID는 string으로
@@ -30,7 +30,7 @@ null, boolean, 실수, 범위를 벗어난 숫자는 거절한다. 문자열 ID�
 
 result/error가 들어 있는 client request는 거절한다. core→adapter request는 아직 없다.
 유효한 notification(id 없음)은 응답 없이 무시하며 handshake 상태를 변경하지 않는다.
-두 method에는 ID를 넣는다. invalid JSON/UTF-8/BOM은 -32700, invalid request envelope는
+호출할 method에는 ID를 넣는다. invalid JSON/UTF-8/BOM은 -32700, invalid request envelope는
 -32600. 해석 가능한 유효 ID가 있으면 오류에 반환하고 없으면 id:null이다.
 Unknown envelope/hello 필드는 확장을 위해 무시하며 ping의 unknown params key는 거절한다.
 
@@ -129,15 +129,64 @@ protocolVersion 생략은 legacy v1로 간주하며 current version이 1이 아�
 ```
 
 manager의 request(command, fields)는 get_state, get_available_commands, get_session_stats,
-abort만 허용한다. 고유 string ID로 pending 요청을 관리하고 response.id와 command를 함께
+new_session, prompt, abort를 허용한다. 고유 string ID로 pending 요청을 관리하고 response.id와 command를 함께
 검사한다. 최대 64개 pending, 기본 request timeout 5초, ready timeout 10초다.
 실패 응답·timeout·child exit·stop은 pending Promise를 reject한다.
 response 성공은 명령 응답이며 agent 턴 완료가 아니다. 그 외 event는 raw frame으로 전달한다.
 stdin EOF로 종료를 요청하고 기본 2초 deadline 후 직접 자식을 kill한다. 자동 restart는 없다.
 
-현재 prompt, host_tool_call 응답/승인, extension_ui_request 처리, checkpoint와 usage 집계는
-미구현이다. OMP 이벤트를 adapter/UI에 연결하기 전에 typed session/event와 approval 계약을
-추가해야 한다. raw OMP frame은 PiAgent pipe RPC envelope로 직접 전송하지 않는다.
+chat session은 아래 정규화 계약으로 OMP prompt/event를 연결한다. host_tool_call 응답/승인,
+checkpoint와 usage 집계는 후속 범위다. raw OMP frame은 PiAgent pipe RPC envelope로 직접 전송하지 않는다.
+
+## Chat capability: chat.v1 (0.2.0)
+
+기존 protocolVersion 1 framing과 hello/ping 계약을 유지한다. hello의 capabilities 및
+requiredCapabilities에 `chat.v1`을 넣는다. daemon이 --omp로 설정된 경우에만 협상된다.
+chat capability를 요구하지 않는 Delphi/기존 adapter는 그대로 ping-only로 동작한다.
+chat 메서드는 JSON-RPC request이며 notification으로 보낸 요청은 실행하지 않는다.
+
+| Method | params | result |
+| --- | --- | --- |
+| chat.open | {} | {sessionId, toolsEnabled:false} |
+| chat.prompt | {sessionId, message} | {sessionId, turnId, accepted:true} |
+| chat.cancel | {sessionId, turnId} | {requested:true} |
+| chat.close | {sessionId} | {closed:true} |
+
+세션 ID/턴 ID는 Core가 만든 불투명 문자열이다. 세션은 pipe connection 소유이며 다른
+connection에서 사용할 수 없다. connection마다 한 세션, 세션마다 한 active turn이다.
+workspace는 daemon --cwd로 고정한다. adapter/UI가 실행파일·명령·cwd를 지정할 수 없다.
+open은 OMP ready → new_session 응답 후 완료하고 이전 auto-resume 대화를 상속하지 않는다.
+OMP에는 --no-tools --no-extensions --no-skills --no-rules --no-lsp --no-session --no-title
+--no-pty를 전달한다. 이번 버전에서는 도구 실행, 이미지, slash commands를 열지 않는다.
+message는 비어 있지 않은 일반 텍스트이며 UTF-8 64 KiB 이하이다.
+
+Core → adapter notification 예:
+
+```json
+{"jsonrpc":"2.0","method":"chat.event","params":{"sessionId":"opaque-session","turnId":"opaque-turn","sequence":1,"kind":"started"}}
+{"jsonrpc":"2.0","method":"chat.event","params":{"sessionId":"opaque-session","turnId":"opaque-turn","sequence":2,"kind":"delta","text":"안녕"}}
+{"jsonrpc":"2.0","method":"chat.event","params":{"sessionId":"opaque-session","turnId":"opaque-turn","sequence":3,"kind":"completed"}}
+```
+
+kind는 started/delta/completed/cancelled/error/closed이다. sequence는 세션 내 단조 증가한다.
+closed의 turnId는 null이다. 이벤트가 prompt 응답보다 먼저 올 수 있다. accepted는 접수이며
+완료가 아니다. UI는 started로 turnId를 받아 delta를 표시하고 terminal event로 busy를 해제한다.
+message_update.assistantMessageEvent.text_delta만 텍스트 delta로 변환한다.
+agent_end는 isTerminal:false를 제외하고 terminal이다. data.agentInvoked:false 응답과
+prompt_result.agentInvoked:false도 완료로 처리한다. thinking/raw frames는 UI에 전달하지 않는다.
+setStatus 같은 정보성 OMP UI 요청은 무시한다. select/confirm/input/editor 또는 host tool 요청은
+unsupported error로 턴을 종료하고 세션을 닫는다. 임의 승인 응답을 보내지 않는다.
+
+cancel은 OMP abort를 보내며 그 응답이 턴 종료를 의미하지 않는다. terminal event를 기다리고,
+5초 내 종료 이벤트가 없으면 취소 처리 후 해당 세션의 process를 정리한다. 턴 제한은 10분이다.
+prompt acknowledgement timeout은 세션을 폐기해 늦은 응답이 다음 턴에 섞이지 않게 한다.
+close, pipe disconnect, daemon graceful shutdown은 OMP stdin EOF/2초 kill fallback으로 정리한다.
+VS chat은 20초마다 ping해 idle connection을 유지한다. RPC는 기본 5초, chat.open은 adapter에서
+20초 제한이다. 최대 in-flight 요청 16개, frame 1 MiB/output queue 2 MiB 제한을 유지한다.
+
+추가 오류: -32010 OMP/connection 실패, -32011 session already open/opening,
+-32012 session/turn 소유권 또는 ID 불일치, -32013 turn busy. capability 미협상은 기존 -32005다.
+권한·영속 복원·tool approval·checkpoint는 별도 capability로 후속 확장한다.
 
 ## Adapter 구현 메모
 

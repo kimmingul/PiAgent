@@ -2,20 +2,26 @@ import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
 import { encodeFrame, FrameDecoder, isObject } from '@piagent/protocol';
 import type { RpcResponse } from '@piagent/protocol';
+import { EventEmitter } from 'node:events';
 
 /** Small protocol simulator client, not an IDE adapter SDK. */
-export class PipeClient {
+export class PipeClient extends EventEmitter {
   private sequence = 0;
   private readonly pending = new Map<string, {
     resolve: (response: RpcResponse) => void; reject: (error: Error) => void; timer: NodeJS.Timeout;
   }>();
 
   private constructor(private readonly socket: Socket) {
+    super();
     const decoder = new FrameDecoder();
     socket.on('data', (chunk: Buffer) => {
       try {
         decoder.push(chunk, body => {
           const frame: unknown = JSON.parse(body.toString('utf8')) as unknown;
+          if (isObject(frame) && frame['jsonrpc'] === '2.0' && frame['method'] === 'chat.event'
+            && !('id' in frame) && isObject(frame['params'])) {
+            this.emit('chat.event', frame['params']); return;
+          }
           if (!isObject(frame) || frame['jsonrpc'] !== '2.0' || typeof frame['id'] !== 'string'
             || ('result' in frame) === ('error' in frame)) throw new Error('Invalid RPC response');
           const pending = this.pending.get(frame['id']);
@@ -52,7 +58,7 @@ export class PipeClient {
     try { buffer = encodeFrame({ jsonrpc: '2.0', id, method, params }); }
     catch (error) { return Promise.reject(error); }
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Pipe RPC timeout')); }, 5_000);
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Pipe RPC timeout')); }, method === 'chat.open' ? 20_000 : 5_000);
       this.pending.set(id, { resolve, reject, timer });
       this.socket.write(buffer, error => { if (error) this.rejectAll(error); });
     });

@@ -102,8 +102,7 @@ export class OmpProcess extends EventEmitter {
 
   request(command: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     if (this.currentState !== 'ready' || this.child === undefined) return Promise.reject(new Error('OMP is not ready'));
-    // Restrict this skeleton to read-only inspection and cooperative cancellation.
-    if (!['get_state', 'get_available_commands', 'get_session_stats', 'abort'].includes(command)) {
+    if (!['get_state', 'get_available_commands', 'get_session_stats', 'abort', 'new_session', 'prompt'].includes(command)) {
       return Promise.reject(new Error('OMP command not enabled in this slice'));
     }
     if ('id' in fields || 'type' in fields) return Promise.reject(new Error('Reserved OMP fields'));

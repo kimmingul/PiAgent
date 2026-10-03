@@ -5,8 +5,9 @@ RAD Studio Delphi BPL과 Visual Studio 2022/2026 C# VSIX adapter는 Named Pipe J
 연결하고, Core는 별도 OMP 자식과 `omp --mode rpc-ui` JSONL로 통신한다.
 
 현재 구현: daemon, adapter handshake/version/capability negotiation/ping, simulator,
-OMP process manager skeleton, C# VSIX/Delphi BPL 최소 연결 메뉴와 transport/tests.
-독립 실행 배포본도 생성할 수 있다. WebView UI와 agent 기능 전체 포팅은 후속 범위다.
+OMP process manager, C# VSIX/Delphi BPL 연결 메뉴와 transport/tests.
+0.2.0은 OMP 텍스트 채팅 세션, 스트리밍, 취소와 VS WebView 채팅 UI를 제공한다.
+독립 실행 배포본도 생성할 수 있다. 파일/IDE 변경 도구·승인·Git checkpoint·usage는 후속 범위다.
 
 - [Architecture](ARCHITECTURE.md): Rust 제거/유지 내역, workspace, reference mapping, 확장 경계
 - [Protocol](PROTOCOL.md): binary framing, capability negotiation, 오류와 OMP JSONL 계약
@@ -57,8 +58,8 @@ Windows에서는 shell wrapper(.cmd/.bat)가 아닌 omp.exe 경로를 지정한�
 npm start -- --pipe piagent-dev --omp "$env:LOCALAPPDATA\omp\omp.exe" --cwd D:\source\PiAgent
 ```
 
-이 명령은 OMP child를 시작하고 JSONL v1 ready를 기다린다. Adapter protocol은 여전히
-hello/ping만 제공한다. prompt나 IDE tool 실행은 노출하지 않는다.
+이 명령은 chat.v1 capability를 제공한다. chat.open 때 연결별 OMP child를 시작하고
+JSONL v1 ready/new_session 후 채팅을 받는다. OMP 도구는 비활성화한다.
 읽기 전용 연결 smoke는 별도 임시 workspace에서 실행하는 것이 좋다:
 
 ```powershell
@@ -76,7 +77,8 @@ npm test는 node:test로 protocol, 실제 Windows Named Pipe, standalone CLI와 
 Windows에서 모든 테스트가 실행되어야 한다. OMP의 live smoke는 설치 상태에 의존하므로 opt-in이다.
 
 2026-10-03 이 PC(Windows ARM64)에서 Node 24.21.0 ARM64와 x64(Windows emulation)로
-각각 테스트 16개를 통과했다. x64 runtime은 공식 SHA-256으로 검증한 테스트용 바이너리다.
+0.2.0 Core 테스트 22개를 각 runtime에서 통과했다. adapter 테스트 6개도 통과했다.
+x64 runtime은 공식 SHA-256으로 검증한 테스트용 바이너리다.
 Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/get_state smoke도 통과했다.
 원하는 runtime으로 재검증하려면:
 
@@ -103,13 +105,39 @@ npm run test:adapters
 기본 script는 최신 설치된 Visual Studio와 RAD Studio를 찾으며 -MsBuildPath / -BdsRoot로
 명시할 수 있다. 두 Delphi bitness를 모두 빌드하고 IDE 설치/레지스트리 변경은 하지 않는다.
 2026-10-03에 VS 2022/2026 MSBuild와 RAD Studio 13.2 Win32/Win64 build를 확인했다.
-추가 adapter 테스트 5개는 실제 Core 연결, Unicode nonce, 취소와 oversized response를 검증한다.
+adapter 테스트 6개는 실제 Core 연결, Unicode nonce, 취소와 oversized response 및 C# 채팅 스트림을 검증한다.
 
 설치와 메뉴 확인 절차: [Visual Studio adapter](adapters/visualstudio/README.md),
 [RAD Studio adapter](adapters/radstudio/README.md). VSIX는 VS 2022/2026의 별도 PiAgentTest
 프로필에 설치했다. VS 2026 업데이트(18.10.3) 후 PiAgentTest에서 실제 package load, Tools 메뉴 실행과
-PiAgent Output의 handshake/capability/ping OK를 확인했다. VS 2022의 실제 메뉴 검증은 아직 남아 있다.
+PiAgent Output의 handshake/capability/ping OK를 확인했다. 0.2.0 Chat UI의 실제 질문/응답 스트리밍,
+취소·새 대화·IDE 종료 시 OMP 정리도 확인했다. VS 2022의 실제 메뉴 검증은 아직 남아 있다.
 RAD Studio의 실제 host 검증 결과는 adapter README에 기록한다.
+자세한 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md)에 있다.
+
+## VS 채팅 사용 (0.2.0)
+
+```powershell
+npm run build
+npm start -- --pipe piagent-dev --omp "$env:LOCALAPPDATA\omp\omp.exe" --cwd C:\path\to\workspace
+```
+
+새 VSIX를 설치한 프로필에서 Tools → PiAgent: Open Chat을 열고 연결을 누른다.
+질문을 입력해 보내고, 응답 중 취소할 수 있다. Enter로 전송하고 Shift+Enter로 줄바꿈한다.
+새 대화는 기존 OMP 세션을 닫고 새 세션을 만든다. 창을 숨겼다가 열면 대화를 유지한다.
+연결 종료/IDE 종료는 세션을 정리한다. IDE 실행 전에 PIAGENT_PIPE_NAME으로 endpoint를 바꿀 수 있다.
+WebView2 Runtime이 필요하다. SDK DLL/loader는 VSIX에 포함하며 Node Core는 native dependency가 없다.
+기존 RADAgent의 composer/bridge 패턴을 참고한 최소 TypeScript UI이며 원본 repository는 수정하지 않는다.
+이번 버전은 일반 텍스트만 받으며 slash commands, 이미지, 파일 변경 도구를 제공하지 않는다.
+
+실제 모델 호출 smoke (설치된 OMP 인증을 사용하며 모델 사용량이 발생한다):
+
+```powershell
+node scripts/chat-smoke.mjs "$env:LOCALAPPDATA\omp\omp.exe" C:\path\to\scratch-workspace
+```
+
+자동 테스트는 fake OMP로 결정적으로 검증하고 이 명령은 opt-in이다. 실제 OMP 18.5.0에서
+ready/new_session/prompt/text delta/agent_end로 `PiAgent chat verified` 응답을 받았다.
 
 ## 독립 실행 배포본
 

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable">
+  <Extern href="stdidcmd.h"/><Extern href="vsshlids.h"/>
+  <Commands package="guidPackage">
+    <Groups><Group guid="guidCommands" id="ConnectionGroup" priority="0x0600"><Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" /></Group></Groups>
+    <Buttons><Button guid="guidCommands" id="CheckConnection" priority="0x0100" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Check Core Connection</ButtonText></Strings></Button>
+    <Button guid="guidCommands" id="OpenChat" priority="0x0101" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Open Chat</ButtonText></Strings></Button></Buttons>
+  </Commands>
+  <Symbols><GuidSymbol name="guidPackage" value="{38557171-e01d-4d7b-9842-3b435c5eed83}"/><GuidSymbol name="guidCommands" value="{e648642e-3b01-454a-a5f5-77ab0b763a90}"><IDSymbol name="ConnectionGroup" value="0x1020"/><IDSymbol name="CheckConnection" value="0x0100"/><IDSymbol name="OpenChat" value="0x0101"/></GuidSymbol></Symbols>
+</CommandTable>

@@ -1,0 +1,30 @@
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.2.0</Version>
+    <AssemblyName>PiAgent.Vsix</AssemblyName><RootNamespace>PiAgent.Vsix</RootNamespace>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile><IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <CreateVsixContainer>true</CreateVsixContainer><DeployExtension>false</DeployExtension>
+    <UseCodebase>true</UseCodebase><VsixType>v3</VsixType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Design" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
+    <ProjectReference Include="../PiAgent.Transport/PiAgent.Transport.csproj"><IncludeOutputGroupsInVSIX>BuiltProjectOutputGroup</IncludeOutputGroupsInVSIX></ProjectReference>
+    <VSCTCompile Include="Commands.vsct"><ResourceName>Menus.ctmenu</ResourceName></VSCTCompile>
+    <None Update="source.extension.vsixmanifest"><SubType>Designer</SubType></None>
+    <VSIXSourceItem Include="$(OutputPath)Newtonsoft.Json.dll"><TargetPath>Newtonsoft.Json.dll</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\THIRD-PARTY-NOTICES.txt"><TargetPath>THIRD-PARTY-NOTICES.txt</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\WEBVIEW2-LICENSE.txt"><TargetPath>WEBVIEW2-LICENSE.txt</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\..\..\ui\src\chat.html"><TargetPath>ui\chat.html</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\..\..\ui\src\chat.css"><TargetPath>ui\chat.css</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\..\..\ui\dist\chat.js"><TargetPath>ui\chat.js</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(NuGetPackageRoot)microsoft.web.webview2\1.0.4258.31\runtimes\win-x64\native\WebView2Loader.dll"><TargetPath>runtimes\win-x64\native\WebView2Loader.dll</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(NuGetPackageRoot)microsoft.web.webview2\1.0.4258.31\runtimes\win-arm64\native\WebView2Loader.dll"><TargetPath>runtimes\win-arm64\native\WebView2Loader.dll</TargetPath></VSIXSourceItem>
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" />
+</Project>

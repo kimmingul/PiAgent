@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { OmpProcess } from '@piagent/omp';
 import { startDaemon } from './index.js';
 
 async function main(): Promise<void> {
@@ -20,11 +19,11 @@ async function main(): Promise<void> {
     else if (flag === '--omp') executable = value;
     else cwd = resolve(value);
   }
-  const daemon = await startDaemon({ pipeName, onDiagnostic: error => console.error(error.message) });
-  let omp: OmpProcess | undefined;
+  const daemon = await startDaemon({ pipeName, onDiagnostic: error => console.error(error.message),
+    ...(executable ? { omp: { executable, cwd } } : {}) });
   let shutdown: Promise<void> | undefined;
   const close = (): Promise<void> => {
-    shutdown ??= Promise.all([daemon.close(), omp?.stop()]).then(() => undefined);
+    shutdown ??= daemon.close();
     return shutdown;
   };
   const signal = (): void => { void close().catch(error => { console.error(error); process.exitCode = 1; }); };
@@ -32,15 +31,7 @@ async function main(): Promise<void> {
   process.once('SIGTERM', signal);
   try {
     console.error(`PiAgent listening on ${daemon.path} (${process.platform}/${process.arch})`);
-    if (executable) {
-      omp = new OmpProcess({ executable, cwd });
-      omp.on('diagnostic', (error: Error) => console.error(`OMP: ${error.message}`));
-      omp.on('exit', ({ expected }: { expected: boolean }) => {
-        if (!expected) { process.exitCode = 1; void close().catch(error => console.error(error)); }
-      });
-      await omp.start();
-      console.error('OMP JSONL v1 ready');
-    }
+    console.error(`Chat ${executable ? 'enabled: isolated, tool-free OMP sessions on demand' : 'disabled: pass --omp to enable'}`);
   } catch (error) { await close(); throw error; }
 }
 

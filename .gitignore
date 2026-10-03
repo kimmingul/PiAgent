@@ -11,3 +11,4 @@ dist/
 *.bpl
 *.dcu
 *.vsix
+!adapters/visualstudio/PiAgent.Vsix/

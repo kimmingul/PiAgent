@@ -1,10 +1,14 @@
 {
   "name": "piagent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
-  "engines": { "node": ">=24.21.0 <25" },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
@@ -16,5 +20,8 @@
     "package": "npm run build && node scripts/package-core.mjs",
     "package:adapters": "npm run build && node scripts/package-core.mjs --adapters"
   },
-  "devDependencies": { "@types/node": "^24.0.0", "typescript": "^5.9.0" }
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
 }

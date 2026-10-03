@@ -23,7 +23,7 @@ test('OMP launch flags/cwd, ready gate, ID correlation, Unicode events and stder
     assert.deepEqual(state.data.argv, ['--mode', 'rpc-ui']);
     assert.ok(frames.some(frame => frame.type === 'session_event' && frame.text === '한글 🚀'));
     assert.ok(stderr.length > 0);
-    await assert.rejects(omp.request('prompt', { message: 'never sent' }), /not enabled/);
+    await assert.rejects(omp.request('delete_files'), /not enabled/);
   } finally { await omp.stop(); }
   assert.equal(omp.state, 'stopped'); await omp.stop();
   await assert.rejects(omp.start(), /single-use/);
