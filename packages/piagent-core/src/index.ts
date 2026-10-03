@@ -3,6 +3,7 @@ import { CORE_VERSION, PROTOCOL_VERSION, failure, isObject, success, validId } f
 import type { RpcId, RpcResponse } from '@piagent/protocol';
 import { ChatError, CHAT_CAPABILITY } from './chat.js';
 import type { ChatSession } from './chat.js';
+import { CONTEXT_CAPABILITY } from './context.js';
 export { ChatSession } from './chat.js';
 
 interface AdapterInfo {
@@ -37,6 +38,8 @@ export class Session {
     const id = value['id'];
     if (!this.ready) return failure(id, -32002, 'Handshake required');
     if (!this.chat || !this.negotiated.includes(CHAT_CAPABILITY)) return failure(id, -32005, 'Capability not negotiated');
+    if (value['method'] === 'chat.prompt' && isObject(value['params']) && 'context' in value['params']
+      && !this.negotiated.includes(CONTEXT_CAPABILITY)) return failure(id, -32005, 'Selection context capability not negotiated');
     if (!isObject(value['params'] ?? {})) return failure(id, -32602, 'Invalid params');
     try { return success(id, await this.chat.handle(value['method'], (value['params'] ?? {}) as Record<string, unknown>)); }
     catch (error) { return failure(id, error instanceof ChatError ? error.code : -32010,
@@ -94,7 +97,8 @@ export class Session {
     if (!params['protocolVersions'].includes(PROTOCOL_VERSION)) {
       return failure(id, -32001, 'Unsupported protocol version', { supportedProtocolVersions: [PROTOCOL_VERSION] });
     }
-    const negotiated: string[] = offered.filter(capability => capability === 'core.ping' || (this.chat && capability === CHAT_CAPABILITY));
+    const negotiated: string[] = offered.filter(capability => capability === 'core.ping'
+      || (this.chat && (capability === CHAT_CAPABILITY || (capability === CONTEXT_CAPABILITY && offered.includes(CHAT_CAPABILITY)))));
     const missing = required.filter(capability => !negotiated.includes(capability));
     if (missing.length > 0) return failure(id, -32004, 'Required capability unavailable', { missingCapabilities: missing });
     this.negotiated = negotiated;

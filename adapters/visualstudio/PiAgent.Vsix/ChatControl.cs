@@ -26,6 +26,7 @@ public sealed class ChatControl : UserControl, IDisposable
     private PipeAdapterClient? client;
     private string? sessionId;
     private string? turnId;
+    private JObject? selectionContext;
     private bool initialized, connecting, pageReady, disposed;
     public ChatControl()
     {
@@ -72,6 +73,16 @@ public sealed class ChatControl : UserControl, IDisposable
             switch ((string?)message["action"])
             {
                 case "ready": pageReady = true; break;
+                case "captureSelection":
+                    if (turnId != null) return;
+                    await factory.SwitchToMainThreadAsync(lifetime.Token);
+                    selectionContext = null;
+                    Post(new JObject { ["type"] = "selection", ["context"] = null });
+                    selectionContext = SelectionContext.Capture();
+                    Post(new JObject { ["type"] = "selection", ["context"] = selectionContext.DeepClone() }); break;
+                case "clearSelection":
+                    if (turnId != null) return;
+                    selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null }); break;
                 case "connect": await ConnectAsync(); break;
                 case "reset":
                     if (client == null || sessionId == null || turnId != null || connecting) return;
@@ -79,7 +90,15 @@ public sealed class ChatControl : UserControl, IDisposable
                     sessionId = null; await OpenAsync(); break;
                 case "prompt":
                     if (client == null || sessionId == null || turnId != null) throw new IOException("Session unavailable or busy");
-                    await client.RequestAsync("chat.prompt", new JObject { ["sessionId"] = sessionId, ["message"] = message["message"] }, lifetime.Token); break;
+                    var parameters = new JObject { ["sessionId"] = sessionId, ["message"] = message["message"] };
+                    var attached = selectionContext;
+                    // Only the host-captured snapshot can cross the pipe; WebView cannot supply arbitrary context.
+                    if (attached != null) parameters["context"] = attached.DeepClone();
+                    await client.RequestAsync("chat.prompt", parameters, lifetime.Token);
+                    if (ReferenceEquals(selectionContext, attached)) {
+                        selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null });
+                    }
+                    break;
                 case "cancel":
                     if (client == null || sessionId == null || turnId == null || (string?)message["turnId"] != turnId) return;
                     await client.RequestAsync("chat.cancel", new JObject { ["sessionId"] = sessionId, ["turnId"] = turnId }, lifetime.Token); break;
@@ -114,7 +133,7 @@ public sealed class ChatControl : UserControl, IDisposable
                     if (!disposed && ReferenceEquals(client, active)) Disconnect(error.Message);
                 }).FileAndForget("PiAgent/ChatDisconnect");
             };
-            await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true);
+            await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true, selectionContext: true);
             await OpenAsync(); heartbeat.Start();
         }
         catch (Exception error) { Disconnect(error.Message); }
@@ -124,6 +143,7 @@ public sealed class ChatControl : UserControl, IDisposable
     {
         var result = await client!.RequestAsync("chat.open", new JObject(), lifetime.Token);
         sessionId = (string?)result["sessionId"] ?? throw new InvalidDataException("Missing session ID"); turnId = null;
+        selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null });
         Post(new JObject { ["type"] = "session", ["sessionId"] = sessionId });
     }
     private void Post(JObject message)

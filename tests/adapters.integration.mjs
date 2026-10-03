@@ -13,6 +13,18 @@ const csharp = file('adapters/visualstudio/PiAgent.Transport.Smoke/bin/Release/n
 const delphi = platform => file(`adapters/radstudio/bin/${platform}/PipeSmoke.exe`);
 const windows = { skip: process.platform !== 'win32', timeout: 15_000 };
 
+test('C# adapter selection capability delivers the exact Unicode snapshot to OMP', windows, async () => {
+  const name = `piagent-context-csharp-${randomUUID()}`;
+  const daemon = await startDaemon({ pipeName: name, omp: { executable: process.execPath,
+    executableArgs: [file('tests/fixtures/chat-omp.mjs')], cwd: process.cwd() } });
+  try {
+    const result = JSON.parse((await run('dotnet', [csharp, name, '2026', 'context'])).stdout.trim());
+    const context = JSON.parse(result.text.split('\n')[1]);
+    assert.equal(context.documentUri, 'file:///D:/workspace/Example.cs');
+    assert.equal(context.selection.text, '// 안녕 🚀'); assert.equal(result.cancelled, true);
+  } finally { await daemon.close(); }
+});
+
 test('C# duplex chat streams Unicode text while pinging and cooperatively cancels', windows, async () => {
   const name = `piagent-chat-csharp-${randomUUID()}`;
   const daemon = await startDaemon({ pipeName: name, omp: { executable: process.execPath,

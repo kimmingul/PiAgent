@@ -1,5 +1,10 @@
 # PiAgent architecture
 
+0.3.0은 VS adapter의 선택 코드 스냅샷을 `context.selection.v1`로 전달한다.
+Core는 URI·언어·범위·코드만 검증하고 OMP prompt에 포함한다. 파일 조회와 IDE SDK 호출은
+하지 않는다. VS UI thread의 캡처와 host 보관, UI 미리보기/전송은 adapter 책임이다.
+[Selection context 계약](docs/SELECTION-CONTEXT.md)을 따른다.
+
 ## 목표와 현재 범위
 
 PiAgent Core는 Node.js 24 LTS + TypeScript strict mode / ESM이다. Delphi BPL과

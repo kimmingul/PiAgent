@@ -13,7 +13,7 @@ var version = args.Length > 1 ? args[1] : "2022";
 using var client = new PipeAdapterClient(name);
 using var cancellation = new CancellationTokenSource();
 var mode = args.Length > 2 ? args[2] : "normal";
-if (mode == "chat")
+if (mode == "chat" || mode == "context")
 {
     var completed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
     var cancelled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -28,9 +28,14 @@ if (mode == "chat")
         }
     };
     cancellation.CancelAfter(10000);
-    await client.InitializeAsync("visual-studio", version, "chat-smoke", cancellation.Token, chat: true);
+    await client.InitializeAsync("visual-studio", version, "chat-smoke", cancellation.Token, chat: true, selectionContext: mode == "context");
     var session = (string?)(await client.RequestAsync("chat.open", new JObject(), cancellation.Token))["sessionId"];
-    await client.RequestAsync("chat.prompt", new JObject { ["sessionId"] = session, ["message"] = "hello" }, cancellation.Token);
+    var prompt = new JObject { ["sessionId"] = session, ["message"] = "hello" };
+    if (mode == "context") prompt["context"] = new JObject {
+        ["documentUri"] = "file:///D:/workspace/Example.cs", ["language"] = "CSharp",
+        ["selection"] = new JObject { ["text"] = "// 안녕 🚀", ["startLine"] = 1, ["startColumn"] = 1, ["endLine"] = 1, ["endColumn"] = 9 }
+    };
+    await client.RequestAsync("chat.prompt", prompt, cancellation.Token);
     await client.PingAsync("during-chat", cancellation.Token);
     var answer = await completed.Task.WaitAsync(cancellation.Token);
     var turn = (string?)(await client.RequestAsync("chat.prompt", new JObject { ["sessionId"] = session, ["message"] = "wait" }, cancellation.Token))["turnId"];

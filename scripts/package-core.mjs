@@ -28,6 +28,7 @@ export async function packageCore(destination, { adapters = false } = {}) {
     await cp(join(repository, document), join(output, document));
   await mkdir(join(output, 'docs'));
   await cp(join(repository, 'docs/VALIDATION.md'), join(output, 'docs/VALIDATION.md'));
+  await cp(join(repository, 'docs/SELECTION-CONTEXT.md'), join(output, 'docs/SELECTION-CONTEXT.md'));
   await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
     'No npm install, TypeScript compiler, native addon or workspace checkout is needed.\n\n' +
@@ -38,6 +39,7 @@ export async function packageCore(destination, { adapters = false } = {}) {
     (adapters ? 'Adapter installers and installation instructions are in adapters/.\n' : '') +
     'This release implements handshake/capability/ping and isolated tool-free OMP chat.\n' +
     'For VS Chat, start with --omp and --cwd, then Tools > PiAgent: Open Chat > Connect.\n' +
+    'Select code in the editor, capture it in Chat, inspect the attachment and send your question. See docs/SELECTION-CONTEXT.md.\n' +
     'The VS adapter uses an installed WebView2 Runtime. Full agent tools remain a future scope.\n');
   if (adapters) {
     for (const ide of ['visualstudio', 'radstudio']) {

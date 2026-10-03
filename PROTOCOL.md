@@ -190,6 +190,10 @@ VS chat은 20초마다 ping해 idle connection을 유지한다. RPC는 기본 5�
 
 ## Adapter 구현 메모
 
+0.3.0은 선택적 `context.selection.v1` capability를 추가한다. `chat.v1`과 함께 협상한 경우만
+chat.prompt의 context 필드를 허용한다. 자세한 schema·제한·소유권은
+[Selection context 계약](docs/SELECTION-CONTEXT.md)을 따른다. 기존 hello/ping/chat framing은 유지한다.
+
 Delphi는 Cardinal little-endian header와 TEncoding.UTF8 byte 배열을 사용한다.
 C#은 async NamedPipeClientStream과 BinaryPrimitives little-endian header를 사용한다.
 문자열 길이를 byte length로 사용하지 않으며 64-bit 숫자 request ID는 string으로 보낸다.

@@ -1,5 +1,9 @@
 # Visual Studio adapter
 
+0.3.0: 저장된 활성 텍스트 파일의 선택 코드를 Chat의 **선택 코드 가져오기**로 캡처한다.
+URI·언어·범위·코드를 미리 보고 질문을 보내면 한 턴에 첨부된다. 캡처는 UI thread에서 실행하며
+Core는 파일을 조회하지 않는다. 전체 파일·오류 목록·파일 수정 기능은 아직 없다.
+
 C# VSIX: Tools → PiAgent: Check Core Connection / PiAgent: Open Chat.
 명령은 background worker에서 Core에 connect/hello/capability negotiation/ping을 수행하고
 연결을 닫는다. 결과는 PiAgent Output pane에 표시한다. Open Chat은 WPF ToolWindowPane 안의

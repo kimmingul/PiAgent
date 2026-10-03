@@ -22,6 +22,10 @@ lines.on('line', line => {
   if (command.message === 'reject') { emit({ type: 'response', id: command.id, command: 'prompt', success: false }); active = false; return; }
   if (command.message === 'local') { response({ agentInvoked: false }); return; }
   response({});
+  if (command.message.startsWith('PiAgent IDE context v1')) {
+    emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: command.message } });
+    emit({ type: 'agent_end', isTerminal: true }); return;
+  }
   if (command.message === 'provider-error') {
     emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'Provider unavailable' } });
     emit({ type: 'agent_end', isTerminal: true }); return;

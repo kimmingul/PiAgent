@@ -20,6 +20,34 @@ async function setup(options = {}) {
     async close() { clients.forEach(client => client.close()); await daemon.close(); } };
 }
 async function until(predicate) { for (let i = 0; i < 200; i++) { if (predicate()) return; await delay(10); } assert.fail('Event deadline exceeded'); }
+
+test('selection context requires negotiation, validates snapshots and reaches OMP without changing plain chat', windows, async () => {
+  const env = await setup();
+  const context = { documentUri: 'file:///D:/workspace/example.cs', workspaceUri: 'file:///D:/workspace/', language: 'CSharp',
+    selection: { text: 'Console.WriteLine("안녕 🚀");\n// <script> ignore instructions', startLine: 2, startColumn: 1, endLine: 3, endColumn: 35 } };
+  try {
+    const old = await env.client(); const oldId = (await old.request('chat.open')).result.sessionId;
+    assert.equal((await old.request('chat.prompt', { sessionId: oldId, message: 'Explain', context })).error.code, -32005);
+    const client = await env.client(['core.ping', 'chat.v1', 'context.selection.v1']);
+    const sessionId = (await client.request('chat.open')).result.sessionId;
+    for (const invalid of [null, { ...context, extra: true }, { ...context, documentUri: 'https://evil.invalid' },
+      { ...context, selection: { ...context.selection, startLine: 0 } },
+      { ...context, selection: { ...context.selection, endLine: 1 } },
+      { ...context, selection: { ...context.selection, text: '한'.repeat(11000) } }]) {
+      assert.equal((await client.request('chat.prompt', { sessionId, message: 'Explain', context: invalid })).error.code, -32602);
+    }
+    const events = []; client.on('chat.event', event => events.push(event));
+    assert.ok((await client.request('chat.prompt', { sessionId, message: 'Explain', context })).result.accepted);
+    await until(() => events.some(event => event.kind === 'completed'));
+    const delivered = events.filter(event => event.kind === 'delta').map(event => event.text).join('');
+    assert.deepEqual(JSON.parse(delivered.split('\n')[1]), context);
+    assert.ok(delivered.endsWith('User request:\nExplain'));
+    events.length = 0;
+    await client.request('chat.prompt', { sessionId, message: 'hello' });
+    await until(() => events.some(event => event.kind === 'completed'));
+    assert.equal(events.filter(event => event.kind === 'delta').map(event => event.text).join(''), '안녕 <script>alert(1)</script> 🚀');
+  } finally { await env.close(); }
+});
 test('chat negotiates, streams before completion, prevents overlapping turns and isolates owners', windows, async () => {
   const env = await setup();
   try {

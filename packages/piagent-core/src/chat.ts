@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { OmpProcess } from '@piagent/omp';
 import type { OmpOptions } from '@piagent/omp';
 import { isObject } from '@piagent/protocol';
+import { contextPrompt } from './context.js';
 
 export const CHAT_CAPABILITY = 'chat.v1';
 export class ChatError extends Error {
@@ -55,7 +56,7 @@ export class ChatSession {
     }
     if (!this.id || !this.omp || this.opening || params['sessionId'] !== this.id)
       throw new ChatError(-32012, 'Unknown or unavailable session');
-    const keys = method === 'chat.prompt' ? ['sessionId', 'message'] : method === 'chat.cancel' ? ['sessionId', 'turnId'] : ['sessionId'];
+    const keys = method === 'chat.prompt' ? ['sessionId', 'message', 'context'] : method === 'chat.cancel' ? ['sessionId', 'turnId'] : ['sessionId'];
     if (Object.keys(params).some(key => !keys.includes(key))) throw new ChatError(-32602, 'Invalid params');
     if (method === 'chat.close') {
       await this.closeSession(); return { closed: true };
@@ -79,13 +80,18 @@ export class ChatSession {
       throw new ChatError(-32602, 'Expected plain text (1–65536 UTF-8 bytes); slash commands are disabled');
     if (this.turn) throw new ChatError(-32013, 'Turn already running');
     if (this.omp.state !== 'ready') throw new ChatError(-32010, 'OMP is not ready');
+    let prompt = message;
+    if ('context' in params) {
+      try { prompt = contextPrompt(message, params['context']); }
+      catch { throw new ChatError(-32602, 'Invalid selection context'); }
+    }
     const turnId = randomUUID(); this.turn = turnId; this.cancelling = false;
     this.emit('started');
     this.timer = setTimeout(() => {
       this.finish('error', 'Turn deadline exceeded'); void this.closeSession();
     }, 600_000);
     try {
-      const response = await this.omp.request('prompt', { message });
+      const response = await this.omp.request('prompt', { message: prompt });
       if (isObject(response['data']) && response['data']['agentInvoked'] === false) this.finish('completed');
       return { sessionId: this.id, turnId, accepted: true };
     } catch (error) {

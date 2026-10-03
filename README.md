@@ -1,5 +1,8 @@
 # PiAgent
 
+0.3.0의 VS Chat은 **선택 코드 가져오기**로 코드 미리보기를 확인한 뒤 질문에 첨부한다.
+사용 방법과 계약: [Selection context](docs/SELECTION-CONTEXT.md).
+
 Node.js 24 LTS + TypeScript strict / ESM 기반 IDE-neutral Core.
 RAD Studio Delphi BPL과 Visual Studio 2022/2026 C# VSIX adapter는 Named Pipe JSON-RPC로
 연결하고, Core는 별도 OMP 자식과 `omp --mode rpc-ui` JSONL로 통신한다.
@@ -77,7 +80,7 @@ npm test는 node:test로 protocol, 실제 Windows Named Pipe, standalone CLI와 
 Windows에서 모든 테스트가 실행되어야 한다. OMP의 live smoke는 설치 상태에 의존하므로 opt-in이다.
 
 2026-10-03 이 PC(Windows ARM64)에서 Node 24.21.0 ARM64와 x64(Windows emulation)로
-0.2.0 Core 테스트 22개를 각 runtime에서 통과했다. adapter 테스트 6개도 통과했다.
+0.3.0 Core 테스트 23개를 각 runtime에서 통과했다. adapter 테스트 7개도 통과했다.
 x64 runtime은 공식 SHA-256으로 검증한 테스트용 바이너리다.
 Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/get_state smoke도 통과했다.
 원하는 runtime으로 재검증하려면:
@@ -105,7 +108,7 @@ npm run test:adapters
 기본 script는 최신 설치된 Visual Studio와 RAD Studio를 찾으며 -MsBuildPath / -BdsRoot로
 명시할 수 있다. 두 Delphi bitness를 모두 빌드하고 IDE 설치/레지스트리 변경은 하지 않는다.
 2026-10-03에 VS 2022/2026 MSBuild와 RAD Studio 13.2 Win32/Win64 build를 확인했다.
-adapter 테스트 6개는 실제 Core 연결, Unicode nonce, 취소와 oversized response 및 C# 채팅 스트림을 검증한다.
+adapter 테스트 7개는 실제 Core 연결, Unicode nonce, 취소와 oversized response, C# 채팅 스트림 및 선택 코드 전달을 검증한다.
 
 설치와 메뉴 확인 절차: [Visual Studio adapter](adapters/visualstudio/README.md),
 [RAD Studio adapter](adapters/radstudio/README.md). VSIX는 VS 2022/2026의 별도 PiAgentTest

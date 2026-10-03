@@ -28,7 +28,7 @@ public sealed class PipeAdapterClient : IDisposable
         if (!Regex.IsMatch(pipeName, @"\A[a-zA-Z0-9_-]{1,128}\z")) throw new ArgumentException("Invalid pipe name");
         pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
     }
-    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false)
+    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false)
     {
         if (ready) throw new InvalidOperationException("Already initialized");
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation))
@@ -39,10 +39,11 @@ public sealed class PipeAdapterClient : IDisposable
         }
         _ = ReadLoopAsync();
         var offered = chat ? new JArray("core.ping", "chat.v1") : new JArray("core.ping");
+        if (selectionContext) { if (!chat) throw new ArgumentException("Selection context requires chat"); offered.Add("context.selection.v1"); }
         var result = await CallAsync("adapter.hello", new JObject {
             ["protocolVersions"] = new JArray(1), ["capabilities"] = offered,
             ["requiredCapabilities"] = offered.DeepClone(),
-            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.2.0", ["ideVersion"] = ideVersion,
+            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.3.0", ["ideVersion"] = ideVersion,
                 ["instanceId"] = instanceId, ["capabilities"] = new JArray() }
         }, cancellation).ConfigureAwait(false);
         if ((int?)result["protocolVersion"] != 1 || result["capabilities"] is not JArray capabilities

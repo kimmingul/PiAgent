@@ -1,4 +1,19 @@
-# PiAgent 0.2.0 validation
+# PiAgent 0.3.0 validation
+
+## Selection context (0.3.0)
+
+- Core: 23 tests passed with ARM64 Node and x64 Node under Windows emulation. Adapter: 7 tests passed.
+- VS 2026 18.10.3 PiAgentTest: installed 0.3.0, opened a local scratch C# file, selected the `Double`
+  function, captured its file URI/language/1–2 line range and exact code into the attachment preview.
+  Sending the default Korean explanation question produced a completed explanation containing the function
+  and its expression-bodied equivalent. The attachment was cleared after the turn was accepted.
+  Normal test IDE exit also removed its owned OMP process (PID 29904); the user's default IDE stayed open.
+- C# transport test verifies the exact Unicode context reaches OMP; Core tests verify negotiation,
+  malformed/oversized ranges and snapshots, and that the next plain turn has no implicit attachment.
+- VS 2022 selection capture has not been exercised in the actual host for 0.3.0; its build is checked.
+  The previously completed 0.2.0 host checks below remain recorded separately.
+
+## Previous chat validation (0.2.0)
 
 2026-10-03, Windows ARM64 PC, Node 24.21.0. Existing RADAgent source/settings were not changed.
 
