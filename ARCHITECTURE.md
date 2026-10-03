@@ -111,8 +111,8 @@ Adapter pipe로 OMP raw command를 전달하는 메서드는 아직 없다.
 | --- | --- |
 | DESIGN.md / RpcClient.pas / RpcDispatch.pas / RpcProtocol.pas | transport와 dispatch 분리, ready gate, 별도 stderr, physical frame limit |
 | ChatSession.pas | connection-local ChatSession이 ephemeral OMP child와 turn 수명을 소유; 숨김/재표시 때 VS chat connection 유지 |
-| Approval.pas / ChatApproval.pas | 향후 IDE 변경 전에 diff/target 기반 승인, 승인 ID와 취소/수명 분리; 현재 변경 도구 없음 |
-| GitRepo.pas / RpcResponses.pas | 향후 사용자 메시지 직전 별도 index와 refs/piagent/cp로 checkpoint; index/HEAD/branch 보존, restore 전 safety ref |
+| Approval.pas / ChatApproval.pas | 파일별 diff/revision 기반 승인, 연결 소유권과 취소/만료 분리 |
+| GitRepo.pas / RpcResponses.pas | 승인 적용 전 raw blob과 refs/piagent/checkpoints로 파일 checkpoint; index/HEAD/branch 보존, 적용 후 blob도 보관 |
 | ChatUsage.pas / UsageReport.pas | 향후 get_session_stats의 세션 사용량과 별도 omp usage --json provider 한도를 구분; 현재 raw response만 전달 |
 | src/chat/chat.html / composer.js / chat.js | 입력/전송/취소와 host bridge 분리 패턴을 참고해 작은 shared TypeScript UI 작성; 승인/checkpoint UI는 후속 |
 | AGENTS.md | ToolsAPI 메인 스레드, IDE bitness별 BPL, unload 때 callback/notifier/pipe 해제 |
@@ -173,8 +173,21 @@ network logon deny와 PIPE_REJECT_REMOTE_CLIENTS를 적용하며 첫 listener �
 host/Core는 상속된 stdin/stdout으로 byte stream만 전달하고 TCP listener를 만들지 않는다.
 Core의 Authentication은 연결별 nonce와 domain-separated HMAC으로 credential 소유를 검증한다.
 adapter.kind 등 metadata는 executable attestation이 아니다. 같은 사용자·관리자·악성 동시 filesystem
-변경까지 격리하는 sandbox는 아니다. 파일 쓰기 승인과 checkpoint는 후속 범위다.
+변경까지 격리하는 sandbox는 아니다. 0.6.0의 파일 쓰기는 별도 opt-in 및 매 변경 승인으로 제한한다.
 개발용 --dev-pipe/API test fixture는 Node 기본 pipe security를 사용하며 secure transport와 별개다.
 
 기준: [Node LTS releases](https://nodejs.org/en/about/previous-releases),
 [node:net](https://nodejs.org/api/net.html), [node:child_process](https://nodejs.org/api/child_process.html).
+
+## Approved changes (0.6.0)
+
+`--allow-writes` requires secure transport and an explicit workspace. Core's `WorkspaceChanges` owns
+Git-backed single-file snapshots, revision validation, serialized writes and restore. `Approvals` is
+scoped to the adapter's ChatSession; OMP can only propose, while the owning adapter decides.
+The shared WebView presents full-file diffs; VS checks unsaved target documents before sending a decision.
+No IDE-specific logic enters Core. Optional `workspace.edit.v1` preserves read-only adapters.
+
+Checkpoint blobs and private refs preserve raw working bytes without changing the user's index/HEAD.
+A journal precedes bounded in-place writes; uncertain interruption requires inspection, not automatic overwrite.
+This first slice supports existing tracked UTF-8 files up to 32 KiB, one per approval.
+See [approved changes](docs/APPROVED-CHANGES.md) for lifecycle, cancellation and recovery limits.

@@ -1,5 +1,9 @@
 # PiAgent
 
+0.6.0은 **diff 확인 → 개별 승인 → 파일 적용 → Git checkpoint 복원**을 추가한다.
+`--allow-writes`를 명시한 secure workspace에서 VS Chat으로 사용할 수 있다.
+[승인 변경 사용법과 제한](docs/APPROVED-CHANGES.md).
+
 0.5.0은 **현재 사용자 전용 Named Pipe와 상호 인증**을 추가한다. CLI는 기본적으로 secure
 Windows pipe host를 사용하며 VS/Delphi adapter가 pipe별 credential을 자동 발견한다.
 [설정과 보안 범위](docs/SECURITY.md). Node.js 외에 .NET 8 이상 runtime이 필요하다.
@@ -17,7 +21,7 @@ RAD Studio Delphi BPL과 Visual Studio 2022/2026 C# VSIX adapter는 Named Pipe J
 현재 구현: daemon, adapter handshake/version/capability negotiation/ping, simulator,
 OMP process manager, C# VSIX/Delphi BPL 연결 메뉴와 transport/tests.
 0.2.0은 OMP 텍스트 채팅 세션, 스트리밍, 취소와 VS WebView 채팅 UI를 제공한다.
-독립 실행 배포본도 생성할 수 있다. 파일/IDE 변경 도구·승인·Git checkpoint·usage는 후속 범위다.
+독립 실행 배포본도 생성할 수 있다. 다중 파일/IDE 변경 도구와 usage 집계는 후속 범위다.
 
 - [Architecture](ARCHITECTURE.md): Rust 제거/유지 내역, workspace, reference mapping, 확장 경계
 - [Protocol](PROTOCOL.md): binary framing, capability negotiation, 오류와 OMP JSONL 계약
@@ -88,7 +92,7 @@ npm test는 node:test로 protocol, 실제 Windows Named Pipe, standalone CLI와 
 Windows에서 모든 테스트가 실행되어야 한다. OMP의 live smoke는 설치 상태에 의존하므로 opt-in이다.
 
 2026-10-03 이 PC(Windows ARM64)에서 Node 24.21.0 ARM64와 x64(Windows emulation)로
-0.5.0 Core 테스트 33개와 adapter 테스트 10개를 제공한다. runtime별 검증은 docs/VALIDATION.md를 따른다.
+0.6.0 Core/UI 테스트 39개와 adapter 테스트 11개를 제공한다. runtime별 검증은 docs/VALIDATION.md를 따른다.
 x64 runtime은 공식 SHA-256으로 검증한 테스트용 바이너리다.
 Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/get_state smoke도 통과했다.
 원하는 runtime으로 재검증하려면:
@@ -99,7 +103,7 @@ Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/
 
 x86/Win64 Delphi transport harness의 Core 통신과 BPL build를 검증했다.
 x86 Core runtime 배포는 미래 범위다. pipe 인증/사용자 전용 ACL의 범위는 docs/SECURITY.md를 따른다.
-파일 변경 승인과 checkpoint는 후속 단계다. 큰 숫자 RPC ID는 문자열로 보내야 한다.
+승인 변경과 checkpoint는 --allow-writes로 활성화한다. 큰 숫자 RPC ID는 문자열로 보내야 한다.
 
 D:\source\RADAgent는 읽기 전용 reference다. session/approval/checkpoint/usage/WebView의
 다음 단계 설계는 ARCHITECTURE.md와 ui/README.md에 기록했다. 기존 Rust source와 Cargo 파일은

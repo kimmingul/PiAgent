@@ -190,7 +190,7 @@ begin
   Params.AddPair('capabilities', TJSONArray.Create.Add('core.ping'));
   Params.AddPair('requiredCapabilities', TJSONArray.Create.Add('core.ping'));
   Adapter := TJSONObject.Create;
-  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.5.0');
+  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.6.0');
   Adapter.AddPair('ideVersion', IdeVersion); Adapter.AddPair('instanceId', InstanceId);
   Adapter.AddPair('capabilities', TJSONArray.Create);
   Params.AddPair('adapter', Adapter);

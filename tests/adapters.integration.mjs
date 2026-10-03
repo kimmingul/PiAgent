@@ -13,8 +13,22 @@ import { startDaemon, pipePath } from '@piagent/daemon';
 const execute = promisify(execFile);
 const file = path => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const csharp = file('adapters/visualstudio/PiAgent.Transport.Smoke/bin/Release/net10.0/PiAgent.Transport.Smoke.dll');
-const delphi = platform => file(`adapters/radstudio/bin/${platform}/0.5.0/PipeSmoke.exe`);
+const delphi = platform => file(`adapters/radstudio/bin/${platform}/0.6.0/PipeSmoke.exe`);
 const windows = { skip: process.platform !== 'win32', timeout: 15_000 };
+
+test('secure C# adapter receives a diff, approves the exact revision and restores its checkpoint', {...windows,timeout:30000},async()=>{
+  const root=await mkdtemp(join(tmpdir(),'piagent-adapter-changes-'));let daemon;
+  try{
+    const git=async(...args)=>execute('git',['-c','user.name=PiAgent Test','-c','user.email=test@localhost',...args],{cwd:root,windowsHide:true});
+    await git('init');await writeFile(join(root,'Example.cs'),'int Double(int value) { return value * 2; }\r\n');await git('add','Example.cs');await git('commit','-m','Fixture');
+    const name=`piagent-adapter-changes-${randomUUID()}`,authFile=join(root,'private','token');
+    daemon=await startDaemon({pipeName:name,secure:{authFile},workspaceRoot:root,allowWrites:true,
+      omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
+    const result=JSON.parse((await execute('dotnet',[csharp,name,'2026','changes'],{windowsHide:true,timeout:20000,env:{...process.env,PIAGENT_AUTH_FILE:authFile}})).stdout.trim());
+    assert.deepEqual(result,{applied:true,restored:true});
+    assert.equal((await git('diff','--','Example.cs')).stdout.trim(),'');
+  }finally{await daemon?.close();assert.ok(root.startsWith(join(tmpdir(),'piagent-adapter-changes-')));await rm(root,{recursive:true,force:true});}
+});
 
 test('secure C# VS and Delphi Win32/Win64 authenticate before handshake and reject wrong credentials', { ...windows, timeout: 30_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'piagent-adapter-security-'));

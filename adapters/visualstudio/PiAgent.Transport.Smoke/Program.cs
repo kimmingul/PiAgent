@@ -13,6 +13,30 @@ var version = args.Length > 1 ? args[1] : "2022";
 using var client = new PipeAdapterClient(name);
 using var cancellation = new CancellationTokenSource();
 var mode = args.Length > 2 ? args[2] : "normal";
+if (mode == "changes")
+{
+    var approval = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    client.Notification += frame => {
+        var data = (JObject)frame["params"]!;
+        if ((string?)data["kind"] == "approval_requested") approval.TrySetResult((JObject)data["approval"]!);
+        if ((string?)data["kind"] == "completed") completed.TrySetResult(true);
+        if ((string?)data["kind"] == "error") { var error = new IOException((string?)data["text"]); approval.TrySetException(error); completed.TrySetException(error); }
+    };
+    cancellation.CancelAfter(20000);
+    await client.InitializeAsync("visual-studio", version, "approval-smoke", cancellation.Token, chat:true, writes:true);
+    var opened = await client.RequestAsync("chat.open", new JObject(), cancellation.Token);
+    if ((bool?)opened["writeEnabled"] != true) throw new IOException("Write capability unavailable");
+    var session = (string?)opened["sessionId"];
+    await client.RequestAsync("chat.prompt", new JObject { ["sessionId"] = session, ["message"] = "propose-edit" }, cancellation.Token);
+    var preview = await approval.Task.WaitAsync(cancellation.Token);
+    if (!((string?)preview["diff"] ?? "").Contains("+int Double")) throw new IOException("Missing preview");
+    var applied = await client.RequestAsync("changes.decide", new JObject { ["sessionId"] = session, ["proposalId"] = preview["proposalId"], ["revision"] = preview["revision"], ["decision"] = "approve" }, cancellation.Token);
+    await completed.Task.WaitAsync(cancellation.Token);
+    var restore = await client.RequestAsync("changes.previewRestore", new JObject { ["sessionId"] = session, ["checkpointId"] = applied["checkpointId"] }, cancellation.Token);
+    var result = await client.RequestAsync("changes.restore", new JObject { ["sessionId"] = session, ["checkpointId"] = restore["checkpointId"], ["revision"] = restore["revision"] }, cancellation.Token);
+    Console.WriteLine(new JObject { ["applied"] = applied["applied"], ["restored"] = result["restored"] }.ToString(Formatting.None)); return;
+}
 if (mode == "chat" || mode == "context" || mode == "workspace")
 {
     var completed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);

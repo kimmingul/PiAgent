@@ -27,6 +27,8 @@ public sealed class ChatControl : UserControl, IDisposable
     private string? sessionId;
     private string? turnId;
     private JObject? selectionContext;
+    private JObject? approval, restorePreview;
+    private string? workspaceUri;
     private bool initialized, connecting, pageReady, disposed;
     public ChatControl()
     {
@@ -102,9 +104,42 @@ public sealed class ChatControl : UserControl, IDisposable
                 case "cancel":
                     if (client == null || sessionId == null || turnId == null || (string?)message["turnId"] != turnId) return;
                     await client.RequestAsync("chat.cancel", new JObject { ["sessionId"] = sessionId, ["turnId"] = turnId }, lifetime.Token); break;
+                case "decideChange":
+                    if (client == null || sessionId == null || approval == null || (string?)message["proposalId"] != (string?)approval["proposalId"]) return;
+                    var decision = (string?)message["decision"];
+                    if (decision != "approve" && decision != "reject") throw new IOException("Invalid decision");
+                    if (decision == "approve") { await factory.SwitchToMainThreadAsync(lifetime.Token); EnsureTargetSaved((string?)approval["path"]); }
+                    await client.RequestAsync("changes.decide", new JObject { ["sessionId"] = sessionId, ["proposalId"] = approval["proposalId"], ["revision"] = approval["revision"], ["decision"] = decision }, lifetime.Token); break;
+                case "listCheckpoints":
+                    if (client == null || sessionId == null || turnId != null) return;
+                    var history = await client.RequestAsync("changes.list", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
+                    Post(new JObject { ["type"] = "checkpoints", ["items"] = history["checkpoints"] }); break;
+                case "previewRestore":
+                    if (client == null || sessionId == null || turnId != null) return;
+                    restorePreview = await client.RequestAsync("changes.previewRestore", new JObject { ["sessionId"] = sessionId, ["checkpointId"] = message["checkpointId"] }, lifetime.Token);
+                    Post(new JObject { ["type"] = "restorePreview", ["data"] = restorePreview.DeepClone() }); break;
+                case "restoreChange":
+                    if (client == null || sessionId == null || turnId != null || restorePreview == null || (string?)message["checkpointId"] != (string?)restorePreview["checkpointId"]) return;
+                    await factory.SwitchToMainThreadAsync(lifetime.Token);
+                    EnsureTargetSaved((string?)restorePreview["path"]);
+                    var restored = await client.RequestAsync("changes.restore", new JObject { ["sessionId"] = sessionId, ["checkpointId"] = restorePreview["checkpointId"], ["revision"] = restorePreview["revision"] }, lifetime.Token);
+                    restorePreview = null; Post(new JObject { ["type"] = "restored", ["warning"] = restored["warning"] }); break;
             }
         }
-        catch (Exception error) { Post(new JObject { ["type"] = "error", ["message"] = error.Message }); }
+        catch (Exception error) { Post(new JObject { ["type"] = "operationError", ["message"] = error.Message }); }
+    }
+    private void EnsureTargetSaved(string? relativePath)
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (workspaceUri == null || relativePath == null) throw new IOException("Workspace unavailable");
+        var root = Path.GetFullPath(new Uri(workspaceUri).LocalPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var target = Path.GetFullPath(Path.Combine(root, relativePath));
+        if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new IOException("Invalid workspace file");
+        var dte = Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+        if (dte == null) throw new IOException("IDE document state unavailable");
+        foreach (EnvDTE.Document document in dte.Documents)
+            if (string.Equals(document.FullName, target, StringComparison.OrdinalIgnoreCase) && !document.Saved)
+                throw new IOException("대상 파일의 편집기 변경 내용을 먼저 저장한 뒤 새 변경안을 요청해 주세요.");
     }
     private async Task ConnectAsync()
     {
@@ -121,6 +156,8 @@ public sealed class ChatControl : UserControl, IDisposable
                     if ((string?)data["sessionId"] != sessionId) return;
                     switch ((string?)data["kind"]) {
                         case "started": turnId = (string?)data["turnId"]; break;
+                        case "approval_requested": approval = data["approval"] as JObject; break;
+                        case "approval_resolved": approval = null; break;
                         case "completed": case "cancelled": case "error": turnId = null; break;
                         case "closed": sessionId = null; turnId = null; break;
                     }
@@ -133,7 +170,7 @@ public sealed class ChatControl : UserControl, IDisposable
                     if (!disposed && ReferenceEquals(client, active)) Disconnect(error.Message);
                 }).FileAndForget("PiAgent/ChatDisconnect");
             };
-            await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true, selectionContext: true);
+            await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true, selectionContext: true, writes: true);
             await OpenAsync(); heartbeat.Start();
         }
         catch (Exception error) { Disconnect(error.Message); }
@@ -143,9 +180,10 @@ public sealed class ChatControl : UserControl, IDisposable
     {
         var result = await client!.RequestAsync("chat.open", new JObject(), lifetime.Token);
         sessionId = (string?)result["sessionId"] ?? throw new InvalidDataException("Missing session ID"); turnId = null;
+        workspaceUri = (string?)result["workspaceUri"]; approval = null; restorePreview = null;
         selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null });
         Post(new JObject { ["type"] = "session", ["sessionId"] = sessionId,
-            ["workspaceUri"] = result["workspaceUri"], ["readOnly"] = result["readOnly"] });
+            ["workspaceUri"] = result["workspaceUri"], ["readOnly"] = result["readOnly"], ["writeEnabled"] = result["writeEnabled"] });
     }
     private void Post(JObject message)
     {
@@ -155,6 +193,7 @@ public sealed class ChatControl : UserControl, IDisposable
     private void Disconnect(string message)
     {
         heartbeat.Stop(); sessionId = null; turnId = null;
+        approval = null; restorePreview = null; workspaceUri = null;
         var previous = client; client = null; previous?.Dispose();
         Post(new JObject { ["type"] = "disconnected", ["message"] = message });
     }

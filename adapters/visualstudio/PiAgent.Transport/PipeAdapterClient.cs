@@ -31,7 +31,7 @@ public sealed class PipeAdapterClient : IDisposable
         this.pipeName = pipeName;
         pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
     }
-    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false)
+    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false, bool writes = false)
     {
         if (ready) throw new InvalidOperationException("Already initialized");
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation))
@@ -47,10 +47,11 @@ public sealed class PipeAdapterClient : IDisposable
         if (selectionContext) { if (!chat) throw new ArgumentException("Selection context requires chat"); offered.Add("context.selection.v1"); }
         var required = (JArray)offered.DeepClone();
         if (chat) offered.Add("workspace.read.v1"); // Optional; the daemon owner must opt in with --workspace.
+        if (writes) { if (!chat) throw new ArgumentException("Writes require chat"); offered.Add("workspace.edit.v1"); }
         var result = await CallAsync("adapter.hello", new JObject {
             ["protocolVersions"] = new JArray(1), ["capabilities"] = offered,
             ["requiredCapabilities"] = required,
-            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.5.0", ["ideVersion"] = ideVersion,
+            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.6.0", ["ideVersion"] = ideVersion,
                 ["instanceId"] = instanceId, ["capabilities"] = new JArray() }
         }, cancellation).ConfigureAwait(false);
         if ((int?)result["protocolVersion"] != 1 || result["capabilities"] is not JArray capabilities
@@ -94,9 +95,9 @@ public sealed class PipeAdapterClient : IDisposable
     }
     public Task<JObject> RequestAsync(string method, JObject parameters, CancellationToken cancellation)
     {
-        if (!ready || !new[] { "chat.open", "chat.prompt", "chat.cancel", "chat.close" }.Contains(method))
+        if (!ready || !new[] { "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore" }.Contains(method))
             throw new InvalidOperationException("Unsupported request or handshake required");
-        return CallAsync(method, parameters, cancellation, method == "chat.open" ? 20000 : 5000);
+        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : method == "chat.open" ? 20000 : 5000);
     }
     private async Task<JObject> CallAsync(string method, JObject parameters, CancellationToken cancellation, int timeout = 5000)
     {

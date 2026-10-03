@@ -1,6 +1,6 @@
 # RAD Studio adapter
 
-0.5.0은 hello 전에 Core/adapter 상호 HMAC 인증을 수행한다. pipe별 credential을 자동 발견하며
+0.6.0은 hello 전에 Core/adapter 상호 HMAC 인증을 수행한다. pipe별 credential을 자동 발견하며
 PIAGENT_AUTH_FILE로 다른 경로를 지정할 수 있다. [보안 설정](../../docs/SECURITY.md).
 
 Delphi design-time BPL 최소 vertical slice다. IDE의 PiAgent: Check Core Connection wizard 메뉴가
@@ -21,9 +21,9 @@ IDE에서는 src/PiAgent.dproj를 열어 Win32/Win64를 각각 빌드한다.
 Requires는 rtl, vcl, designide뿐이며 BPL suffix는 compiler의 LIBSUFFIX AUTO를 따른다.
 이 PC의 RAD Studio 13.2 결과:
 
-- bin/Win32/0.5.0/PiAgent370.bpl
-- bin/Win64/0.5.0/PiAgent370.bpl
-- bin/Win32/0.5.0/PipeSmoke.exe 및 bin/Win64/0.5.0/PipeSmoke.exe
+- bin/Win32/0.6.0/PiAgent370.bpl
+- bin/Win64/0.6.0/PiAgent370.bpl
+- bin/Win32/0.6.0/PipeSmoke.exe 및 bin/Win64/0.6.0/PipeSmoke.exe
 
 실행 중인 이전 BPL을 덮어쓰지 않도록 script는 버전별 디렉터리에 빌드한다.
 새 BPL로 교체하려면 IDE에서 기존 package를 해제하고 새 파일을 설치한다. 배포 ZIP은 bitness별 파일을 제공한다.

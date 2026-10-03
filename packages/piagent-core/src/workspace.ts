@@ -40,7 +40,7 @@ export class WorkspaceReader {
     if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) throw new Error('Path escapes workspace');
     return canonical;
   }
-  private async text(path: string, signal: AbortSignal): Promise<string> {
+  private async bytes(path: string, signal: AbortSignal): Promise<Buffer> {
     signal.throwIfAborted();
     const before = await lstat(path);
     if (!before.isFile() || before.isSymbolicLink() || before.nlink > 1 || before.size > 256 * 1024) throw new Error('Only unlinked UTF-8 files up to 256 KiB are readable');
@@ -62,8 +62,16 @@ export class WorkspaceReader {
         throw new Error('File exceeds limit or changed during read');
       const value = new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytesRead));
       if (value.includes('\0')) throw new Error('Binary files are excluded');
-      return value;
+      return buffer.subarray(0, bytesRead);
     } finally { await handle.close(); }
+  }
+  private async text(path: string, signal: AbortSignal): Promise<string> {
+    return new TextDecoder('utf-8', { fatal: true }).decode(await this.bytes(path, signal));
+  }
+  /** Internal snapshot for approved changes; never exposes an arbitrary filesystem path on the wire. */
+  async snapshot(value: unknown, signal: AbortSignal): Promise<{ absolute: string; bytes: Buffer }> {
+    const absolute = await this.path(value);
+    return { absolute, bytes: await this.bytes(absolute, signal) };
   }
   async execute(name: string, args: unknown, signal: AbortSignal): Promise<Record<string, unknown>> {
     if (!isObject(args)) throw new Error('Invalid tool arguments');

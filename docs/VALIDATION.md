@@ -1,4 +1,18 @@
-# PiAgent 0.5.0 validation
+# PiAgent 0.6.0 validation
+
+## Approved changes (0.6.0)
+
+- 39 Core/UI tests passed on native ARM64 and emulated x64 Node 24.21.0 (38 Core plus one WebView controller test).
+- 11 adapter integration tests passed, including actual secure Named Pipe C# approval/apply/restore round trip.
+- Tests cover pending/rejected/cancelled/stale/foreign approvals, capability gating, raw BOM/CRLF and dirty
+  content preservation, unchanged Git index/HEAD, disabled Git hooks, locks, hard links and restart recovery.
+- WebView controller test exercises explicit approval, duplicate-click suppression, rejection, reverse-diff preview,
+  restore confirmation, operation failure retry, warnings and disconnect cleanup using a minimal DOM fixture.
+- VS 2022/2026 MSBuild and Delphi Win32/Win64 BPL builds succeeded. Actual 0.6.0 IDE approval UI and
+  a live-model edit proposal have not been manually exercised; fixture OMP drives automated change tests.
+- Release test runs the standalone secure daemon/probe outside the workspace and verifies packaged file hashes.
+- This release does not claim atomic disk writes, malicious concurrent-writer isolation or power-loss recovery tests.
+  Interrupted metadata recovery is tested by prepared/restoring state simulation; see APPROVED-CHANGES.md.
 
 ## Secure transport (0.5.0)
 

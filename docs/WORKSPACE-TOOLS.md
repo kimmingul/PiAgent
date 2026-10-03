@@ -43,11 +43,11 @@ chat.event에 tool_started/tool_completed와 고정 도구 이름만 추가한�
 root는 startup에 realpath로 고정한다. 절대 경로, .., 빈 path component, ADS colon,
 Windows device 이름, trailing dot/space, symlink/junction 및 hard-linked files를 거부한다.
 읽기 전 canonical containment와 open handle의 file identity/크기, 읽기 후 크기·mtime/path 변경을 검사한다.
-항상 read-only handle을 사용하며 파일 쓰기·프로세스 실행 도구는 없다.
+읽기/검색 도구는 read-only handle을 사용한다. 별도 --allow-writes opt-in은 [승인 변경](APPROVED-CHANGES.md)을 따른다.
 
 `.git/.svn/.hg/.ssh/.aws/.azure`, `node_modules/.tools/artifacts/bin/obj`, `.env`와 `.env.*`,
 credentials/secrets 이름 및 pem/key/pfx/p12/kdbx suffix를 제외한다. 이 목록은 모든 비밀을
 탐지하는 redaction 체계가 아니다. 읽기 root는 모델에 전달할 수 있는 프로젝트로 지정해야 한다.
 경계 검사는 OS sandbox나 악의적인 동시 filesystem 교체에 대한 원자적 방어를 제공하지 않는다.
-0.5.0 CLI의 Named Pipe ACL/상호 인증은 [SECURITY.md](SECURITY.md)를 따른다.
+0.6.0 CLI의 Named Pipe ACL/상호 인증은 [SECURITY.md](SECURITY.md)를 따른다.
 권한이 필요한 쓰기 도구를 추가하기 전에 승인·checkpoint를 구현해야 한다.

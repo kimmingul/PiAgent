@@ -35,6 +35,7 @@ export async function packageCore(destination, { adapters = false } = {}) {
   await cp(join(repository, 'docs/SELECTION-CONTEXT.md'), join(output, 'docs/SELECTION-CONTEXT.md'));
   await cp(join(repository, 'docs/WORKSPACE-TOOLS.md'), join(output, 'docs/WORKSPACE-TOOLS.md'));
   await cp(join(repository, 'docs/SECURITY.md'), join(output, 'docs/SECURITY.md'));
+  await cp(join(repository, 'docs/APPROVED-CHANGES.md'), join(output, 'docs/APPROVED-CHANGES.md'));
   await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
     'Secure transport also requires .NET 8+ runtime; no npm install, TypeScript compiler or native Node addon is needed.\n\n' +
@@ -46,6 +47,7 @@ export async function packageCore(destination, { adapters = false } = {}) {
     (adapters ? 'Adapter installers and installation instructions are in adapters/.\n' : '') +
     'This release implements handshake/capability/ping, selection context and opt-in read-only OMP workspace tools.\n' +
     'Add --workspace C:\\project to enable bounded file reading/search. See docs/WORKSPACE-TOOLS.md.\n' +
+    'Add --allow-writes for per-file diff approval and checkpoint restore. Git is required; see docs/APPROVED-CHANGES.md.\n' +
     'For VS Chat, start with --omp and --cwd, then Tools > PiAgent: Open Chat > Connect.\n' +
     'Select code in the editor, capture it in Chat, inspect the attachment and send your question. See docs/SELECTION-CONTEXT.md.\n' +
     'The VS adapter uses an installed WebView2 Runtime. Full agent tools remain a future scope.\n');

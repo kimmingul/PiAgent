@@ -141,7 +141,7 @@ response 성공은 명령 응답이며 agent 턴 완료가 아니다. 그 외 ev
 stdin EOF로 종료를 요청하고 기본 2초 deadline 후 직접 자식을 kill한다. 자동 restart는 없다.
 
 chat session은 아래 정규화 계약으로 OMP prompt/event를 연결한다. 0.4.0은 읽기 전용 host_tool_call/result를
-구현한다. 쓰기 도구 승인, checkpoint와 usage 집계는 후속 범위다. raw OMP frame은 pipe RPC로 직접 전송하지 않는다.
+구현한다. 0.6.0은 아래 승인 변경 계약을 추가한다. usage 집계는 후속 범위다. raw OMP frame은 pipe RPC로 직접 전송하지 않는다.
 
 ## Chat capability: chat.v1 (0.2.0)
 
@@ -220,3 +220,37 @@ PIAGENT_PIPE_NAME은 IDE를 실행하기 전 설정하며 기본값은 piagent-d
 [Node net IPC](https://nodejs.org/api/net.html), [Node child_process](https://nodejs.org/api/child_process.html).
 OMP reference: RADAgent.RpcClient.pas / RpcProtocol.pas / RpcDispatch.pas와 로컬
 RADAgent `.agents/skills/omp-rpc/SKILL.md` (reference-tested omp 18.4.4).
+
+## Approved changes v1 (0.6.0)
+
+Wire protocolVersion remains 1. Optional `workspace.edit.v1` is offered only with
+`chat.v1` and `workspace.read.v1` on a daemon configured for approved writes.
+`chat.open` includes `writeEnabled:true` and `readOnly:false` when negotiated.
+OMP receives `workspace_propose_edit {path,content,reason}` via set_host_tools; it receives no approval method.
+One proposal per session waits for at most five minutes.
+
+`chat.event` adds `approval_requested` and `approval_resolved` kinds with an `approval` object.
+The requested object contains `proposalId,path,reason,revision,beforeHash,afterHash,expiresAt,diff`.
+Hashes and revision are SHA-256 lowercase hex; expiresAt is Unix epoch milliseconds.
+The resolved object contains proposalId and approved, with reason on rejection or checkpointId/path/applied
+on successful application. A warning can accompany successful application if final journal persistence fails.
+Existing sessionId, turnId and sequence rules apply.
+
+All changes methods require the owning connection's open sessionId and negotiated edit capability:
+
+| Method | Additional params | Result |
+| --- | --- | --- |
+| changes.decide | proposalId, revision, decision: approve or reject | applied/checkpointId/path (approve), approved:false (reject) |
+| changes.list | none | checkpoints: [{checkpointId,path,createdAt,state}] |
+| changes.previewRestore | checkpointId | checkpointId,path,revision,diff |
+| changes.restore | checkpointId, revision | restored:true,checkpointId,path |
+
+Extra parameter keys are rejected. Approval is bound to the cached proposal and exact revision; adapters
+must show its diff before deciding. Restore requires a fresh displayed reverse diff and explicit confirmation;
+Core rechecks the revision and current file hash. Restore/preview are rejected while a chat turn is active.
+Checkpoints belong to the configured workspace and survive sessions/restarts; proposals do not.
+List returns at most 50 newest entries, with applied/restored/prepared/restoring/notApplied/recoveryRequired states.
+Capability errors use -32005, active-turn restore -32013, invalid param keys -32602; other rejected change
+operations use -32010. No failure should be interpreted as proof that an interrupted disk write never started.
+Cancellation before writing leaves content unchanged; once writing begins, completion/rollback takes priority.
+See [limits and recovery](docs/APPROVED-CHANGES.md).

@@ -28,6 +28,12 @@ lines.on('line', line => {
   if (command.message === 'reject') { emit({ type: 'response', id: command.id, command: 'prompt', success: false }); active = false; return; }
   if (command.message === 'local') { response({ agentInvoked: false }); return; }
   response({});
+  if (command.message === 'propose-edit') {
+    if (!tools.some(t => t.name === 'workspace_propose_edit')) process.exit(8);
+    toolMode = 'propose-edit';
+    emit({type:'host_tool_call',id:'host-edit',toolCallId:'edit-1',toolName:'workspace_propose_edit',
+      arguments:{path:'Example.cs',content:'int Double(int value) { return value * 3; }\r\n',reason:'Test edit: multiply by three'}}); return;
+  }
   if (command.message.startsWith('workspace-')) {
     if (tools.length !== 2 || !tools.some(t => t.name === 'workspace_read_file') || !tools.some(t => t.name === 'workspace_search')) process.exit(8);
     toolMode = command.message;

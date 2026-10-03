@@ -5,6 +5,8 @@ import { isObject } from '@piagent/protocol';
 import { contextPrompt } from './context.js';
 import { WorkspaceReader, workspaceTools } from './workspace.js';
 import { pathToFileURL } from 'node:url';
+import { WorkspaceChanges, editTool } from './changes.js';
+import { Approvals } from './approvals.js';
 
 export const CHAT_CAPABILITY = 'chat.v1';
 export class ChatError extends Error {
@@ -12,8 +14,9 @@ export class ChatError extends Error {
 }
 export interface ChatEvent {
   sessionId: string; turnId: string | null; sequence: number;
-  kind: 'started' | 'delta' | 'completed' | 'cancelled' | 'error' | 'closed' | 'tool_started' | 'tool_completed';
+  kind: 'started' | 'delta' | 'completed' | 'cancelled' | 'error' | 'closed' | 'tool_started' | 'tool_completed' | 'approval_requested' | 'approval_resolved';
   text?: string;
+  approval?: Record<string, unknown>;
 }
 /** One ephemeral OMP process owned by one adapter connection, with opt-in read-only workspace tools. */
 export class ChatSession {
@@ -27,13 +30,16 @@ export class ChatSession {
   private sequence = 0;
   private timer: NodeJS.Timeout | undefined;
   private workspaceEnabled = false;
+  private writesEnabled = false;
+  private approvals: Approvals | undefined;
   private readonly tools = new Map<string, AbortController>();
   private readonly seenTools = new Set<string>();
   constructor(private readonly options: OmpOptions, private readonly send: (event: ChatEvent) => void,
-    private readonly workspace?: WorkspaceReader) {}
+    private readonly workspace?: WorkspaceReader, private readonly changes?: WorkspaceChanges) {}
   get supportsWorkspace(): boolean { return !!this.workspace; }
+  get supportsWrites(): boolean { return !!this.changes; }
 
-  async handle(method: string, params: Record<string, unknown>, workspaceNegotiated = false): Promise<Record<string, unknown>> {
+  async handle(method: string, params: Record<string, unknown>, workspaceNegotiated = false, writesNegotiated = false): Promise<Record<string, unknown>> {
     if (this.disposed) throw new ChatError(-32010, 'Connection closed');
     if (method === 'chat.open') {
       await this.retiring;
@@ -54,11 +60,13 @@ export class ChatSession {
         await omp.start();
         await omp.request('new_session'); // Never inherit OMP auto-resumed conversation.
         this.workspaceEnabled = workspaceNegotiated && !!this.workspace;
-        if (this.workspaceEnabled) await omp.request('set_host_tools', { tools: workspaceTools });
+        this.writesEnabled = this.workspaceEnabled && writesNegotiated && !!this.changes;
+        this.approvals = this.writesEnabled ? new Approvals(this.changes!, (kind, approval) => this.emit(kind, undefined, approval)) : undefined;
+        if (this.workspaceEnabled) await omp.request('set_host_tools', { tools: [...workspaceTools, ...(this.writesEnabled ? [editTool] : [])] });
         if (this.disposed) throw new Error('Connection closed during startup');
         this.id = randomUUID(); this.sequence = 0;
         return { sessionId: this.id, toolsEnabled: this.workspaceEnabled,
-          ...(this.workspaceEnabled ? { workspaceUri: pathToFileURL(this.workspace!.root).href, readOnly: true } : {}) };
+          ...(this.workspaceEnabled ? { workspaceUri: pathToFileURL(this.workspace!.root).href, readOnly: !this.writesEnabled, writeEnabled: this.writesEnabled } : {}) };
       } catch (error) {
         await omp.stop(); this.omp = undefined;
         throw new ChatError(-32010, error instanceof Error ? error.message : 'OMP startup failed');
@@ -66,8 +74,20 @@ export class ChatSession {
     }
     if (!this.id || !this.omp || this.opening || params['sessionId'] !== this.id)
       throw new ChatError(-32012, 'Unknown or unavailable session');
-    const keys = method === 'chat.prompt' ? ['sessionId', 'message', 'context'] : method === 'chat.cancel' ? ['sessionId', 'turnId'] : ['sessionId'];
+    const keys = method === 'chat.prompt' ? ['sessionId', 'message', 'context'] : method === 'chat.cancel' ? ['sessionId', 'turnId']
+      : method === 'changes.decide' ? ['sessionId','proposalId','revision','decision']
+      : method === 'changes.restore' ? ['sessionId','checkpointId','revision']
+      : method === 'changes.previewRestore' ? ['sessionId','checkpointId'] : ['sessionId'];
     if (Object.keys(params).some(key => !keys.includes(key))) throw new ChatError(-32602, 'Invalid params');
+    if (method.startsWith('changes.')) {
+      if (!this.writesEnabled || !this.changes) throw new ChatError(-32005, 'Write capability not negotiated');
+      if (method === 'changes.decide') return this.approvals!.decide(params['proposalId'],params['revision'],params['decision']);
+      if (method === 'changes.list') return { checkpoints: await this.changes.list() };
+      if (this.turn) throw new ChatError(-32013, 'Wait until the turn finishes before restoring');
+      if (method === 'changes.previewRestore') return this.changes.previewRestore(params['checkpointId']);
+      if (method === 'changes.restore') return this.changes.restore(params['checkpointId'],params['revision']);
+      throw new ChatError(-32601, 'Method not found');
+    }
     if (method === 'chat.close') {
       await this.closeSession(); return { closed: true };
     }
@@ -161,11 +181,13 @@ export class ChatSession {
     const aborted = new Promise<never>((_, reject) => { abortReject = reject; });
     const onAbort = (): void => { abortReject?.(new Error('Workspace call aborted')); };
     controller.signal.addEventListener('abort', onAbort, { once: true });
-    const timeout = setTimeout(() => controller.abort('deadline'), 10_000);
-    this.emit('tool_started', name === 'workspace_read_file' ? 'workspace_read_file' : name === 'workspace_search' ? 'workspace_search' : 'unknown');
+    const proposing = name === 'workspace_propose_edit' && !!this.approvals;
+    const timeout = setTimeout(() => controller.abort('deadline'), proposing ? 310_000 : 10_000);
+    this.emit('tool_started', name === 'workspace_read_file' ? 'workspace_read_file' : name === 'workspace_search' ? 'workspace_search' : proposing ? 'workspace_propose_edit' : 'unknown');
     try {
       let text: string, isError = false;
-      try { text = JSON.stringify(await Promise.race([this.workspace!.execute(String(name), frame['arguments'], controller.signal), aborted])); }
+      try { text = JSON.stringify(await Promise.race([proposing ? this.approvals!.propose(frame['arguments'],controller.signal)
+        : this.workspace!.execute(String(name), frame['arguments'], controller.signal), aborted])); }
       catch (error) {
         if (controller.signal.aborted && controller.signal.reason !== 'deadline') return;
         isError = true; text = controller.signal.reason === 'deadline' ? 'Workspace tool deadline exceeded'
@@ -178,10 +200,10 @@ export class ChatSession {
     finally { clearTimeout(timeout); controller.signal.removeEventListener('abort', onAbort); if (this.tools.get(id) === controller) this.tools.delete(id); }
   }
   private cancelTools(): void { for (const controller of this.tools.values()) controller.abort(); this.tools.clear(); }
-  private emit(kind: ChatEvent['kind'], text?: string): void {
+  private emit(kind: ChatEvent['kind'], text?: string, approval?: Record<string, unknown>): void {
     if (!this.id || this.disposed) return;
     this.send({ sessionId: this.id, turnId: this.turn ?? null, sequence: ++this.sequence, kind,
-      ...(text === undefined ? {} : { text }) });
+      ...(text === undefined ? {} : { text }), ...(approval ? {approval} : {}) });
   }
   private finish(kind: 'completed' | 'cancelled' | 'error', text?: string): void {
     if (!this.turn) return;

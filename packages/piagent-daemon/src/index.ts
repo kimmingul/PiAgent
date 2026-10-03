@@ -1,6 +1,6 @@
 import { createServer } from 'node:net';
 import type { Duplex } from 'node:stream';
-import { Session, ChatSession, WorkspaceReader, Authentication } from '@piagent/core';
+import { Session, ChatSession, WorkspaceReader, WorkspaceChanges, Authentication } from '@piagent/core';
 import { securePipe, credentialPath, defaultBroker } from './secure-pipe.js';
 export { credentialPath, defaultBroker } from './secure-pipe.js';
 import type { OmpOptions } from '@piagent/omp';
@@ -19,6 +19,7 @@ export interface DaemonOptions {
   onDiagnostic?: (error: Error) => void;
   omp?: OmpOptions;
   workspaceRoot?: string;
+  allowWrites?: boolean;
   secure?: { brokerPath?: string; authFile?: string };
 }
 
@@ -28,6 +29,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
   if (process.platform !== 'win32') throw new Error('PiAgent daemon requires Windows Named Pipes');
   if (options.workspaceRoot && !options.omp) throw new Error('Workspace tools require OMP');
   const workspace = options.workspaceRoot ? await WorkspaceReader.create(options.workspaceRoot) : undefined;
+  if (options.allowWrites && (!options.secure || !workspace)) throw new Error('Writes require secure transport and an explicit workspace');
+  const changes = options.allowWrites ? await WorkspaceChanges.create(workspace!) : undefined;
   const path = pipePath(options.pipeName ?? 'piagent-dev');
   const deadline = options.ioTimeoutMs ?? 30_000;
   const maxConnections = options.maxConnections ?? 16;
@@ -64,7 +67,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
         });
       } catch (error) { close(error instanceof Error ? error : new Error(String(error))); }
     };
-    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace) : undefined;
+    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace, changes) : undefined;
     if (chat) chats.set(socket, chat);
     const session = new Session(chat, token ? new Authentication(token, options.pipeName ?? 'piagent-dev') : undefined);
     const authTimer = token ? setTimeout(() => { if (!session.ready) close(new Error('Authentication/handshake deadline exceeded')); }, 10_000) : undefined;
@@ -125,6 +128,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
         for (const socket of sockets) { retire(socket); socket.destroy(); }
         await closeTransport();
         await Promise.all([...cleanup]);
+        await changes?.drain();
       })();
       return closing;
     },

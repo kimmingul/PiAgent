@@ -53,7 +53,9 @@ challenge는 30초 후 만료하지만 transport의 10초 인증/hello deadline�
 같은 Windows 사용자로 실행 중인 악성 코드, 관리자/SYSTEM, credential 유출 또는 악의적인 동시 파일 교체를 격리하는 sandbox가 아니다.
 adapter.kind/ideVersion은 자기 보고 metadata이며 VS/Delphi executable 서명 attestation을 의미하지 않는다.
 IDE와 daemon은 같은 일반 사용자 권한으로 실행한다. credential file 공유와 관리자 실행을 운영 방식으로 사용하지 않는다.
-파일 변경·승인·Git checkpoint는 후속 단계다.
+0.6.0 파일 변경은 secure transport, 명시적 --workspace/--allow-writes와 workspace.edit.v1 협상이 모두 필요하다.
+OMP에는 제안 도구만 제공하며 소유 adapter의 diff/revision 승인으로만 적용한다.
+[승인·checkpoint의 범위와 장애 복구](APPROVED-CHANGES.md)를 참고한다.
 
 API 근거: [Win32 pipe security](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights),
 [CreateNamedPipe](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipew).

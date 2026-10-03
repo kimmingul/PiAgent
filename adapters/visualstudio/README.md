@@ -1,6 +1,6 @@
 # Visual Studio adapter
 
-0.5.0: hello 전에 current-user credential을 자동 발견하고 Core/adapter 상호 HMAC 인증을 수행한다.
+0.6.0: hello 전에 current-user credential을 자동 발견하고 Core/adapter 상호 HMAC 인증을 수행한다.
 credential과 proof는 WebView로 전달하지 않는다. daemon과 adapter를 함께 업데이트한다.
 기본 경로와 PIAGENT_AUTH_FILE 설정은 [SECURITY.md](../../docs/SECURITY.md)를 따른다.
 
@@ -70,3 +70,7 @@ WebView 채팅 스트리밍·응답 완료·새 대화·IDE 종료 때 OMP 정�
 VS 2022의 Newtonsoft.Json binding에는 JToken.ToString(Formatting) overload가 없어,
 transport와 WebView bridge에서 converter array를 명시하는 호환 overload를 사용한다.
 수정 후 adapter 테스트 6개도 다시 통과했다.
+
+0.6.0 adds per-file diff approval and checkpoint restore in Chat. Start the secure daemon with
+`--workspace <Git-root> --allow-writes`; see [approved changes](../../docs/APPROVED-CHANGES.md).
+Unsaved target documents must be saved before requesting a fresh proposal.
