@@ -1,0 +1,133 @@
+# PiAgent
+
+Node.js 24 LTS + TypeScript strict / ESM 기반 IDE-neutral Core.
+RAD Studio Delphi BPL과 Visual Studio 2022/2026 C# VSIX adapter는 Named Pipe JSON-RPC로
+연결하고, Core는 별도 OMP 자식과 `omp --mode rpc-ui` JSONL로 통신한다.
+
+현재 구현: daemon, adapter handshake/version/capability negotiation/ping, simulator,
+OMP process manager skeleton, C# VSIX/Delphi BPL 최소 연결 메뉴와 transport/tests.
+독립 실행 배포본도 생성할 수 있다. WebView UI와 agent 기능 전체 포팅은 후속 범위다.
+
+- [Architecture](ARCHITECTURE.md): Rust 제거/유지 내역, workspace, reference mapping, 확장 경계
+- [Protocol](PROTOCOL.md): binary framing, capability negotiation, 오류와 OMP JSONL 계약
+
+## 준비와 빌드
+
+2026-10-03 기준 최신 LTS인 Node.js 24.21.0과 npm을 사용한다. .nvmrc / engines가
+24 LTS line을 고정하며 package-lock.json이 개발 dependency와 workspace 링크를 고정한다.
+Windows x64 / ARM64에서는 동일 JS 산출물을 실행하며 native addon이나 MSVC/Rust 도구 체인이 필요 없다.
+
+```powershell
+npm ci --ignore-scripts
+npm run build
+npm run typecheck
+npm test
+```
+
+packages/piagent-{protocol,core,daemon,omp}가 npm workspace다. TypeScript project references,
+NodeNext ESM, strict / noUncheckedIndexedAccess / exactOptionalPropertyTypes를 사용한다.
+런타임 외부 dependency는 없고 개발 dependency는 typescript / @types/node뿐이다.
+
+## Daemon과 adapter probe
+
+Terminal 1:
+
+```powershell
+npm start -- --pipe piagent-dev
+```
+
+Terminal 2:
+
+```powershell
+npm run probe -- piagent-dev rad-studio 13.2
+npm run probe -- piagent-dev visual-studio 2022
+npm run probe -- piagent-dev visual-studio 2026
+```
+
+probe는 hello에서 core.ping을 필수 capability로 요청하고, 결과와 Unicode nonce pong을 검증한다.
+불일치/RPC 오류는 비정상 종료한다. daemon 로그는 stderr, pipe는 JSON-RPC 전용이다.
+Ctrl+C로 종료하며 client가 30초 idle 상태이면 연결을 닫는다.
+
+## OMP 연결 (선택)
+
+OMP는 별도로 설치한 실행파일을 사용한다. 기본 daemon은 OMP를 자동으로 실행하지 않는다.
+Windows에서는 shell wrapper(.cmd/.bat)가 아닌 omp.exe 경로를 지정한다.
+
+```powershell
+npm start -- --pipe piagent-dev --omp "$env:LOCALAPPDATA\omp\omp.exe" --cwd D:\source\PiAgent
+```
+
+이 명령은 OMP child를 시작하고 JSONL v1 ready를 기다린다. Adapter protocol은 여전히
+hello/ping만 제공한다. prompt나 IDE tool 실행은 노출하지 않는다.
+읽기 전용 연결 smoke는 별도 임시 workspace에서 실행하는 것이 좋다:
+
+```powershell
+npm run omp:smoke -- "$env:LOCALAPPDATA\omp\omp.exe" C:\path\to\scratch-workspace
+```
+
+smoke는 ready와 get_state만 확인하고 OMP를 종료한다. 실제 LLM 호출을 하지 않는다.
+OMP manager는 ready gate, ID/command correlation, frame limit, timeout, stderr drain,
+정상 EOF 종료와 강제 종료 fallback을 제공한다. v2 chunking과 전체 subprocess tree 정리는 아직 없다.
+
+## 검증과 지원 범위
+
+npm test는 node:test로 protocol, 실제 Windows Named Pipe, standalone CLI와 fake OMP를 검증한다.
+실제 pipe tests는 다른 OS에서 skip되며 production daemon도 Windows 외 실행을 거절한다.
+Windows에서 모든 테스트가 실행되어야 한다. OMP의 live smoke는 설치 상태에 의존하므로 opt-in이다.
+
+2026-10-03 이 PC(Windows ARM64)에서 Node 24.21.0 ARM64와 x64(Windows emulation)로
+각각 테스트 16개를 통과했다. x64 runtime은 공식 SHA-256으로 검증한 테스트용 바이너리다.
+Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/get_state smoke도 통과했다.
+원하는 runtime으로 재검증하려면:
+
+```powershell
+& .\scripts\test-windows.ps1 -NodeExecutable C:\path\to\node.exe
+```
+
+x86/Win64 Delphi transport harness의 Core 통신과 BPL build를 검증했다.
+x86 Core runtime 배포는 미래 범위다. 현재 pipe 인증/사용자 전용 ACL은 개발 skeleton 수준이며,
+IDE/file 변경 기능을 추가하기 전에 강화한다. 큰 숫자 RPC ID는 문자열로 보내야 한다.
+
+D:\source\RADAgent는 읽기 전용 reference다. session/approval/checkpoint/usage/WebView의
+다음 단계 설계는 ARCHITECTURE.md와 ui/README.md에 기록했다. 기존 Rust source와 Cargo 파일은
+제거했으며 Git 제외된 target/.tools cache와 전역 Rust 설치는 활성 프로젝트에서 참조하지 않는다.
+
+## IDE adapter build와 검증
+
+```powershell
+& .\scripts\build-adapters.ps1
+npm run test:adapters
+```
+
+빌드에는 Visual Studio MSBuild / .NET 10 SDK(smoke harness) / RAD Studio compiler가 필요하다.
+기본 script는 최신 설치된 Visual Studio와 RAD Studio를 찾으며 -MsBuildPath / -BdsRoot로
+명시할 수 있다. 두 Delphi bitness를 모두 빌드하고 IDE 설치/레지스트리 변경은 하지 않는다.
+2026-10-03에 VS 2022/2026 MSBuild와 RAD Studio 13.2 Win32/Win64 build를 확인했다.
+추가 adapter 테스트 5개는 실제 Core 연결, Unicode nonce, 취소와 oversized response를 검증한다.
+
+설치와 메뉴 확인 절차: [Visual Studio adapter](adapters/visualstudio/README.md),
+[RAD Studio adapter](adapters/radstudio/README.md). VSIX는 VS 2022/2026의 별도 PiAgentTest
+프로필에 설치했다. VS 2026 업데이트(18.10.3) 후 PiAgentTest에서 실제 package load, Tools 메뉴 실행과
+PiAgent Output의 handshake/capability/ping OK를 확인했다. VS 2022의 실제 메뉴 검증은 아직 남아 있다.
+RAD Studio의 실제 host 검증 결과는 adapter README에 기록한다.
+
+## 독립 실행 배포본
+
+```powershell
+npm run package
+# adapter를 먼저 빌드한 경우 VSIX / Win32·Win64 BPL도 포함
+npm run package:adapters
+```
+
+artifacts/piagent-<UTC timestamp>에 새 폴더를 만든다. workspace junction 대신 각 ESM package의
+실제 파일과 SHA-256 release-manifest.json을 포함한다. 저장소, npm install, TypeScript compiler 없이
+Node 24 LTS가 설치된 Windows x64/ARM64에서 실행할 수 있다. Node/OMP/IDE runtime은 별도 설치다.
+
+```powershell
+node core.mjs --pipe piagent-dev
+# 다른 터미널
+node probe.mjs piagent-dev test-adapter release
+```
+
+release 테스트는 임시 폴더에서 배포본 daemon/probe를 실행하고 hello/pong 및 모든 파일 hash를 검증한다.
+adapter 포함 배포본은 현재 빌드된 BPL compiler version을 그대로 포함한다. 다른 RAD Studio version에는 재빌드한다.

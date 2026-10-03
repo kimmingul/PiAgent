@@ -1,0 +1,20 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectGuid>{89DBB6A0-8B8B-4FC1-937A-85724582CD38}</ProjectGuid>
+    <MainSource>PiAgent.dpk</MainSource><ProjectVersion>20.3</ProjectVersion>
+    <FrameworkType>VCL</FrameworkType><Base>True</Base><AppType>Package</AppType>
+    <Config Condition="'$(Config)'==''">Release</Config>
+    <Platform Condition="'$(Platform)'==''">Win32</Platform><TargetedPlatforms>3</TargetedPlatforms>
+    <DCC_DesignPackage>true</DCC_DesignPackage><GenPackage>true</GenPackage><GenDll>true</GenDll>
+    <DCC_DcuOutput>..\bin\$(Platform)</DCC_DcuOutput>
+    <DCC_BplOutput>..\bin\$(Platform)</DCC_BplOutput><DCC_DcpOutput>..\bin\$(Platform)</DCC_DcpOutput>
+    <DCC_UnitSearchPath>$(BDS)\lib\$(Platform)\release;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+    <DCC_Namespace>System;Winapi;Vcl;$(DCC_Namespace)</DCC_Namespace>
+    <SanitizedProjectName>PiAgent</SanitizedProjectName>
+  </PropertyGroup>
+  <ItemGroup><DelphiCompile Include="PiAgent.dpk"><MainSource>MainSource</MainSource></DelphiCompile>
+    <DCCReference Include="rtl.dcp"/><DCCReference Include="vcl.dcp"/><DCCReference Include="designide.dcp"/>
+    <DCCReference Include="PiAgent.PipeClient.pas"/><DCCReference Include="PiAgent.Wizard.pas"/>
+  </ItemGroup>
+  <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets"/>
+</Project>

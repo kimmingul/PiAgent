@@ -1,0 +1,13 @@
+/target/
+/artifacts/
+/.tools/
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+.vs/
+**/bin/
+**/obj/
+*.bpl
+*.dcu
+*.vsix

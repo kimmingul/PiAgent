@@ -1,0 +1,10 @@
+package PiAgent;
+{$DESCRIPTION 'PiAgent Core connection vertical slice'}
+{$DESIGNONLY}
+{$IMPLICITBUILD OFF}
+{$LIBSUFFIX AUTO}
+requires rtl, vcl, designide;
+contains
+  PiAgent.PipeClient in 'PiAgent.PipeClient.pas',
+  PiAgent.Wizard in 'PiAgent.Wizard.pas';
+end.

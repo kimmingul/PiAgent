@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/piagent-protocol" },
+    { "path": "packages/piagent-core" },
+    { "path": "packages/piagent-omp" },
+    { "path": "packages/piagent-daemon" }
+  ]
+}
