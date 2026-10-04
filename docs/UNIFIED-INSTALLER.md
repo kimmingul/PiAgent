@@ -17,6 +17,9 @@ instance's VSIXInstaller with `/shutdownprocesses` after checking that IDE windo
 so leftover ServiceHub processes do not cause error 2004. Completed instances are recorded;
 rerunning repairs selected components, including a same-version VSIX. Previously installed
 components that are deselected are retained; use uninstall to remove the installation.
+Core upgrades preserve the existing pipe, OMP executable, workspace, write setting
+and OMP profile; the bundled Node path is updated to the new release. Invalid saved
+settings stop the upgrade instead of silently resetting the access policy.
 RAD registers packages in the
 correct HKCU Known Packages / Known Packages x64 key. Only PiAgent package entries are
 replaced; previous PiAgent RAD entries are recorded and restored on uninstall if still present.

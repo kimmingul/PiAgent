@@ -484,3 +484,39 @@ This repeat validates VCL; it does not add FMX live coverage or native AMD64 har
   signing process was stopped without typing into the authentication dialog.
   User must run set-signing-pin.ps1 once locally; actual encrypted-PIN token unlock,
   final signed setup and live VS2026 verification remain pending.
+
+## 2026-10-04: signed VS2026 deployment and transport control regression (0.9.5)
+
+- The actual VS2026 instance still contained VSIX 0.9.3 and an older Core while
+  the access-mode/workspace/+ changes existed only in source. The running NanumPDF
+  solution therefore used the PiAgent workspace and disabled both composer controls.
+- Live testing of the 0.9.4 installation exposed another cause: C# RequestAsync
+  did not allow chat.setApproval or chat.extensions. Added both methods and a
+  60-second deadline for OMP restart/extension operations to C# and Delphi transport.
+- A C# integration regression now authenticates over the real pipe, binds a
+  different IDE workspace, cycles write/yolo/plan/always-ask, preserves the saved
+  conversation and workspace, and lists a fixture plugin. All 15 adapter integration
+  tests and 19 affected chat/UI/workspace tests passed.
+- Installer upgrades now preserve owner pipe, OMP executable, workspace, write
+  setting and OMP profile, while changing the bundled Node path to the new release.
+  Malformed settings fail instead of resetting the access policy. Installer tests passed.
+- Signed first-party DLLs/BPLs, VSIX container and unified setup verified with the
+  expected Nanum Space signer and timestamps. Setup embedded hashes and actual
+  bundled ARM64/x64 authenticated handshake/capability/ping probes passed.
+  Setup SHA-256: F97E42076F6896EF4B9083175A650B51BA450BE16A1619CF4A1C5B15D39F5322.
+- Installed core,vs26 with the unified setup and reopened NanumPDF. VS2026 reports
+  VSIX 0.9.5; receipt release is 0.9.0-20261004131345. Core bootstrapped automatically
+  with its bundled native ARM64 Node. The installed signed Transport DLL also passed
+  all four mode changes and extension listing against this running production Core
+  in a separate probe workspace, preserving its savedSessionId.
+- Live WebView verification: NanumPDF workspace badge/path; enabled access selector
+  and all four options; file selection starting at the solution directory; actual
+  NanumPDF.sln and NanumPDF folder attachment chips; MCP/plugin submenus without
+  transport errors. No MCP servers or plugins are installed, so lists are empty;
+  live toggling of installed extensions was not exercised.
+- A real OMP chat answered NanumPDF and C:/Users/kimmi/source/repos/NanumPDF from
+  the attached references. No project edits or commands were requested by that probe.
+  The IDE remains open on the user's solution, with the chat response displayed.
+- Only VS2026 and Core were selected for this installation; VS2022 and RAD live
+  validation were not performed in this pass. Encrypted-PIN provider caching remains
+  a separate unverified feature; authentication dialogs were not automated.

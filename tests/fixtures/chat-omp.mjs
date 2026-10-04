@@ -5,13 +5,17 @@ import { randomUUID } from 'node:crypto';
 if (process.argv.includes('usage')) {
   console.log(JSON.stringify({reports:[{provider:'fixture',metadata:{planType:'Test'},limits:[{label:'Weekly',amount:{usedFraction:0.25},window:{resetsAt:1800000000000}}]}]})); process.exit(0);
 }
+if (process.argv[2] === 'plugin') {
+  if (process.argv[3] !== 'list' || process.argv[4] !== '--json') process.exit(2);
+  console.log(JSON.stringify({npm:[{name:'fixture-plugin',enabled:true}],marketplace:[]})); process.exit(0);
+}
 const directoryIndex = process.argv.indexOf('--session-dir');
 const directory = directoryIndex === -1 ? undefined : process.argv[directoryIndex + 1];
 let sessionFile, previousMessages=[];
 const emit = frame => process.stdout.write(JSON.stringify(frame) + '\n');
 const pidFile = process.argv.indexOf('--pid-file');
 if (pidFile !== -1) writeFileSync(process.argv[pidFile + 1], String(process.pid));
-for (const flag of ['--no-tools', '--no-extensions', '--no-skills', '--no-rules', '--no-lsp', '--no-title', '--no-pty'])
+for (const flag of (process.argv.includes('--approval-mode') ? ['--no-title','--no-pty'] : ['--no-tools', '--no-extensions', '--no-skills', '--no-rules', '--no-lsp', '--no-title', '--no-pty']))
   if (!process.argv.includes(flag)) process.exit(2);
 if (!directory && !process.argv.includes('--no-session')) process.exit(2);
 emit({ type: 'ready', protocolVersion: 1, supportedProtocolVersions: [1, 2] });

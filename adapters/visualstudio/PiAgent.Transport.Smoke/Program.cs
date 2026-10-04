@@ -14,6 +14,24 @@ using var client = new PipeAdapterClient(name);
 using var cancellation = new CancellationTokenSource();
 var mode = args.Length > 2 ? args[2] : "normal";
 if (mode == "credential") { Console.WriteLine(client.AuthenticationCredentialPath); return; }
+if (mode == "controls")
+{
+    cancellation.CancelAfter(60000);
+    var hello = await client.InitializeAsync("visual-studio", version, "controls-smoke", cancellation.Token, chat:true, writes:true);
+    if (!hello["capabilities"]!.ToString().Contains("workspace.bind.v1") || !hello["capabilities"]!.ToString().Contains("chat.approval.v1")) throw new IOException("Control capabilities unavailable");
+    var opened = await client.RequestAsync("chat.open", new JObject { ["workspaceUri"] = args[3] }, cancellation.Token);
+    var saved = (string?)opened["savedSessionId"];
+    var workspace = (string?)opened["workspaceUri"];
+    var modes = new JArray();
+    foreach (var access in new[] { "write", "yolo", "plan", "always-ask" }) {
+        opened = await client.RequestAsync("chat.setApproval", new JObject { ["sessionId"] = opened["sessionId"], ["mode"] = access }, cancellation.Token);
+        if ((string?)opened["approvalMode"] != access || (string?)opened["savedSessionId"] != saved || (string?)opened["workspaceUri"] != workspace) throw new IOException("Control lost session/workspace");
+        modes.Add(access);
+    }
+    var extensions = await client.RequestAsync("chat.extensions", new JObject { ["sessionId"] = opened["sessionId"], ["action"] = "listExtensions" }, cancellation.Token);
+    await client.RequestAsync("chat.close", new JObject { ["sessionId"] = opened["sessionId"] }, cancellation.Token);
+    Console.WriteLine(new JObject { ["workspaceUri"] = workspace, ["modes"] = modes, ["plugins"] = extensions["plugins"], ["savedSessionPreserved"] = true }.ToString(Formatting.None)); return;
+}
 if (mode == "changes")
 {
     var approval = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -10,6 +10,14 @@ void MustReject(Action action, string test)
 }
 try
 {
+    var fresh = InstallerEngine.UpgradeCoreSettings("new-node", "detected-omp", null);
+    if (fresh.allowWrites || fresh.ompProfile != "restricted" || fresh.workspace != null || fresh.omp != "detected-omp") throw new Exception("Fresh install defaults changed");
+    var saved = new CoreSettings("old-node", "custom-pipe", "saved-omp", "saved-workspace", true, "native");
+    var upgraded = InstallerEngine.UpgradeCoreSettings("new-node", "detected-omp", JsonSerializer.Serialize(saved));
+    if (upgraded != saved with { node = "new-node" }) throw new Exception("Upgrade lost owner settings");
+    MustReject(() => InstallerEngine.UpgradeCoreSettings("new-node", null, "invalid json"), "malformed settings do not reset access policy");
+    MustReject(() => InstallerEngine.UpgradeCoreSettings("new-node", null, JsonSerializer.Serialize(saved with { workspace = null })), "invalid native settings rejected");
+    Console.WriteLine("PASS fresh defaults / upgrade preserves Core settings with new bundled Node path");
     var file = Path.Combine(folder, "core.txt"); File.WriteAllText(file, "valid payload");
     var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file)));
     void Manifest(string path) => File.WriteAllText(Path.Combine(folder, "setup-manifest.json"), JsonSerializer.Serialize(new { sha256 = new Dictionary<string,string> { [path] = hash } }));

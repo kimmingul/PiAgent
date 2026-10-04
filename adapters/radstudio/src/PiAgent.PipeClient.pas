@@ -153,7 +153,7 @@ var Request, Reply: TJSONObject; Bytes: TBytes; Header: array[0..3] of Byte;
   Id: string; Length: Cardinal;
 begin
   FDeadline := GetTickCount64 + 5000;
-  if MatchText(Method,['chat.open','changes.decide','changes.restore','chat.usage','sessions.list','omp.control']) then FDeadline := GetTickCount64 + 60000;
+  if MatchText(Method,['chat.open','chat.setApproval','chat.extensions','changes.decide','changes.restore','chat.usage','sessions.list','omp.control']) then FDeadline := GetTickCount64 + 60000;
   Inc(FSequence);
   Id := 'delphi-' + IntToStr(FSequence);
   Request := TJSONObject.Create;
@@ -217,7 +217,7 @@ end;
 function TPiPipeClient.Request(const Method: string; Params: TJSONObject): TJSONObject;
 begin
   if not FReady then begin Params.Free; raise Exception.Create('Handshake required'); end;
-  if not MatchText(Method,['chat.open','chat.prompt','chat.cancel','chat.close','changes.decide','changes.list',
+  if not MatchText(Method,['chat.open','chat.setApproval','chat.extensions','chat.prompt','chat.cancel','chat.close','changes.decide','changes.list',
     'changes.previewRestore','changes.restore','sessions.list','chat.usage','designer.reply','designer.decide','omp.respond','omp.control']) then
     begin Params.Free; raise Exception.Create('Method unavailable'); end;
   Result := Call(Method,Params);

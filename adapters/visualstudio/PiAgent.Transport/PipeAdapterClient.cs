@@ -112,9 +112,9 @@ public sealed class PipeAdapterClient : IDisposable
     }
     public Task<JObject> RequestAsync(string method, JObject parameters, CancellationToken cancellation)
     {
-        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
+        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "chat.extensions", "chat.setApproval", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
             throw new InvalidOperationException("Unsupported request or handshake required");
-        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.open", "chat.usage", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
+        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.open", "chat.usage", "chat.setApproval", "chat.extensions", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
     }
     private async Task<JObject> CallAsync(string method, JObject parameters, CancellationToken cancellation, int timeout = 5000)
     {

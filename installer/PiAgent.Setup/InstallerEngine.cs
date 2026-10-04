@@ -12,6 +12,7 @@ public record Detection(string Architecture, bool Rad32, bool Rad64, List<VsInst
 public record Selection(bool Rad32, bool Rad64, bool Vs22, bool Vs26, bool InstallOmp);
 public record RegistryBackup(string Key, string Name, string Value);
 public record Receipt(string Product, string Root, string Release, List<VsInstance> VisualStudio, List<string> RadKeys, List<RegistryBackup> PreviousRad);
+public record CoreSettings(string node, string pipe = "piagent-dev", string? omp = null, string? workspace = null, bool allowWrites = false, string ompProfile = "restricted");
 public static class InstallerEngine
 {
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
@@ -21,6 +22,18 @@ public static class InstallerEngine
     private const string BdsKey = @"Software\Embarcadero\BDS\37.0";
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\PiAgent";
     private static string Architecture => RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "x64";
+    public static CoreSettings UpgradeCoreSettings(string node, string? detectedOmp, string? previousJson)
+    {
+        if (previousJson == null) return new(node, omp: detectedOmp);
+        CoreSettings settings;
+        try { settings = JsonSerializer.Deserialize<CoreSettings>(previousJson, Json) ?? throw new JsonException("Empty settings"); }
+        catch (JsonException error) { throw new IOException("기존 Core 설정을 읽지 못했습니다. 설정을 보존하기 위해 업데이트를 중단합니다.", error); }
+        if (string.IsNullOrEmpty(settings.pipe) || settings.pipe.Length > 128 || settings.pipe.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('_' or '-')) ||
+            settings.ompProfile is not ("restricted" or "native") || (settings.allowWrites && string.IsNullOrWhiteSpace(settings.workspace)) ||
+            (settings.ompProfile == "native" && (!settings.allowWrites || string.IsNullOrWhiteSpace(settings.omp ?? detectedOmp))))
+            throw new IOException("기존 Core 설정이 올바르지 않습니다. 설정을 보존하기 위해 업데이트를 중단합니다.");
+        return settings with { node = node, omp = settings.omp ?? detectedOmp };
+    }
     public static Detection Detect()
     {
         using var bds = Registry.CurrentUser.OpenSubKey(BdsKey);
@@ -139,7 +152,10 @@ public static class InstallerEngine
             var node = Path.Combine(release, "runtimes", Architecture, "node", "node.exe");
             var dotnet = Path.Combine(release, "runtimes", Architecture, "dotnet");
             Run(node, ["-p", "process.arch"]);
-            File.WriteAllText(Path.Combine(runtime, "settings.json"), JsonSerializer.Serialize(new { node, pipe = "piagent-dev", omp, workspace = (string?)null, allowWrites = false, ompProfile = "restricted" }, Json));
+            var previousSettings = previous == null ? null : Path.Combine(previous.Release, "core", "settings.json");
+            if (previousSettings != null) EnsurePlainPath(previousSettings);
+            var settings = UpgradeCoreSettings(node, omp, previousSettings != null && File.Exists(previousSettings) ? File.ReadAllText(previousSettings) : null);
+            File.WriteAllText(Path.Combine(runtime, "settings.json"), JsonSerializer.Serialize(settings, Json));
             var startCore = Path.Combine(release, "Start-Core.ps1");
             File.WriteAllText(startCore, "$ErrorActionPreference='Stop'\n$env:PATH=(Join-Path $PSScriptRoot 'runtimes/" + Architecture + "/dotnet')+';'+$env:PATH\n& (Join-Path $PSScriptRoot 'core/scripts/start-core.ps1')\n");
             progress.Report("IDE adapter를 등록하고 있습니다…");
