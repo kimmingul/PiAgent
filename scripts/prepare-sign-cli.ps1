@@ -13,8 +13,18 @@ if (!(Test-Path -LiteralPath (Join-Path $source '.git'))) {
 }
 if ((& git -C $source rev-parse HEAD) -ne $revision) { throw 'Unexpected Sign CLI source revision.' }
 function Patch-PinnedSource([string]$Relative,[string]$Before,[string]$After) {
-    $original=(& git -C $source show ($revision+':'+$Relative)) -join "`n"
-    if ($LASTEXITCODE -ne 0 -or !$original.Contains($Before)) { throw "Unexpected pinned source: $Relative" }
+    # MSBuild's inherited console codepage can corrupt a UTF-8 BOM in git output.
+    $gitInfo=[Diagnostics.ProcessStartInfo]::new('git')
+    $gitInfo.UseShellExecute=$false;$gitInfo.CreateNoWindow=$true
+    $gitInfo.RedirectStandardOutput=$true;$gitInfo.RedirectStandardError=$true
+    $gitInfo.StandardOutputEncoding=[Text.UTF8Encoding]::new($false)
+    foreach($argument in @('-C',$source,'show',($revision+':'+$Relative))){$gitInfo.ArgumentList.Add($argument)}
+    $gitProcess=[Diagnostics.Process]::Start($gitInfo)
+    try {
+        $original=$gitProcess.StandardOutput.ReadToEnd().TrimStart([char]0xFEFF)
+        $gitError=$gitProcess.StandardError.ReadToEnd();$gitProcess.WaitForExit()
+        if ($gitProcess.ExitCode -ne 0 -or !$original.Contains($Before)) { throw "Unexpected pinned source: $Relative" }
+    } finally {$gitProcess.Dispose()}
     [IO.File]::WriteAllText((Join-Path $source $Relative),$original.Replace($Before,$After)+"`n")
 }
 Patch-PinnedSource 'src/Sign.Cli/Program.cs' 'if (!Environment.Is64BitProcess)' 'if (!Environment.Is64BitProcess && !(args.Length > 0 && new[] { ".vsix", ".dll", ".exe", ".bpl" }.Any(ext => args[^1].EndsWith(ext, StringComparison.OrdinalIgnoreCase))))'
@@ -35,4 +45,4 @@ New-Item -ItemType Directory -Path $sdkOutput -Force | Out-Null
 foreach($name in @('signtool.exe.manifest','mssign32.dll','wintrust.dll','wintrust.dll.ini','appxsip.dll','appxpackaging.dll','opcservices.dll','Microsoft.Windows.Build.Signing.mssign32.dll.manifest','Microsoft.Windows.Build.Signing.wintrust.dll.manifest','Microsoft.Windows.Build.Appx.AppxSip.dll.manifest','Microsoft.Windows.Build.Appx.AppxPackaging.dll.manifest','Microsoft.Windows.Build.Appx.OpcServices.dll.manifest')) {
     Copy-Item -LiteralPath (Join-Path $sdk.FullName "$Architecture/$name") -Destination $sdkOutput -Force
 }
-@{revision=$revision;patch='DPAPI PIN supplied to the actual CSP RSA signer; no UI and no signing retries; PE/BPL/VSIX only on x86';credentialHash=(Get-FileHash (Join-Path $PSScriptRoot 'signing/PiAgentSigningCredential.cs')).Hash;prepareHash=(Get-FileHash $PSCommandPath).Hash} | ConvertTo-Json | Set-Content (Join-Path $output 'source-revision.json')
+@{revision=$revision;patch='DPAPI PIN supplied to the actual CSP/CNG RSA signer; silent private-key operations and no signing retries; PE/BPL/VSIX only on x86';credentialHash=(Get-FileHash (Join-Path $PSScriptRoot 'signing/PiAgentSigningCredential.cs')).Hash;prepareHash=(Get-FileHash $PSCommandPath).Hash} | ConvertTo-Json | Set-Content (Join-Path $output 'source-revision.json')

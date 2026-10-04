@@ -11,6 +11,9 @@ RADAgent 원본 WebView UI/UX를 유지하면서 VS/RAD host 연결을 보완했
 - BTW/설정/접근 모드/첨부/폴더/MCP/플러그인/계획/대기열/사용량 연결 보완.
 - 무응답 OMP 취소, 설정 후 동적 UI 상태, C#/XAML/FMX 파일 참조 수정.
 - RAD 복원 후 FMX 디자이너 갱신, MCP 편집기 표시 및 폴더 선택 창 소유자 수정.
+- Windows DPAPI PIN을 CNG/CSP 서명 프로세스에 전달한다. CNG 키를 명시적으로
+  취득하고 private signing에 silent flag를 적용해 별도 PIN 대화상자를 사용하지 않는다.
+- MSBuild 환경의 console codepage와 관계없이 pinned Sign CLI 소스를 UTF-8로 읽는다.
 
 ## 배포 범위
 
@@ -41,4 +44,12 @@ VS2022 및 RAD32는 빌드·자동 검증 범위이며 이번 실사용 검증 �
 - bundled Node 24.21.0 ARM64/x64 각각 인증 handshake/capability negotiation/ping 통과.
 - installer safety tests 통과: 변조/traversal/기존 추출 경로/미설치 IDE 거절, 업그레이드 설정 보존.
 
-코드서명 및 서명된 설치파일 검증이 완료될 때까지 GitHub 릴리즈는 초안으로 유지한다.
+## 코드서명 검증
+
+실제 USB 인증서 `3CE49DE1124F325082FA90BDE4944756D1626251`로 서명했다.
+Win32/Win64 BPL, pipe host, VSIX 내부 DLL 및 OPC 컨테이너, 통합 setup의 서명을 검증했다.
+PE는 SHA-256/RFC3161 timestamp를 포함하며 VSIX는 content signature/신뢰 체인을 확인했다.
+암호화 PIN 등록 후 별도 PIN 입력 없이 연속 서명을 완료했다.
+
+서명된 setup 자체 진단, embedded payload hash 전체 검사, ARM64/x64 runtime handshake/ping,
+installer safety tests가 통과했다. 실제 설치 IDE의 남은 검증 항목은 위 제한을 그대로 유지한다.

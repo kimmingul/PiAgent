@@ -40,7 +40,14 @@ processes reused its login; an environment marker was not proof of an unlocked k
 Automatic signing never falls back to an interactive PIN dialog. Key/PIN validation
 failure quarantines the encrypted file with a `.rejected-<id>` suffix and stops
 without automatic retries. It reports the provider error code, never the PIN.
-CNG-only tokens are currently unsupported by this saved-PIN implementation.
+CSP and CNG RSA tokens are supported. CNG receives the decrypted PIN through
+`NCryptSetProperty(SmartCardPin)` in the signing process. Key acquisition and every
+`NCryptSignHash` call carry the silent flag. PIN native memory is zeroed immediately;
+private-key export and unsupported padding are rejected.
+The signer uses `CryptAcquireCertificatePrivateKey(ONLY_NCRYPT | SILENT)` first,
+so smart-card certificate propagation changing the provider metadata back to CSP
+does not force the next signing process onto a legacy provider. This acquisition
+does not retry PIN authentication. Software-only CSP fixtures retain the CSP path.
 Explicit `-Interactive` on the individual signing scripts retains manual signing
 for diagnosis and temporary software-certificate tests; release builds use the
 saved-PIN path by default. This switch contains no credential.
@@ -54,7 +61,7 @@ the PE/BPL/VSIX paths on x86, and selects matching Windows SDK signing component
 The generated tool stays under ignored `.tools/sign-x86` or `.tools/sign-x64`;
 source/patch hashes trigger rebuilding when the implementation changes.
 
-On this ARM64 PC, the SafeNet CSP exposes its key to x86 processes. The helper uses
+On this ARM64 PC, the token provider is used from x86 processes. The helper uses
 the x86 .NET 8 runtime under `C:\Program Files (x86)\dotnet` and x86 SDK components.
 On x64, it builds/runs x64. These are build prerequisites, not PiAgent runtime
 dependencies; Core remains native ARM64. This is not an official x86 Sign CLI release.
@@ -97,9 +104,14 @@ signatures. Temporary certificates, keys and fake credentials are removed.
 The actual-token test signs copies in `artifacts` in fresh processes and verifies
 them, leaving release artifacts and installed IDEs untouched. Software tests alone
 do not prove that this SafeNet middleware accepts a saved PIN without UI. At the
-time this fix was prepared, the actual PIN had not been registered; live USB
-validation remains pending until the owner registers it.
+time the initial CSP fix was prepared, the actual PIN had not been registered.
+On 2026-10-05 the owner registered it; the actual release key used CNG and its first
+DLL signing/verification passed without another PIN prompt. Full release verification
+is recorded in `RELEASE-0.9.9.md`.
 
 References: [CspParameters.KeyPassword](https://learn.microsoft.com/dotnet/api/system.security.cryptography.cspparameters.keypassword),
+[CNG PIN property](https://learn.microsoft.com/windows/win32/seccng/key-storage-property-identifiers),
+[NCryptSignHash](https://learn.microsoft.com/windows/win32/api/ncrypt/nf-ncrypt-ncryptsignhash),
+[Certificate key acquisition](https://learn.microsoft.com/windows/win32/api/wincrypt/nf-wincrypt-cryptacquirecertificateprivatekey),
 [SignTool](https://learn.microsoft.com/windows/win32/seccrypto/signtool),
 [Signing VSIX packages](https://learn.microsoft.com/visualstudio/extensibility/signing-vsix-packages).

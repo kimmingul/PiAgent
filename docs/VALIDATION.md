@@ -577,6 +577,11 @@ This repeat validates VCL; it does not add FMX live coverage or native AMD64 har
 - Final installed acceptance additionally verified VS native MCP editor and RAD actual subagent log
   (3+4=7 / Result submitted). RAD HTTPS click opened another Edge Example Domain tab; final
   browser capture stopped because Computer Use could not enforce URL policy with confidence.
-- User explicitly requested signing and release. Signing is pending local DPAPI PIN registration;
-  no unencrypted credential, PIN prompt automation, or unsigned public setup release is used.
+- User explicitly requested signing and release and registered the DPAPI PIN locally.
+  Actual USB CNG signing of DLLs, Win32/Win64 BPLs and VSIX passed with expected certificate,
+  trusted chain and timestamps. No PIN dialog automation or plaintext credential is used.
+- Signing regressions passed: silent CNG signing/tamper rejection/no private export, DPAPI x86/native,
+  malformed credential/DTD rejection, no-prompt failure, PE timestamps and VSIX signatures.
 - See RELEASE-0.9.9.md and MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md for remaining limitations.
+- Signed setup passed expected Authenticode certificate and RFC3161 timestamp validation,
+  complete embedded payload verification, ARM64/x64 runtime handshake/ping and installer safety tests.

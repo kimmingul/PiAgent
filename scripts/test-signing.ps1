@@ -17,6 +17,7 @@ $pin=ConvertTo-SecureString 'PiAgent test PIN 🚀' -AsPlainText -Force
 try{$pin | Export-Clixml -LiteralPath $credential}finally{$pin.Dispose()}
 $receipt=Join-Path $stage 'certificate.json'
 try {
+    Test-Runner @('silent-cng')
     Test-Runner @('credential',$credential)
     Test-Runner @('create-test-cert',$receipt)
     $certificate=Get-Content $receipt -Raw | ConvertFrom-Json

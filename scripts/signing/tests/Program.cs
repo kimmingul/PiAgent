@@ -4,6 +4,22 @@ using System.Security.Cryptography.Pkcs;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
+if(args[0]=="silent-cng") {
+    var parameters=new CngKeyCreationParameters {Provider=CngProvider.MicrosoftSoftwareKeyStorageProvider};
+    parameters.Parameters.Add(new CngProperty("Length",BitConverter.GetBytes(2048),CngPropertyOptions.None));
+    using var key=CngKey.Create(CngAlgorithm.Rsa,null,parameters);
+    using var rsa=new PiAgentSigningCredential.SilentCngRsa(key);
+    var digest=SHA256.HashData("PiAgent silent CNG regression"u8);
+    var signature=rsa.SignHash(digest,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1);
+    using var verifier=RSA.Create(); verifier.ImportParameters(rsa.ExportParameters(false));
+    if(!verifier.VerifyHash(digest,signature,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1))throw new Exception("CNG signature failed");
+    digest[0]^=1;
+    if(verifier.VerifyHash(digest,signature,HashAlgorithmName.SHA256,RSASignaturePadding.Pkcs1))throw new Exception("Tampered digest accepted");
+    try {rsa.ExportParameters(true);throw new Exception("Private key exported");} catch(NotSupportedException){}
+    try {rsa.SignHash(digest,HashAlgorithmName.SHA256,RSASignaturePadding.Pss);throw new Exception("Unsupported padding accepted");} catch(NotSupportedException){}
+    Console.WriteLine("PASS silent CNG PKCS1 signature / tamper rejection / no private export / unsupported padding rejection");return;
+}
+
 if(args[0]=="credential") {
     using var pin=PiAgentSigningCredential.LoadPinFile(args[1]);
     var pointer=Marshal.SecureStringToGlobalAllocUnicode(pin);
