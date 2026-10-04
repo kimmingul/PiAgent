@@ -4,6 +4,8 @@
 <title>PiAgent Chat</title><link rel="stylesheet" href="chat.css"><script type="module" src="chat.js"></script></head>
 <body><header><strong>PiAgent</strong><div><button id="connect">연결</button><button id="reset" disabled>새 대화</button></div></header>
 <p id="status" role="status">Core를 실행한 뒤 연결해 주세요.</p><main id="transcript" aria-label="대화"></main>
+<section id="sessionTools" hidden><button id="refreshSessions" type="button">저장된 대화</button><select id="sessions" aria-label="재개할 대화"></select><button id="resumeSession" type="button">재개</button><span id="savedSession"></span></section>
+<section id="usageTools" hidden><button id="refreshUsage" type="button">사용량 새로고침</button><details><summary>사용량 · 비용</summary><pre id="usageText">조회 중…</pre></details></section>
 <section id="checkpointTools" hidden><button id="refreshCheckpoints" type="button">변경 기록</button><select id="checkpoints" aria-label="복원할 변경"></select><button id="previewRestore" type="button">복원 미리보기</button></section>
 <section id="approvalCard" hidden aria-label="파일 변경 검토"><strong id="approvalTitle"></strong><p id="approvalReason"></p><p class="diffHint">파일 전체의 삭제(-)·추가(+) 내용입니다. ␍는 CR, ⟨BOM⟩은 UTF-8 BOM을 표시합니다.</p><pre id="approvalDiff"></pre><div class="approvalActions"><button id="rejectChange" type="button">거절</button><button id="approveChange" type="button">승인하고 적용</button></div></section>
 <form id="composer"><label for="message">메시지</label><textarea id="message" rows="3" placeholder="질문을 입력하세요. Shift+Enter로 줄바꿈"></textarea>

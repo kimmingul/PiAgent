@@ -5,7 +5,10 @@ import { ChatError, CHAT_CAPABILITY } from './chat.js';
 import type { ChatSession } from './chat.js';
 import { CONTEXT_CAPABILITY } from './context.js';
 import { WORKSPACE_CAPABILITY } from './workspace.js';
-import { EDIT_CAPABILITY } from './changes.js';
+import { SESSION_CAPABILITY, USAGE_CAPABILITY } from './sessions.js';
+export { SessionStore } from './sessions.js';
+export { UsageService } from './usage.js';
+import { EDIT_CAPABILITY,BATCH_CAPABILITY } from './changes.js';
 export { WorkspaceChanges } from './changes.js';
 import { Authentication } from './authentication.js';
 export { Authentication, authProof, equalProof } from './authentication.js';
@@ -39,7 +42,7 @@ export class Session {
     let value: unknown;
     try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)) as unknown; }
     catch { return fallback; }
-    if (!isObject(value) || typeof value['method'] !== 'string' || !['chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore'].includes(value['method'])
+    if (!isObject(value) || typeof value['method'] !== 'string' || !['chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore','sessions.list','chat.usage'].includes(value['method'])
       || !('id' in value) || !validId(value['id']) || fallback?.error?.code !== -32601) return fallback;
     const id = value['id'];
     if (!this.ready) return failure(id, -32002, 'Handshake required');
@@ -47,7 +50,7 @@ export class Session {
     if (value['method'] === 'chat.prompt' && isObject(value['params']) && 'context' in value['params']
       && !this.negotiated.includes(CONTEXT_CAPABILITY)) return failure(id, -32005, 'Selection context capability not negotiated');
     if (!isObject(value['params'] ?? {})) return failure(id, -32602, 'Invalid params');
-    try { return success(id, await this.chat.handle(value['method'], (value['params'] ?? {}) as Record<string, unknown>, this.negotiated.includes(WORKSPACE_CAPABILITY), this.negotiated.includes(EDIT_CAPABILITY))); }
+    try { return success(id, await this.chat.handle(value['method'], (value['params'] ?? {}) as Record<string, unknown>, this.negotiated.includes(WORKSPACE_CAPABILITY), this.negotiated.includes(EDIT_CAPABILITY),this.negotiated.includes(SESSION_CAPABILITY),this.negotiated.includes(USAGE_CAPABILITY),this.negotiated.includes(BATCH_CAPABILITY))); }
     catch (error) { return failure(id, error instanceof ChatError ? error.code : -32010,
       error instanceof Error ? error.message : 'Chat failed'); }
   }
@@ -108,6 +111,9 @@ export class Session {
     const negotiated: string[] = offered.filter(capability => capability === 'core.ping'
       || (this.chat && (capability === CHAT_CAPABILITY || (capability === CONTEXT_CAPABILITY && offered.includes(CHAT_CAPABILITY))
         || (capability === WORKSPACE_CAPABILITY && this.chat.supportsWorkspace && offered.includes(CHAT_CAPABILITY))
+        || (capability === SESSION_CAPABILITY && this.chat.supportsSessions && offered.includes(CHAT_CAPABILITY))
+        || (capability === USAGE_CAPABILITY && this.chat.supportsUsage && offered.includes(CHAT_CAPABILITY))
+        || (capability === BATCH_CAPABILITY && this.chat.supportsWrites && offered.includes(EDIT_CAPABILITY) && offered.includes(CHAT_CAPABILITY) && offered.includes(WORKSPACE_CAPABILITY))
         || (capability === EDIT_CAPABILITY && this.chat.supportsWrites && offered.includes(CHAT_CAPABILITY) && offered.includes(WORKSPACE_CAPABILITY)))));
     const missing = required.filter(capability => !negotiated.includes(capability));
     if (missing.length > 0) return failure(id, -32004, 'Required capability unavailable', { missingCapabilities: missing });

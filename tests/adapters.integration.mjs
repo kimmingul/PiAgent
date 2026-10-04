@@ -13,8 +13,19 @@ import { startDaemon, pipePath } from '@piagent/daemon';
 const execute = promisify(execFile);
 const file = path => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const csharp = file('adapters/visualstudio/PiAgent.Transport.Smoke/bin/Release/net10.0/PiAgent.Transport.Smoke.dll');
-const delphi = platform => file(`adapters/radstudio/bin/${platform}/0.6.0/PipeSmoke.exe`);
+const delphi = platform => file(`adapters/radstudio/bin/${platform}/0.7.0/PipeSmoke.exe`);
 const windows = { skip: process.platform !== 'win32', timeout: 15_000 };
+for(const platform of ['Win32','Win64']) test(`Delphi ${platform} chat worker approves/restores a batch and resumes a saved session`,{...windows,timeout:30000},async()=>{
+ const root=await mkdtemp(join(tmpdir(),'piagent-rad-chat-'));let daemon;
+ try{
+  const git=async(...args)=>execute('git',['-c','user.name=PiAgent Test','-c','user.email=test@localhost',...args],{cwd:root,windowsHide:true});
+  await git('init');await writeFile(join(root,'Example.cs'),'first\r\n');await writeFile(join(root,'Second.cs'),'second\n');await git('add','.');await git('commit','-m','Fixture');
+  const name='piagent-rad-chat-'+randomUUID(),authFile=join(root,'private','token');
+  daemon=await startDaemon({pipeName:name,secure:{authFile},workspaceRoot:root,allowWrites:true,omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
+  const result=await execute(file(`adapters/radstudio/bin/${platform}/0.7.0/ChatSmoke.exe`),[],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_PIPE_NAME:name,PIAGENT_AUTH_FILE:authFile}});
+  assert.deepEqual(JSON.parse(result.stdout.trim()),{applied:true,restored:true,resumed:true,usage:true});assert.equal((await git('diff')).stdout.trim(),'');
+ }finally{await daemon?.close();await rm(root,{recursive:true,force:true});}
+});
 
 test('secure C# adapter receives a diff, approves the exact revision and restores its checkpoint', {...windows,timeout:30000},async()=>{
   const root=await mkdtemp(join(tmpdir(),'piagent-adapter-changes-'));let daemon;

@@ -1,5 +1,10 @@
 # PiAgent architecture
 
+0.7.0: VS와 RAD는 동일한 WebView UI로 채팅·승인·복원을 제공한다. IDE별 미저장 문서 검사는
+adapter의 UI thread에서 수행한다. Core의 SessionStore는 broker가 보호한 사용자별 디렉터리 아래에
+workspace별 세션 metadata와 OMP JSONL을 저장하며, UsageService는 세션 통계와 계정 한도를 분리한다.
+WorkspaceChanges는 최대 8개 파일을 하나의 revision/승인/checkpoint로 처리한다.
+
 0.5.0: Windows pipe host가 current-user DACL, remote-client 거부와 name ownership을 담당한다.
 TypeScript Core는 연결별 mutual HMAC 인증 뒤 기존 RPC를 허용한다. [보안 계약](docs/SECURITY.md).
 
@@ -22,7 +27,7 @@ JSON-RPC 2.0이며, Core–OMP 통신은 `omp --mode rpc-ui`의 stdin/stdout JSO
 현재 vertical slice는 adapter hello/version/capability negotiation/ping, standalone daemon,
 OMP process manager, C# VSIX/Delphi BPL 연결 메뉴와 transport, 독립 배포본, 테스트다.
 0.2.0은 도구 없는 OMP 채팅 session/prompt/stream/cancel과 VS WebView UI까지 확장한다.
-IDE host tools, 파일 변경, approval, checkpoint, usage 집계는 후속 범위다.
+현재는 제한된 파일 읽기·검색·승인 변경, checkpoint 복원, 세션 저장·재개와 사용량 조회까지 제공한다.
 
 ```mermaid
 flowchart LR
@@ -32,7 +37,7 @@ flowchart LR
     D --> C["IDE-neutral Session"]
     D --> M["OMP process manager"]
     M <-->|"stdin/stdout JSONL"| OMP["omp --mode rpc-ui"]
-    UI["Shared WebView HTML / TypeScript UI"] -.->|"future host"| RAD
+    UI["Shared WebView HTML / TypeScript UI"] --> RAD
     UI --> VS
 ```
 
@@ -64,7 +69,7 @@ Rust source/build graph를 남겨 두지 않으며 npm workspace가 유일한 �
 | scripts/package-core.mjs | workspace junction 없이 실제 파일을 복사하고 SHA-256 manifest 생성 |
 | scripts/omp-smoke.mjs | 설치된 OMP에 대한 opt-in get_state smoke |
 | adapters/* | BPL / VSIX 최소 메뉴, IDE-independent transport와 콘솔 smoke harness |
-| ui | RADAgent WebView UI 재사용·TypeScript 정리 계획 |
+| ui | VS/RAD 공용 WebView 채팅·승인·복원·세션·사용량 TypeScript UI |
 
 npm workspace local package links와 TypeScript project references로 dependency 순서를 구성한다.
 ESM / NodeNext이며 strict, exactOptionalPropertyTypes, noUncheckedIndexedAccess를 켠다.
@@ -86,7 +91,7 @@ development fixture에서는 node:net이 관리한다. 같은 endpoint의 중복
 hello 성공 전 ping을 거절한다. read/idle deadline 30초, 각 write deadline 30초,
 출력 대기량 2 MiB 제한이다. 부분 frame의 trickle bytes는 read deadline을 연장하지 않는다.
 잘못된 framing/timeout은 peer 하나만 끊고, JSON/RPC 오류에는 오류 응답 후 연결을 유지한다.
-reconnect 시 새 Session이다. 자동 replay, reconnect 또는 durable session 복원은 없다.
+reconnect 시 새 runtime Session이다. 자동 replay/reconnect는 없으며 저장된 대화는 명시적으로 재개한다.
 SIGINT/SIGTERM은 모든 socket과 OMP를 정리한다. 강제 종료 뒤에도 OS가 pipe handle을 해제한다.
 
 OMP manager는 single-use이며 cwd를 절대 경로로 받는다. shell:false / windowsHide:true로
@@ -99,7 +104,7 @@ Job Object 정리는 아직 없다. OMP child가 추가 프로세스를 띄우�
 현재 bridge는 OMP JSONL v1만 유지한다. ready.protocolVersion=1 및 v1 support가 있어야
 사용한다(legacy ready의 version 필드 생략은 v1). v2-only/current-v2와 rpc_chunk는 명시적으로
 거절한다. `negotiate_protocol`/64 MiB chunk 재조립은 후속 구현이다. ready 후 get_state,
-get_available_commands, get_session_stats, new_session, prompt, abort, set_host_tools를 programmatic API에서 허용한다.
+get_available_commands, get_session_stats, new_session, switch_session, prompt, abort, set_host_tools를 programmatic API에서 허용한다.
 유효한 OMP event는 frame event로 전달하고 stderr/diagnostic은 별도 event다.
 Adapter pipe로 OMP raw command를 전달하는 메서드는 아직 없다.
 
@@ -110,16 +115,16 @@ Adapter pipe로 OMP raw command를 전달하는 메서드는 아직 없다.
 | 참고 파일 | PiAgent 반영 / 후속 설계 |
 | --- | --- |
 | DESIGN.md / RpcClient.pas / RpcDispatch.pas / RpcProtocol.pas | transport와 dispatch 분리, ready gate, 별도 stderr, physical frame limit |
-| ChatSession.pas | connection-local ChatSession이 ephemeral OMP child와 turn 수명을 소유; 숨김/재표시 때 VS chat connection 유지 |
+| ChatSession.pas | connection-local ChatSession이 OMP child와 turn 수명을 소유; 숨김/재표시 때 연결 유지, 종료 때 저장·lease 해제 |
 | Approval.pas / ChatApproval.pas | 파일별 diff/revision 기반 승인, 연결 소유권과 취소/만료 분리 |
 | GitRepo.pas / RpcResponses.pas | 승인 적용 전 raw blob과 refs/piagent/checkpoints로 파일 checkpoint; index/HEAD/branch 보존, 적용 후 blob도 보관 |
-| ChatUsage.pas / UsageReport.pas | 향후 get_session_stats의 세션 사용량과 별도 omp usage --json provider 한도를 구분; 현재 raw response만 전달 |
-| src/chat/chat.html / composer.js / chat.js | 입력/전송/취소와 host bridge 분리 패턴을 참고해 작은 shared TypeScript UI 작성; 승인/checkpoint UI는 후속 |
+| ChatUsage.pas / UsageReport.pas | get_session_stats 세션 통계와 omp usage --json provider 한도를 구분하고 허용 필드만 정규화 |
+| src/chat/chat.html / composer.js / chat.js | 입력/전송/취소와 host bridge 분리 패턴을 참고해 공용 TypeScript UI 및 승인/checkpoint/세션/사용량 표시 구현 |
 | AGENTS.md | ToolsAPI 메인 스레드, IDE bitness별 BPL, unload 때 callback/notifier/pipe 해제 |
 
 OMP response.success는 명령 접수이며 agent 턴 완료는 별도 agent_end/prompt_result다.
-후속 agent loop는 이 구분, host-tool 등록·승인·취소, save/refresh conflict를 보존해야 한다.
-0.2.0에서는 도구 없는 agent prompt를 실행한다. Git 변경·IDE/file 변경 도구는 후속 범위다.
+agent loop는 이 구분, host-tool 등록·승인·취소, save/refresh conflict를 보존한다.
+0.7.0은 제한된 tracked 파일 교체와 Git checkpoint 복원을 지원한다. 새 파일/삭제/rename은 후속 범위다.
 
 ## Adapter와 UI 경계
 
@@ -135,29 +140,31 @@ VS 2022 PiAgentTest에서도 실제 메뉴 hello/ping, WebView 채팅 스트리�
 RAD 실제 host 결과는 adapter README에 기록한다.
 둘 다 daemon과 다른 bitness일 수 있다. IDE 버전은 core가 판정하지 않는다.
 
-두 adapter의 PiAgent: Check Core Connection 메뉴는 worker에서 connect → hello → ping을
-실행하고 연결을 닫는다. VS Chat은 별도 persistent connection과 20초 ping을 사용한다. PIAGENT_PIPE_NAME 환경
+VS의 PiAgent: Check Core Connection 메뉴는 worker에서 connect → hello → ping을
+실행하고 연결을 닫는다. VS/RAD Chat은 persistent connection과 20초 ping을 사용한다. PIAGENT_PIPE_NAME 환경
 변수가 endpoint를 선택하고 생략 시 piagent-dev다. C#은 CancellationToken과 dispose로
 비동기 I/O를 취소하고 Output pane에 결과를 표시한다. Delphi는 overlapped I/O와 cancel event,
-메인 스레드 timer polling과 Messages 출력을 사용하며 package unload 전에 worker를 join한다.
+메인 스레드 timer polling과 WebView 출력을 사용하며 package unload 전에 worker를 join한다.
 UI thread/IDE API는 transport library에 없고 콘솔 harness와 동일 코드를 사용한다.
 RAD는 IOTAMenuWizard / RegisterPackageWizard로 Help → Help Wizards에 등록하고 IDE가 메뉴 수명을
-관리한다. VSIX는 Tools 메뉴에 등록한다. RAD Messages view는 연결 검사 완료 후 자동으로 표시한다.
+관리한다. RAD 메뉴는 PiAgent: Open Chat이며 VSIX는 Tools 메뉴에 등록한다.
 
 WebView UI는 IDE SDK 코드와 분리한다. RADAgent의 HTML/CSS/JS를 먼저 분석·재사용하고
 필요한 부분을 TypeScript로 옮기되, shared view는 transcript/status/approval 모델만 다룬다.
 각 adapter의 WebView host bridge가 UI message를 typed Core API로 바꾸도록 설계한다.
-ui/src/chat.ts는 strict DOM TypeScript이고 ui/src/chat.html/chat.css와 함께 VSIX에 담는다.
+ui/src/chat.ts는 strict DOM TypeScript이고 ui/src/chat.html/chat.css와 함께 VSIX와 BPL 옆에 담는다.
 VS의 WPF ToolWindowPane은 WebView2로 local virtual host의 정적 UI를 열고 typed bridge로
 chat.open/prompt/cancel/close를 호출한다. UI에는 OMP raw command, IDE SDK나 shell 로직이 없다.
 HTML transcript는 textContent/TextNode만 사용한다. CSP, local-origin 확인, navigation/download
 차단으로 모델 출력이 host bridge를 실행하지 못하게 한다. UI 표시량은 메시지당 2M 문자와 100행이다.
 WebView2 SDK의 managed DLL 및 x64/ARM64 loader는 adapter에만 있으며 Core는 native dependency가 없다.
-WebView2 Runtime은 PC에 설치된 것을 사용한다. RAD BPL은 이번 단계에서는 handshake/ping 메뉴를 유지한다.
+WebView2 Runtime은 PC에 설치된 것을 사용한다. RAD BPL은 Vcl.Edge의 TEdgeBrowser를 사용하며
+package 옆의 UI 및 bitness에 맞는 loader를 배포한다. Delphi worker는 pipe를 단독 소유하고,
+메인 thread가 bounded queue를 polling하여 WebView와 ToolsAPI에 접근한다. unload 시 worker를 cancel/join한다.
 
 ChatSession은 adapter connection마다 하나씩 만들고 chat.open 때 OMP를 시작한다.
-ready/new_session 이후에 session ID를 반환한다. OMP는 tools/extensions/skills/rules/LSP와 session
-저장을 비활성화한다. 한 번에 한 prompt만 받으며 terminal event 전에는 busy이다. 응답 접수와 턴 완료를
+ready와 new_session/switch_session 이후에 runtime session ID를 반환한다. OMP의 built-in tools/extensions/skills/rules/LSP는
+비활성화한다. 세션 capability가 협상되지 않았을 때는 --no-session을 사용한다. 한 번에 한 prompt만 받으며 terminal event 전에는 busy이다. 응답 접수와 턴 완료를
 분리하고 cooperative abort, deadline, disconnect/exit cleanup을 수행한다. 별도 connection끼리 session과
 이벤트를 공유하지 않는다. --omp가 없으면 chat.v1을 제공하지 않는다. protocol 계약은 PROTOCOL.md를 따른다.
 
@@ -189,5 +196,21 @@ No IDE-specific logic enters Core. Optional `workspace.edit.v1` preserves read-o
 
 Checkpoint blobs and private refs preserve raw working bytes without changing the user's index/HEAD.
 A journal precedes bounded in-place writes; uncertain interruption requires inspection, not automatic overwrite.
-This first slice supports existing tracked UTF-8 files up to 32 KiB, one per approval.
+Each existing tracked UTF-8 file is limited to 32 KiB. Optional workspace.edit.batch.v1 supports 1–8 files,
+128 KiB per batch side. All files are revalidated before writes; attempted writes roll back on failure,
+without overwriting intervening edits. The filesystem update is not an atomic multi-file transaction.
 See [approved changes](docs/APPROVED-CHANGES.md) for lifecycle, cancellation and recovery limits.
+
+## Durable sessions and usage (0.7.0)
+
+`chat.sessions.v1` opts into a private store beneath the verified credential directory, namespaced by a
+hash of the canonical workspace (OMP cwd when no workspace is configured). Opaque saved IDs never expose paths.
+Each active lease has an exclusive lock; close/disconnect joins OMP before flushing metadata and releasing it.
+OMP runs with a private --session-dir and resumes via switch_session, preserving model history/tool results.
+Displayed transcript is limited to 200 entries/256 KiB; it is separate from OMP's full conversation file.
+Interrupted locks require inspection; approvals never survive a disconnected connection.
+
+`chat.usage.v1` reads get_session_stats/get_state and queries `omp usage --json --provider` through execFile
+with no shell, bounded output and a 30-second timeout. Account limits are cached for 60 seconds. Only normalized
+fields cross the pipe; unknown cost/token values remain null. No price table or guessed subscription cost is used.
+See [session and usage contract](docs/SESSIONS-USAGE.md) and [installation](docs/INSTALLATION.md).

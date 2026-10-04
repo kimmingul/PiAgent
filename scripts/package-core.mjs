@@ -31,11 +31,14 @@ export async function packageCore(destination, { adapters = false } = {}) {
   for (const document of ['ARCHITECTURE.md', 'PROTOCOL.md'])
     await cp(join(repository, document), join(output, document));
   await mkdir(join(output, 'docs'));
+  await mkdir(join(output, 'scripts'));
+  for(const name of ['install-core.ps1','start-core.ps1','uninstall-core.ps1']) await cp(join(repository,'scripts',name),join(output,'scripts',name));
   await cp(join(repository, 'docs/VALIDATION.md'), join(output, 'docs/VALIDATION.md'));
   await cp(join(repository, 'docs/SELECTION-CONTEXT.md'), join(output, 'docs/SELECTION-CONTEXT.md'));
   await cp(join(repository, 'docs/WORKSPACE-TOOLS.md'), join(output, 'docs/WORKSPACE-TOOLS.md'));
   await cp(join(repository, 'docs/SECURITY.md'), join(output, 'docs/SECURITY.md'));
   await cp(join(repository, 'docs/APPROVED-CHANGES.md'), join(output, 'docs/APPROVED-CHANGES.md'));
+  for(const document of ['SESSIONS-USAGE.md','INSTALLATION.md']) await cp(join(repository,'docs',document),join(output,'docs',document));
   await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
     'Secure transport also requires .NET 8+ runtime; no npm install, TypeScript compiler or native Node addon is needed.\n\n' +
@@ -45,12 +48,12 @@ export async function packageCore(destination, { adapters = false } = {}) {
     'Stop with Ctrl+C. OMP requires a separately installed executable.\n\n' +
     'The default CLI uses a local-only, current-user pipe and mutual HMAC authentication. See docs/SECURITY.md.\n' +
     (adapters ? 'Adapter installers and installation instructions are in adapters/.\n' : '') +
-    'This release implements handshake/capability/ping, selection context and opt-in read-only OMP workspace tools.\n' +
+    'This release implements VS/RAD WebView chat, durable OMP sessions, usage and opt-in approved file changes. See docs/INSTALLATION.md.\n' +
     'Add --workspace C:\\project to enable bounded file reading/search. See docs/WORKSPACE-TOOLS.md.\n' +
-    'Add --allow-writes for per-file diff approval and checkpoint restore. Git is required; see docs/APPROVED-CHANGES.md.\n' +
-    'For VS Chat, start with --omp and --cwd, then Tools > PiAgent: Open Chat > Connect.\n' +
+    'Add --allow-writes for single/multi-file diff approval and checkpoint restore. Git is required; see docs/APPROVED-CHANGES.md.\n' +
+    'For VS Chat: Tools > PiAgent: Open Chat > Connect. For RAD: Help > Help Wizards > PiAgent: Open Chat.\n' +
     'Select code in the editor, capture it in Chat, inspect the attachment and send your question. See docs/SELECTION-CONTEXT.md.\n' +
-    'The VS adapter uses an installed WebView2 Runtime. Full agent tools remain a future scope.\n');
+    'Both adapters use an installed WebView2 Runtime. File creation/deletion/rename remain a future scope.\n');
   if (adapters) {
     for (const ide of ['visualstudio', 'radstudio']) {
       const target = join(output, 'adapters', ide);
@@ -69,7 +72,10 @@ export async function packageCore(destination, { adapters = false } = {}) {
       const target = join(output, 'adapters/radstudio', platform);
       await mkdir(target);
       await cp(join(source, packages[0]), join(target, packages[0]));
+      await cp(join(source,'WebView2Loader.dll'),join(target,'WebView2Loader.dll'));
+      await cp(join(source,'ui'),join(target,'ui'),{recursive:true});
     }
+    for(const name of ['THIRD-PARTY-NOTICES.txt','WEBVIEW2-LICENSE.txt']) await cp(join(repository,'adapters/visualstudio',name),join(output,'adapters/radstudio',name));
   }
   const files = {};
   async function hashes(directory) {

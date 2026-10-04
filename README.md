@@ -1,5 +1,9 @@
 # PiAgent
 
+0.7.0은 **VS 2022/2026 및 RAD Studio WebView 채팅·승인·복원**, **세션 자동 저장·재개**,
+**세션 토큰·비용과 계정 한도**, **다중 파일 승인·복원**을 제공한다.
+[설치](docs/INSTALLATION.md) · [세션/사용량](docs/SESSIONS-USAGE.md) · [검증 결과](docs/VALIDATION.md).
+
 0.6.0은 **diff 확인 → 개별 승인 → 파일 적용 → Git checkpoint 복원**을 추가한다.
 `--allow-writes`를 명시한 secure workspace에서 VS Chat으로 사용할 수 있다.
 [승인 변경 사용법과 제한](docs/APPROVED-CHANGES.md).
@@ -21,7 +25,7 @@ RAD Studio Delphi BPL과 Visual Studio 2022/2026 C# VSIX adapter는 Named Pipe J
 현재 구현: daemon, adapter handshake/version/capability negotiation/ping, simulator,
 OMP process manager, C# VSIX/Delphi BPL 연결 메뉴와 transport/tests.
 0.2.0은 OMP 텍스트 채팅 세션, 스트리밍, 취소와 VS WebView 채팅 UI를 제공한다.
-독립 실행 배포본도 생성할 수 있다. 다중 파일/IDE 변경 도구와 usage 집계는 후속 범위다.
+독립 실행 배포본에는 x64/ARM64 공용 Core, VSIX, Win32/Win64 BPL과 설치·실행·제거 스크립트가 포함된다.
 
 - [Architecture](ARCHITECTURE.md): Rust 제거/유지 내역, workspace, reference mapping, 확장 경계
 - [Protocol](PROTOCOL.md): binary framing, capability negotiation, 오류와 OMP JSONL 계약
@@ -91,8 +95,8 @@ npm test는 node:test로 protocol, 실제 Windows Named Pipe, standalone CLI와 
 실제 pipe tests는 다른 OS에서 skip되며 production daemon도 Windows 외 실행을 거절한다.
 Windows에서 모든 테스트가 실행되어야 한다. OMP의 live smoke는 설치 상태에 의존하므로 opt-in이다.
 
-2026-10-03 이 PC(Windows ARM64)에서 Node 24.21.0 ARM64와 x64(Windows emulation)로
-0.6.0 Core/UI 테스트 39개와 adapter 테스트 11개를 제공한다. runtime별 검증은 docs/VALIDATION.md를 따른다.
+2026-10-04 이 PC(Windows ARM64)에서 Node 24.21.0 ARM64와 x64(Windows emulation)로
+0.7.0 Core/UI 테스트 43개씩과 adapter 테스트 13개가 통과했다. 실제 IDE 검증은 docs/VALIDATION.md를 따른다.
 x64 runtime은 공식 SHA-256으로 검증한 테스트용 바이너리다.
 Native x64 PC의 실행 결과와는 구분한다. 설치된 OMP에서는 ready/get_state smoke도 통과했다.
 원하는 runtime으로 재검증하려면:

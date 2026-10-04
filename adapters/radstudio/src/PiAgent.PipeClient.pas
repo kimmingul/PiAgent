@@ -5,6 +5,7 @@ interface
 uses System.SysUtils, System.Classes, System.JSON, Winapi.Windows;
 
 type
+  TPiNotification = reference to procedure(const Json: string);
   TPiPipeClient = class
   private
     FPipe, FCancel: THandle;
@@ -12,19 +13,25 @@ type
     FDeadline: UInt64;
     FReady: Boolean;
     FName: string;
+    FOnNotification: TPiNotification;
+    function ReadFrame: TJSONObject;
+    function Notify(Reply: TJSONObject): Boolean;
     procedure Authenticate;
     procedure Transfer(Writing: Boolean; var Buffer; Count: Cardinal);
     function Call(const Method: string; Params: TJSONObject): TJSONObject;
   public
     constructor Create(const Name: string; CancelHandle: THandle = 0);
     destructor Destroy; override;
-    function Hello(const IdeVersion, InstanceId: string): string;
+    function Hello(const IdeVersion, InstanceId: string; Chat: Boolean = False): string;
     function Ping(const Nonce: string): string;
+    function Request(const Method: string; Params: TJSONObject): TJSONObject;
+    function PollNotification: Boolean;
+    property OnNotification: TPiNotification read FOnNotification write FOnNotification;
   end;
 
 implementation
 
-uses System.RegularExpressions, System.IOUtils, System.Hash;
+uses System.RegularExpressions, System.IOUtils, System.Hash, System.StrUtils;
 
 const MaxFrameBytes = 1048576;
 
@@ -142,10 +149,11 @@ begin
 end;
 
 function TPiPipeClient.Call(const Method: string; Params: TJSONObject): TJSONObject;
-var Request, Reply: TJSONObject; Bytes, Encoded: TBytes; Header: array[0..3] of Byte;
-  Id, Text: string; Length: Cardinal;
+var Request, Reply: TJSONObject; Bytes: TBytes; Header: array[0..3] of Byte;
+  Id: string; Length: Cardinal;
 begin
   FDeadline := GetTickCount64 + 5000;
+  if MatchText(Method,['chat.open','changes.decide','changes.restore','chat.usage','sessions.list']) then FDeadline := GetTickCount64 + 60000;
   Inc(FSequence);
   Id := 'delphi-' + IntToStr(FSequence);
   Request := TJSONObject.Create;
@@ -159,17 +167,10 @@ begin
   Header[0] := Byte(Length); Header[1] := Byte(Length shr 8);
   Header[2] := Byte(Length shr 16); Header[3] := Byte(Length shr 24);
   Transfer(True, Header, 4); Transfer(True, Bytes[0], Length);
-  Transfer(False, Header, 4);
-  Length := Cardinal(Header[0]) or (Cardinal(Header[1]) shl 8)
-    or (Cardinal(Header[2]) shl 16) or (Cardinal(Header[3]) shl 24);
-  if (Length = 0) or (Length > MaxFrameBytes) then raise Exception.Create('Invalid frame length');
-  SetLength(Bytes, Length); Transfer(False, Bytes[0], Length);
-  Text := TEncoding.UTF8.GetString(Bytes);
-  Encoded := TEncoding.UTF8.GetBytes(Text);
-  if (System.Length(Encoded) <> System.Length(Bytes)) or not CompareMem(Pointer(Bytes), Pointer(Encoded), Length) then
-    raise Exception.Create('Invalid UTF-8 response');
-  Reply := TJSONObject.ParseJSONValue(Text) as TJSONObject;
-  if Reply = nil then raise Exception.Create('Invalid RPC response');
+  repeat
+    Reply := ReadFrame;
+    if Notify(Reply) then begin Reply.Free; Reply := nil; end;
+  until Reply <> nil;
   try
     if (Reply.GetValue<string>('jsonrpc', '') <> '2.0') or (Reply.GetValue<string>('id', '') <> Id)
       or ((Reply.GetValue('result') = nil) = (Reply.GetValue('error') = nil)) then
@@ -180,17 +181,62 @@ begin
   finally Reply.Free; end;
 end;
 
-function TPiPipeClient.Hello(const IdeVersion, InstanceId: string): string;
-var Params, Adapter, Reply: TJSONObject; Caps: TJSONArray;
+function TPiPipeClient.ReadFrame: TJSONObject;
+var Bytes, Encoded: TBytes; Header: array[0..3] of Byte; Length: Cardinal; Text: string;
+begin
+  Transfer(False, Header, 4);
+  Length := Cardinal(Header[0]) or (Cardinal(Header[1]) shl 8)
+    or (Cardinal(Header[2]) shl 16) or (Cardinal(Header[3]) shl 24);
+  if (Length = 0) or (Length > MaxFrameBytes) then raise Exception.Create('Invalid frame length');
+  SetLength(Bytes, Length); Transfer(False, Bytes[0], Length);
+  Text := TEncoding.UTF8.GetString(Bytes);
+  Encoded := TEncoding.UTF8.GetBytes(Text);
+  if (System.Length(Encoded) <> System.Length(Bytes)) or not CompareMem(Pointer(Bytes), Pointer(Encoded), Length) then
+    raise Exception.Create('Invalid UTF-8 response');
+  Result := TJSONObject.ParseJSONValue(Text) as TJSONObject;
+  if Result = nil then raise Exception.Create('Invalid RPC response');
+end;
+function TPiPipeClient.Notify(Reply: TJSONObject): Boolean;
+begin
+  Result := (Reply.GetValue('id') = nil) and (Reply.GetValue<string>('jsonrpc','') = '2.0') and
+    (Reply.GetValue<string>('method','') = 'chat.event') and (Reply.GetValue('params') is TJSONObject);
+  if Result and Assigned(FOnNotification) then FOnNotification(Reply.ToJSON);
+end;
+function TPiPipeClient.PollNotification: Boolean;
+var Available: Cardinal; Reply: TJSONObject;
+begin
+  Result := False;
+  if not PeekNamedPipe(FPipe,nil,0,nil,@Available,nil) then RaiseLastOSError;
+  if Available = 0 then Exit;
+  FDeadline := GetTickCount64 + 30000;
+  Reply := ReadFrame;
+  try if not Notify(Reply) then raise Exception.Create('Unexpected uncorrelated frame');
+  finally Reply.Free; end;
+  Result := True;
+end;
+function TPiPipeClient.Request(const Method: string; Params: TJSONObject): TJSONObject;
+begin
+  if not FReady then begin Params.Free; raise Exception.Create('Handshake required'); end;
+  if not MatchText(Method,['chat.open','chat.prompt','chat.cancel','chat.close','changes.decide','changes.list',
+    'changes.previewRestore','changes.restore','sessions.list','chat.usage']) then
+    begin Params.Free; raise Exception.Create('Method unavailable'); end;
+  Result := Call(Method,Params);
+end;
+
+function TPiPipeClient.Hello(const IdeVersion, InstanceId: string; Chat: Boolean): string;
+var Params, Adapter, Reply: TJSONObject; Caps, Required: TJSONArray;
 begin
   if FReady then raise Exception.Create('Already initialized');
   Authenticate;
   Params := TJSONObject.Create;
   Params.AddPair('protocolVersions', TJSONArray.Create.Add(1));
-  Params.AddPair('capabilities', TJSONArray.Create.Add('core.ping'));
-  Params.AddPair('requiredCapabilities', TJSONArray.Create.Add('core.ping'));
+  Caps := TJSONArray.Create.Add('core.ping');
+  if Chat then begin Caps.Add('chat.v1'); Caps.Add('workspace.read.v1'); Caps.Add('workspace.edit.v1'); Caps.Add('workspace.edit.batch.v1'); Caps.Add('chat.sessions.v1'); Caps.Add('chat.usage.v1'); end;
+  Params.AddPair('capabilities', Caps);
+  Required := TJSONArray.Create.Add('core.ping'); if Chat then Required.Add('chat.v1');
+  Params.AddPair('requiredCapabilities', Required);
   Adapter := TJSONObject.Create;
-  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.6.0');
+  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.7.0');
   Adapter.AddPair('ideVersion', IdeVersion); Adapter.AddPair('instanceId', InstanceId);
   Adapter.AddPair('capabilities', TJSONArray.Create);
   Params.AddPair('adapter', Adapter);
@@ -198,7 +244,7 @@ begin
   try
     Caps := Reply.GetValue('capabilities') as TJSONArray;
     if (Reply.GetValue<Integer>('protocolVersion', 0) <> 1) or (Caps = nil)
-      or (Caps.Count <> 1) or (Caps.Items[0].Value <> 'core.ping') then
+      or (Caps.Count < 1) or (Caps.Items[0].Value <> 'core.ping') then
       raise Exception.Create('Required protocol/capability was not negotiated');
     FReady := True;
     Result := Reply.ToJSON;

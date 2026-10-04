@@ -5,9 +5,9 @@ import type { Proposal } from './changes.js';
 export class Approvals {
   private pending: { proposal: Proposal; signal: AbortSignal; applying: boolean; settle: (result: Record<string, unknown>) => void } | undefined;
   constructor(private readonly changes: WorkspaceChanges, private readonly emit: (kind: 'approval_requested' | 'approval_resolved', data: Record<string, unknown>) => void) {}
-  async propose(args: unknown, signal: AbortSignal): Promise<Record<string, unknown>> {
+  async propose(args: unknown, signal: AbortSignal, batch=false): Promise<Record<string, unknown>> {
     if (this.pending) throw new Error('Another approval is pending');
-    const proposal = await this.changes.propose(args, signal);
+    const proposal = await (batch?this.changes.proposeMany(args,signal):this.changes.propose(args,signal));
     if (this.pending) throw new Error('Another approval is pending');
     signal.throwIfAborted();
     return new Promise(resolve => {

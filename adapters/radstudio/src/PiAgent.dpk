@@ -1,10 +1,12 @@
 package PiAgent;
-{$DESCRIPTION 'PiAgent Core connection vertical slice'}
+{$DESCRIPTION 'PiAgent Chat, reviewed workspace changes and saved sessions'}
 {$DESIGNONLY}
 {$IMPLICITBUILD OFF}
 {$LIBSUFFIX AUTO}
-requires rtl, vcl, designide;
+requires rtl, vcl, vcledge, designide;
 contains
   PiAgent.PipeClient in 'PiAgent.PipeClient.pas',
+  PiAgent.ChatWorker in 'PiAgent.ChatWorker.pas',
+  PiAgent.ChatForm in 'PiAgent.ChatForm.pas',
   PiAgent.Wizard in 'PiAgent.Wizard.pas';
 end.

@@ -46,12 +46,12 @@ public sealed class PipeAdapterClient : IDisposable
         var offered = chat ? new JArray("core.ping", "chat.v1") : new JArray("core.ping");
         if (selectionContext) { if (!chat) throw new ArgumentException("Selection context requires chat"); offered.Add("context.selection.v1"); }
         var required = (JArray)offered.DeepClone();
-        if (chat) offered.Add("workspace.read.v1"); // Optional; the daemon owner must opt in with --workspace.
-        if (writes) { if (!chat) throw new ArgumentException("Writes require chat"); offered.Add("workspace.edit.v1"); }
+        if (chat) { offered.Add("chat.sessions.v1"); offered.Add("chat.usage.v1"); offered.Add("workspace.read.v1"); } // Optional; the daemon owner must opt in with --workspace.
+        if (writes) { if (!chat) throw new ArgumentException("Writes require chat"); offered.Add("workspace.edit.v1"); offered.Add("workspace.edit.batch.v1"); }
         var result = await CallAsync("adapter.hello", new JObject {
             ["protocolVersions"] = new JArray(1), ["capabilities"] = offered,
             ["requiredCapabilities"] = required,
-            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.6.0", ["ideVersion"] = ideVersion,
+            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.7.0", ["ideVersion"] = ideVersion,
                 ["instanceId"] = instanceId, ["capabilities"] = new JArray() }
         }, cancellation).ConfigureAwait(false);
         if ((int?)result["protocolVersion"] != 1 || result["capabilities"] is not JArray capabilities
@@ -95,7 +95,7 @@ public sealed class PipeAdapterClient : IDisposable
     }
     public Task<JObject> RequestAsync(string method, JObject parameters, CancellationToken cancellation)
     {
-        if (!ready || !new[] { "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore" }.Contains(method))
+        if (!ready || !new[] { "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
             throw new InvalidOperationException("Unsupported request or handshake required");
         return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : method == "chat.open" ? 20000 : 5000);
     }

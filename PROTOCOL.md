@@ -192,7 +192,7 @@ VS chat은 20초마다 ping해 idle connection을 유지한다. RPC는 기본 5�
 
 추가 오류: -32010 OMP/connection 실패, -32011 session already open/opening,
 -32012 session/turn 소유권 또는 ID 불일치, -32013 turn busy. capability 미협상은 기존 -32005다.
-권한·영속 복원·tool approval·checkpoint는 별도 capability로 후속 확장한다.
+영속 세션·usage·승인·checkpoint는 아래의 별도 capability로 협상한다.
 
 ## Adapter 구현 메모
 
@@ -254,3 +254,40 @@ Capability errors use -32005, active-turn restore -32013, invalid param keys -32
 operations use -32010. No failure should be interpreted as proof that an interrupted disk write never started.
 Cancellation before writing leaves content unchanged; once writing begins, completion/rollback takes priority.
 See [limits and recovery](docs/APPROVED-CHANGES.md).
+
+## Sessions, usage and multi-file extension (0.7.0)
+
+Wire protocolVersion remains 1; all three extensions are optional and depend on chat.v1.
+`chat.sessions.v1` is offered only by secure OMP-enabled daemons. `chat.usage.v1` requires OMP.
+`workspace.edit.batch.v1` additionally requires workspace.read.v1 and workspace.edit.v1.
+Unknown optional capabilities are ignored; required capabilities retain the hello failure rules.
+
+| Method | Params | Result |
+| --- | --- | --- |
+| sessions.list | empty object | sessions: [{savedSessionId,title,createdAt,updatedAt,resumable}] |
+| chat.open | optional savedSessionId (UUID v4) | sessionId, sessionsEnabled, usageEnabled; savedSessionId/transcript when durable |
+| chat.usage | owning sessionId | provider,model,currency:USD,cost,premiumRequests,tokens,context,providerLimits, optional limitsError |
+
+Saved IDs and runtime sessionId are distinct. Close the current runtime session before opening another.
+Resume recreates a child and switches to the saved OMP JSONL; it does not replay UI text into the model.
+Only one connection can lease a saved session at a time. The store is scoped to this daemon's workspace and
+private credential parent. Timestamps are epoch milliseconds. Transcript entries use role:user/assistant/status,
+text:string. Maximum displayed history is 200 entries/256 KiB of serialized JSON.
+Capability violations use -32005; unknown owner session -32012; persistence/lease/OMP failures -32010.
+Background transcript persistence failures emit chat.event kind:warning with text. This event is scoped to
+sessionId/sequence and does not terminate or clear an active turn. Synchronous prompt persistence failures
+reject the prompt before sending it to OMP.
+
+Usage numeric fields are finite nonnegative numbers or null. tokens contains input/output/reasoning/cacheRead/
+cacheWrite/total; context contains tokens/contextWindow. providerLimits is null or {plan,limits:[{label,window,
+usedFraction,resetsAt}]}. Session cost reported by OMP is distinct from a subscription bill. No raw provider
+credentials or state/usage command output is forwarded. Adapters allow up to 60 seconds for usage/list/changes.
+
+Batch-capable OMP sessions receive workspace_propose_changes {files:[{path,content}],reason}. Existing files
+only, 1–8 unique paths, 32 KiB per file and 128 KiB per batch side. Single-file tools retain their schema.
+Approval/restore views and successful results include files:[{path,beforeHash,afterHash}] (successful results
+may contain paths only). A batch revision binds every path and both hashes; diff concatenates all full-file diffs.
+One decision covers the entire batch. An adapter must show all diffs and check all unsaved target buffers.
+Checkpoint lists include files for batches. Non-batch adapters cannot list/preview/restore multi-file checkpoints.
+All target hashes are validated before writes and before restore. Cancellation stops before writing; once writing
+starts, conditional rollback/completion takes priority. recoveryRequired means inspect remaining bytes/journal.

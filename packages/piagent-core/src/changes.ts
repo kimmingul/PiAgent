@@ -6,6 +6,8 @@ import { isObject } from '@piagent/protocol';
 import { WorkspaceReader } from './workspace.js';
 
 export const EDIT_CAPABILITY = 'workspace.edit.v1';
+export const BATCH_CAPABILITY='workspace.edit.batch.v1';
+export const batchEditTool={name:'workspace_propose_changes',description:'Propose replacing 1-8 existing Git-tracked UTF-8 files as one reviewed change set. Each file max 32 KiB, total max 128 KiB per side. Waits for explicit user approval.',parameters:{type:'object',properties:{files:{type:'array',minItems:1,maxItems:8,items:{type:'object',properties:{path:{type:'string'},content:{type:'string'}},required:['path','content'],additionalProperties:false}},reason:{type:'string'}},required:['files','reason'],additionalProperties:false}};
 export const editTool = { name: 'workspace_propose_edit', description: 'Propose replacing one existing Git-tracked UTF-8 file (max 32 KiB). Waits for explicit user approval. Never approves itself. Include the complete replacement content.',
   parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' }, reason: { type: 'string' } }, required: ['path', 'content', 'reason'], additionalProperties: false } };
 const hash = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
@@ -13,10 +15,13 @@ const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const signal = (): AbortSignal => new AbortController().signal;
 const decode = (bytes: Buffer): string => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+export interface FileEdit {path:string;before:Buffer;after:Buffer;beforeHash:string;afterHash:string;}
 export interface Proposal {
+  files?:FileEdit[];
   id: string; path: string; reason: string; before: Buffer; after: Buffer; beforeHash: string; afterHash: string; revision: string; expiresAt: number;
 }
-interface Checkpoint { version: 1; id: string; path: string; before: string; after: string; beforeHash: string; afterHash: string; createdAt: number;
+interface CheckpointFile {path:string;before:string;after:string;beforeHash:string;afterHash:string;}
+interface Checkpoint { files?:CheckpointFile[]; version: 1; id: string; path: string; before: string; after: string; beforeHash: string; afterHash: string; createdAt: number;
   state: 'prepared' | 'applied' | 'restoring' | 'restored' | 'failed'; }
 /** Exact full-file unified preview. CR is shown explicitly so CRLF changes cannot hide in the preview. */
 function diff(path: string, before: Buffer, after: Buffer): string {
@@ -32,7 +37,7 @@ function diff(path: string, before: Buffer, after: Buffer): string {
 export function proposalView(proposal: Proposal): Record<string, unknown> {
   return { proposalId: proposal.id, path: proposal.path, reason: proposal.reason, revision: proposal.revision,
     beforeHash: proposal.beforeHash, afterHash: proposal.afterHash, expiresAt: proposal.expiresAt,
-    diff: diff(proposal.path, proposal.before, proposal.after) };
+    files:(proposal.files??[proposal]).map(file=>({path:file.path,beforeHash:file.beforeHash,afterHash:file.afterHash})), diff:(proposal.files??[proposal]).map(file=>diff(file.path,file.before,file.after)).join('\n\n') };
 }
 /** Git-backed single-file checkpoints. Never touches the user's index, HEAD or branch. */
 export class WorkspaceChanges {
@@ -86,6 +91,65 @@ export class WorkspaceChanges {
     return { id: randomUUID(), path, reason: args['reason'], before: snapshot.bytes, after, beforeHash, afterHash,
       revision: hash(JSON.stringify([path, beforeHash, afterHash])), expiresAt: Date.now() + 300_000 };
   }
+  async proposeMany(args:unknown,abort:AbortSignal):Promise<Proposal> {
+    if(!isObject(args)||Object.keys(args).some(key=>!['files','reason'].includes(key))||!Array.isArray(args['files'])||args['files'].length<1||args['files'].length>8)throw new Error('Invalid change set');
+    const edits:Proposal[]=[];
+    for(const file of args['files']) {
+      if(!isObject(file)||Object.keys(file).some(key=>!['path','content'].includes(key)))throw new Error('Invalid change set file');
+      edits.push(await this.propose({...file,reason:args['reason']},abort));
+    }
+    if(new Set(edits.map(file=>file.path.toLowerCase())).size!==edits.length)throw new Error('Duplicate change set path');
+    if(edits.reduce((sum,file)=>sum+file.before.length,0)>131072||edits.reduce((sum,file)=>sum+file.after.length,0)>131072)throw new Error('Change set exceeds 128 KiB');
+    const first=edits[0]!;
+    const result={...first,id:randomUUID(),files:edits,revision:hash(JSON.stringify(edits.map(file=>[file.path,file.beforeHash,file.afterHash]))),expiresAt:Math.min(...edits.map(file=>file.expiresAt))};
+    if(Buffer.byteLength(JSON.stringify(proposalView(result)))>900_000)throw new Error('Change set preview exceeds protocol limit');
+    return result;
+  }
+  private async verifyFiles(files:FileEdit[],after=false):Promise<void> {
+    for(const file of files){await this.tracked(file.path);const current=await this.reader.snapshot(file.path,signal());
+      if(hash(current.bytes)!==(after?file.afterHash:file.beforeHash))throw new Error(after?'File changed since this checkpoint; restore would overwrite later edits':'File changed after preview; request a new proposal');}
+  }
+  private async replaceMany(files:FileEdit[],restore=false):Promise<void> {
+    const attempted:FileEdit[]=[];
+    try{for(const file of files){attempted.push(file);await this.replace(file.path,restore?file.after:file.before,restore?file.before:file.after,signal());}}
+    catch(error){
+      let recovered=true;
+      for(const file of attempted.reverse()){
+        const original=restore?file.after:file.before,changed=restore?file.before:file.after;
+        try{const current=await this.reader.snapshot(file.path,signal());
+          if(current.bytes.equals(changed))await this.replace(file.path,changed,original,signal());
+          else if(!current.bytes.equals(original))recovered=false;
+        }catch{recovered=false;}
+      }
+      if(!recovered)throw new Error('Change set interrupted; durable checkpoint recovery is required');
+      throw new Error('Change set failed; all attempted files rolled back');
+    }
+  }
+  private async batchFiles(checkpoint:Checkpoint):Promise<FileEdit[]> {
+    return Promise.all(checkpoint.files!.map(async file=>({...file,...await this.blobs({...checkpoint,...file})})));
+  }
+  private applyMany(proposal:Proposal,abort:AbortSignal):Promise<Record<string,unknown>> {
+    return this.serialize(async()=>{
+      if(Date.now()>=proposal.expiresAt)throw new Error('Proposal expired');
+      if((await readdir(this.directory)).filter(name=>name.endsWith('.json')).length>=1000)throw new Error('Checkpoint history limit reached');
+      const files=proposal.files!;abort.throwIfAborted();await this.verifyFiles(files);
+      const id=randomUUID();const records:CheckpointFile[]=[];const refs:string[]=[];
+      for(const [index,file] of files.entries()){
+        const before=(await this.git(['hash-object','-w','--stdin','--no-filters'],file.before)).toString().trim();
+        const after=(await this.git(['hash-object','-w','--stdin','--no-filters'],file.after)).toString().trim();
+        if(!oidPattern.test(before)||!oidPattern.test(after))throw new Error('Invalid Git object ID');
+        records.push({path:file.path,before,after,beforeHash:file.beforeHash,afterHash:file.afterHash});
+        refs.push(`create refs/piagent/checkpoints/${id}/${index}/before ${before}`,`create refs/piagent/checkpoints/${id}/${index}/after ${after}`);
+      }
+      const checkpoint:Checkpoint={...records[0]!,version:1,id,files:records,createdAt:Date.now(),state:'prepared'};
+      await this.git(['update-ref','--stdin'],Buffer.from(refs.join('\n')+'\n'));await this.metadata(checkpoint);
+      await this.verifyFiles(files);abort.throwIfAborted();
+      // The entire set finishes or rolls back once the first write starts, despite chat cancellation.
+      await this.replaceMany(files);checkpoint.state='applied';
+      try{await this.metadata(checkpoint);}catch{return {applied:true,checkpointId:id,path:checkpoint.path,files:records.map(file=>({path:file.path})),warning:'Change set applied; inspect checkpoint journal'};}
+      return {applied:true,checkpointId:id,path:checkpoint.path,files:records.map(file=>({path:file.path}))};
+    });
+  }
   private serialize<T>(action: () => Promise<T>): Promise<T> {
     const operation = this.tail.then(async () => {
       const path = join(this.directory, 'write.lock');
@@ -111,6 +175,7 @@ export class WorkspaceChanges {
       || !oidPattern.test(String(data['before'])) || !oidPattern.test(String(data['after']))
       || !/^[0-9a-f]{64}$/.test(String(data['beforeHash'])) || !/^[0-9a-f]{64}$/.test(String(data['afterHash']))
       || typeof data['createdAt'] !== 'number' || !['prepared','applied','restoring','restored','failed'].includes(String(data['state']))) throw new Error('Invalid checkpoint metadata');
+    if(data['files']!==undefined&&(!Array.isArray(data['files'])||data['files'].length<1||data['files'].length>8||data['files'].some(file=>!isObject(file)||typeof file['path']!=='string'||!oidPattern.test(String(file['before']))||!oidPattern.test(String(file['after']))||!/^[0-9a-f]{64}$/.test(String(file['beforeHash']))||!/^[0-9a-f]{64}$/.test(String(file['afterHash'])))||new Set(data['files'].map(file=>String(file.path).toLowerCase())).size!==data['files'].length))throw new Error('Invalid checkpoint files');
     return data as unknown as Checkpoint;
   }
   private async blobs(checkpoint: Checkpoint): Promise<{ before: Buffer; after: Buffer }> {
@@ -143,6 +208,7 @@ export class WorkspaceChanges {
     if (!verified.bytes.equals(after)) throw new Error('File changed during write; inspect the durable checkpoint before continuing');
   }
   apply(proposal: Proposal, abort: AbortSignal): Promise<Record<string, unknown>> {
+    if(proposal.files)return this.applyMany(proposal,abort);
     return this.serialize(async () => {
       if (Date.now() >= proposal.expiresAt) throw new Error('Proposal expired');
       if ((await readdir(this.directory)).filter(name => name.endsWith('.json')).length >= 1000) throw new Error('Checkpoint history limit reached');
@@ -170,15 +236,19 @@ export class WorkspaceChanges {
       let state: string = item.state;
       if (state === 'prepared' || state === 'restoring') {
         try {
-          const current = hash((await this.reader.snapshot(item.path,signal())).bytes);
-          state = current === item.afterHash ? 'applied' : current === item.beforeHash ? (item.state === 'restoring' ? 'restored' : 'notApplied') : 'recoveryRequired';
+          const files=item.files??[item];const current=await Promise.all(files.map(async file=>hash((await this.reader.snapshot(file.path,signal())).bytes)));
+          state=current.every((value,index)=>value===files[index]!.afterHash)?'applied':current.every((value,index)=>value===files[index]!.beforeHash)?(item.state==='restoring'?'restored':'notApplied'):'recoveryRequired';
         } catch { state = 'recoveryRequired'; }
       }
-      return { checkpointId:item.id, path:item.path, createdAt:item.createdAt, state };
+      return { checkpointId:item.id, path:item.path, files:(item.files??[item]).map(file=>({path:file.path})), createdAt:item.createdAt, state };
     }));
   }
   async previewRestore(id: unknown): Promise<Record<string, unknown>> {
-    const checkpoint = await this.load(id), content = await this.blobs(checkpoint);
+    const checkpoint = await this.load(id);
+    if(checkpoint.files){if(checkpoint.state==='restored'||checkpoint.state==='failed')throw new Error('Checkpoint is not restorable');
+      const files=await this.batchFiles(checkpoint);await this.verifyFiles(files,true);
+      return {checkpointId:checkpoint.id,path:checkpoint.path,files:files.map(file=>({path:file.path})),revision:hash(JSON.stringify([checkpoint.id,files.map(file=>[file.path,file.afterHash,file.beforeHash])])),diff:files.map(file=>diff(file.path,file.after,file.before)).join('\n\n')};}
+    const content=await this.blobs(checkpoint);
     if (checkpoint.state === 'restored' || checkpoint.state === 'failed') throw new Error('Checkpoint is not restorable');
     const current = await this.reader.snapshot(checkpoint.path, signal());
     if (hash(current.bytes) !== checkpoint.afterHash) throw new Error('File changed since this checkpoint; restore would overwrite later edits');
@@ -187,7 +257,11 @@ export class WorkspaceChanges {
   restore(id: unknown, revision: unknown): Promise<Record<string, unknown>> {
     return this.serialize(async () => {
       const preview = await this.previewRestore(id); if (revision !== preview['revision']) throw new Error('Restore preview is stale');
-      const checkpoint = await this.load(id), content = await this.blobs(checkpoint); await this.tracked(checkpoint.path);
+      const checkpoint=await this.load(id);
+      if(checkpoint.files){const files=await this.batchFiles(checkpoint);await this.verifyFiles(files,true);checkpoint.state='restoring';await this.metadata(checkpoint);await this.replaceMany(files,true);checkpoint.state='restored';
+        try{await this.metadata(checkpoint);}catch{return {restored:true,checkpointId:checkpoint.id,warning:'Change set restored; inspect checkpoint journal'};}
+        return {restored:true,checkpointId:checkpoint.id,files:files.map(file=>({path:file.path}))};}
+      const content = await this.blobs(checkpoint); await this.tracked(checkpoint.path);
       checkpoint.state = 'restoring'; await this.metadata(checkpoint);
       await this.replace(checkpoint.path, content.after, content.before, signal());
       checkpoint.state = 'restored';

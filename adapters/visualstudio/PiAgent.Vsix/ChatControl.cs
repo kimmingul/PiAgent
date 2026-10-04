@@ -90,6 +90,18 @@ public sealed class ChatControl : UserControl, IDisposable
                     if (client == null || sessionId == null || turnId != null || connecting) return;
                     await client.RequestAsync("chat.close", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
                     sessionId = null; await OpenAsync(); break;
+                case "listSessions":
+                    if (client == null || turnId != null) return;
+                    var sessions = await client.RequestAsync("sessions.list", new JObject(), lifetime.Token);
+                    Post(new JObject { ["type"] = "sessions", ["sessions"] = sessions["sessions"] }); break;
+                case "resumeSession":
+                    if (client == null || sessionId == null || turnId != null || approval != null) return;
+                    await client.RequestAsync("chat.close", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
+                    sessionId = null; await OpenAsync((string?)message["savedSessionId"]); break;
+                case "usage":
+                    if (client == null || sessionId == null || turnId != null) return;
+                    var usage = await client.RequestAsync("chat.usage", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
+                    Post(new JObject { ["type"] = "usage", ["data"] = usage }); break;
                 case "prompt":
                     if (client == null || sessionId == null || turnId != null) throw new IOException("Session unavailable or busy");
                     var parameters = new JObject { ["sessionId"] = sessionId, ["message"] = message["message"] };
@@ -108,7 +120,7 @@ public sealed class ChatControl : UserControl, IDisposable
                     if (client == null || sessionId == null || approval == null || (string?)message["proposalId"] != (string?)approval["proposalId"]) return;
                     var decision = (string?)message["decision"];
                     if (decision != "approve" && decision != "reject") throw new IOException("Invalid decision");
-                    if (decision == "approve") { await factory.SwitchToMainThreadAsync(lifetime.Token); EnsureTargetSaved((string?)approval["path"]); }
+                    if (decision == "approve") { await factory.SwitchToMainThreadAsync(lifetime.Token); EnsureTargetsSaved(approval); }
                     await client.RequestAsync("changes.decide", new JObject { ["sessionId"] = sessionId, ["proposalId"] = approval["proposalId"], ["revision"] = approval["revision"], ["decision"] = decision }, lifetime.Token); break;
                 case "listCheckpoints":
                     if (client == null || sessionId == null || turnId != null) return;
@@ -121,12 +133,19 @@ public sealed class ChatControl : UserControl, IDisposable
                 case "restoreChange":
                     if (client == null || sessionId == null || turnId != null || restorePreview == null || (string?)message["checkpointId"] != (string?)restorePreview["checkpointId"]) return;
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
-                    EnsureTargetSaved((string?)restorePreview["path"]);
+                    EnsureTargetsSaved(restorePreview);
                     var restored = await client.RequestAsync("changes.restore", new JObject { ["sessionId"] = sessionId, ["checkpointId"] = restorePreview["checkpointId"], ["revision"] = restorePreview["revision"] }, lifetime.Token);
                     restorePreview = null; Post(new JObject { ["type"] = "restored", ["warning"] = restored["warning"] }); break;
             }
         }
         catch (Exception error) { Post(new JObject { ["type"] = "operationError", ["message"] = error.Message }); }
+    }
+    private void EnsureTargetsSaved(JObject view)
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();
+        if (view["files"] is JArray files) {
+            foreach (var file in files) EnsureTargetSaved((string?)file["path"]);
+        } else EnsureTargetSaved((string?)view["path"]);
     }
     private void EnsureTargetSaved(string? relativePath)
     {
@@ -176,14 +195,14 @@ public sealed class ChatControl : UserControl, IDisposable
         catch (Exception error) { Disconnect(error.Message); }
         finally { connecting = false; }
     }
-    private async Task OpenAsync()
+    private async Task OpenAsync(string? savedId = null)
     {
-        var result = await client!.RequestAsync("chat.open", new JObject(), lifetime.Token);
+        var parameters = new JObject(); if (savedId != null) parameters["savedSessionId"] = savedId;
+        var result = await client!.RequestAsync("chat.open", parameters, lifetime.Token);
         sessionId = (string?)result["sessionId"] ?? throw new InvalidDataException("Missing session ID"); turnId = null;
         workspaceUri = (string?)result["workspaceUri"]; approval = null; restorePreview = null;
         selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null });
-        Post(new JObject { ["type"] = "session", ["sessionId"] = sessionId,
-            ["workspaceUri"] = result["workspaceUri"], ["readOnly"] = result["readOnly"], ["writeEnabled"] = result["writeEnabled"] });
+        result["type"] = "session"; result["selectionEnabled"] = true; Post(result);
     }
     private void Post(JObject message)
     {

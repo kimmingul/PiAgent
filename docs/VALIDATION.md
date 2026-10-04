@@ -1,4 +1,39 @@
-# PiAgent 0.6.0 validation
+# PiAgent 0.7.0 validation
+
+## Final seven-stage validation (2026-10-04)
+
+Windows ARM64 PC, Node 24.21.0; existing RADAgent source and the user's default IDE profiles were not changed.
+
+| Requested stage | Implementation / evidence |
+| --- | --- |
+| VS 2026 approval/restore | Community 18.10.3, instance 4dee894c, PiAgentTest: actual WebView full-file diff → approval → disk change → reverse diff → explicit restore. 0.7.0 also approved/restored Example.cs and Second.cs together. |
+| VS 2022 approval/restore | Community 17.14.35, instance 8967bed4, PiAgentTest: same single-file flow, then final 0.7.0 two-file approval/restore and empty Git diff. |
+| RAD WebView chat/approval | RAD Studio 13.2 Win64, isolated PiAgentValidation07 profile: BPL load and Open Chat, secure connection, two-file diff approval/apply/restore, saved conversation reopen, token/USD cost/provider-limit UI. Normal IDE exit joined its worker. |
+| Durable sessions | Secure private workspace store, exclusive lease and OMP JSONL resume. Tests close/restart the daemon and recover model conversation, reject another owner and linked files. Installed OMP 18.5.0 also reopened a real saved session successfully. |
+| Usage/cost | Normalized get_session_stats/get_state and provider usage CLI. Real OMP returned token/cost fields and Anthropic account limits. Fixture UI displayed 30 tokens, USD 0.004 and 25% plan usage. Missing values remain unknown. |
+| Multi-file changes | 1–8 tracked files per approval/revision/checkpoint. Tests verify whole-batch staleness checks, failed-second-write rollback, raw BOM/CRLF restore after restart, capability/owner restrictions and unchanged Git index/HEAD. |
+| Windows distribution/install | Same ESM/AnyCPU artifact for x64/ARM64; versioned PowerShell install/start/uninstall, SHA-256 manifest, VSIX and Win32/Win64 BPL plus UI/loaders. Tests run PowerShell 5.1 install/start with default source/settings from another cwd, authenticate/ping the installed daemon, reject corruption/duplicate installs and uninstall the verified version. |
+
+- Final Core/UI suite: **43 passed / 0 skipped** on native ARM64 and **43 passed / 0 skipped** on x64 Node under Windows emulation.
+- Adapter suite: **13 passed / 0 skipped**, including secure C# changes and Delphi Win32/Win64 chat-worker batch approval/restore, saved resume and usage.
+- VS 2022 and VS 2026 MSBuild, Delphi Win32/Win64 BPL and both harness builds succeeded.
+- UI tests additionally cover duplicate session-switch suppression, the intermediate closed event, safe stored-text
+  rendering, background persistence warnings without clearing an active turn, approval/restore retry and all-file labels.
+- PowerShell default script-relative paths are resolved in the script body, after PSScriptRoot is available.
+  The regression test exercises both defaults with ARM64/x64 Node and cleans only its spawned launcher process tree.
+- Approval UI uses deterministic fixture OMP, not live-model edit proposals. Actual IDE hosts, authenticated pipe,
+  Core writes and Git checkpoints are real. Actual OMP process/session/usage checks are recorded separately.
+- Scratch checkpoint journals are restored: VS 2026 single ea69640a-cbb3-40ba-90ba-b6de1d37e779,
+  VS 2022 single 926c9db5-104a-48d0-aaef-c472fca5367b, VS 2026 batch da5908ab-ac80-441e-b7c2-70ce339b1870,
+  RAD batch 048227d8-419c-42cc-9011-313f764ddc9e, VS 2022 batch df9082fe-525f-40d7-88b9-7cf8c02a8065.
+  Example.cs retained its original CRLF bytes, Second.cs its LF bytes, and the final scratch Git diff was empty.
+- Diagnostic logs remain in ignored .tools/ide-validation and Windows TEMP dd_VSIXInstaller logs.
+
+Physical x64 hardware and the final Win32 RAD WebView UI were not exercised; x64 Node and Win32 worker were
+tested under Windows ARM64 emulation. Other Delphi SDK versions need rebuilding. The IDE unsaved-buffer guards
+compile, but a modified-editor UI scenario is not claimed here. No power-loss, remote/second-user or malicious
+concurrent-writer test is claimed. Batch writes are conditional rollback operations, not atomic filesystem transactions.
+Interrupted session locks/checkpoint journals require inspection; see SESSIONS-USAGE.md and APPROVED-CHANGES.md.
 
 ## Approved changes (0.6.0)
 
@@ -8,8 +43,9 @@
   content preservation, unchanged Git index/HEAD, disabled Git hooks, locks, hard links and restart recovery.
 - WebView controller test exercises explicit approval, duplicate-click suppression, rejection, reverse-diff preview,
   restore confirmation, operation failure retry, warnings and disconnect cleanup using a minimal DOM fixture.
-- VS 2022/2026 MSBuild and Delphi Win32/Win64 BPL builds succeeded. Actual 0.6.0 IDE approval UI and
-  a live-model edit proposal have not been manually exercised; fixture OMP drives automated change tests.
+- VS 2022/2026 MSBuild and Delphi Win32/Win64 BPL builds succeeded. On 2026-10-04 both actual VS hosts
+  completed the 0.6.0 approval/apply/reverse-diff/restore flow; fixture OMP drives change proposals.
+  A live-model edit proposal was not manually exercised.
 - Release test runs the standalone secure daemon/probe outside the workspace and verifies packaged file hashes.
 - This release does not claim atomic disk writes, malicious concurrent-writer isolation or power-loss recovery tests.
   Interrupted metadata recovery is tested by prepared/restoring state simulation; see APPROVED-CHANGES.md.

@@ -1,4 +1,10 @@
-# PiAgent 0.5.0 local connection security
+# PiAgent local connection security
+
+0.7.0: 저장 대화 metadata와 OMP JSONL은 검증된 credential의 private parent 아래에 보관한다.
+Windows의 LocalAppData 리디렉션을 canonical 경로로 확인한 후 workspace별 namespace를 만든다.
+savedSessionId만 wire에 노출하고 임의 파일 경로로 재개하지 않는다. 세션 디렉터리와 파일의
+reparse point/hard link를 거부한다. 원문 코드·대화가 저장되므로 삭제·보존 정책은
+[SESSIONS-USAGE.md](SESSIONS-USAGE.md)를 따른다. 설치 제거는 이 데이터를 자동 삭제하지 않는다.
 
 CLI는 기본적으로 secure pipe를 사용한다. 먼저 `npm run build:transport`와 `npm run build`를 실행한다.
 배포 ZIP에는 pipe host가 포함되며 Node.js 24 LTS 외에 Windows용 .NET 8 이상 runtime이 필요하다.

@@ -21,6 +21,24 @@ async function setup(){
  return {root,reader,changes,async close(){assert.ok(root.startsWith(join(tmpdir(),'piagent-changes-')));await rm(root,{recursive:true,force:true});}};
 }
 const proposal=(changes,content=after,path='Example.cs')=>changes.propose({path,content,reason:'Change test'},new AbortController().signal);
+
+test('multi-file approvals validate the whole batch, restore raw bytes and roll back a failed second write',windows,async()=>{
+ const env=await setup();try{
+  await writeFile(join(env.root,'Second.cs'),'\ufeffsecond\r\n');await git(env.root,'add','Second.cs');await git(env.root,'commit','-m','Second fixture');
+  const args={files:[{path:'Example.cs',content:after},{path:'Second.cs',content:'updated second\n'}],reason:'Two-file change'}, signal=new AbortController().signal;
+  let edit=await env.changes.proposeMany(args,signal);
+  await writeFile(join(env.root,'Second.cs'),'later user edit');await assert.rejects(env.changes.apply(edit,signal),/changed after preview/);
+  assert.equal(await readFile(join(env.root,'Example.cs'),'utf8'),before);
+  await writeFile(join(env.root,'Second.cs'),'\ufeffsecond\r\n');edit=await env.changes.proposeMany(args,signal);
+  const original=env.changes.replace.bind(env.changes);let calls=0;
+  env.changes.replace=async(...values)=>{if(++calls===2)throw new Error('Injected second-file I/O failure');return original(...values);};
+  await assert.rejects(env.changes.apply(edit,signal),/rolled back/);assert.equal(await readFile(join(env.root,'Example.cs'),'utf8'),before);assert.equal(await readFile(join(env.root,'Second.cs'),'utf8'),'\ufeffsecond\r\n');
+  env.changes.replace=original;const applied=await env.changes.apply(await env.changes.proposeMany(args,signal),signal);
+  const restarted=await WorkspaceChanges.create(env.reader);const preview=await restarted.previewRestore(applied.checkpointId);assert.equal(preview.files.length,2);assert.match(preview.diff,/Second.cs/);
+  await restarted.restore(applied.checkpointId,preview.revision);assert.equal(await readFile(join(env.root,'Example.cs'),'utf8'),before);assert.equal(await readFile(join(env.root,'Second.cs'),'utf8'),'\ufeffsecond\r\n');
+  await assert.rejects(env.changes.proposeMany({...args,files:[args.files[0],args.files[0]]},signal),/Duplicate/);
+ }finally{await env.close();}
+});
 test('approved edits preserve dirty content, user index/HEAD, raw CRLF/BOM and survive restart for restore',windows,async()=>{
  const env=await setup();try{
   await writeFile(join(env.root,'Example.cs'),'staged\n');await git(env.root,'add','Example.cs');
@@ -78,8 +96,8 @@ test('writes require secure opt-in and approval capability; reject/cancel/foreig
   const omp={executable:process.execPath,executableArgs:[fileURLToPath(new URL('./fixtures/chat-omp.mjs',import.meta.url))],cwd:env.root};
   await assert.rejects(startDaemon({workspaceRoot:env.root,omp,allowWrites:true}),/secure transport/);
   const authFile=join(env.root,'private','token');daemon=await startDaemon({pipeName:`piagent-edit-${randomUUID()}`,workspaceRoot:env.root,omp,allowWrites:true,secure:{authFile}});
-  const connect=async(write=true)=>{const client=await PipeClient.connect(daemon.path,{authFile});clients.push(client);
-   const caps=['chat.v1','core.ping','workspace.read.v1',...(write?['workspace.edit.v1']:[])];
+  const connect=async(write=true,batch=false)=>{const client=await PipeClient.connect(daemon.path,{authFile});clients.push(client);
+   const caps=['chat.v1','core.ping','workspace.read.v1',...(write?['workspace.edit.v1']:[]),...(batch?['workspace.edit.batch.v1']:[])];
    const response=await client.request('adapter.hello',{protocolVersions:[1],capabilities:caps,adapter:{kind:'test-ide',version:'test',ideVersion:'test',instanceId:randomUUID()}});assert.deepEqual(response.result.capabilities,caps);
    const open=(await client.request('chat.open')).result;return{client,id:open.sessionId,open};};
   const old=await connect(false);assert.equal(old.open.writeEnabled,false);assert.equal((await old.client.request('changes.list',{sessionId:old.id})).error.code,-32005);
@@ -98,5 +116,17 @@ test('writes require secure opt-in and approval capability; reject/cancel/foreig
   const restore=(await owner.client.request('changes.previewRestore',{sessionId:owner.id,checkpointId:applied.result.checkpointId})).result;
   assert.equal((await owner.client.request('changes.restore',{sessionId:owner.id,checkpointId:applied.result.checkpointId,revision:restore.revision})).result.restored,true);
   assert.equal(await readFile(join(env.root,'Example.cs'),'utf8'),before);
+  await writeFile(join(env.root,'Second.cs'),'second\n');await git(env.root,'add','Second.cs');await git(env.root,'commit','-m','Second');
+  const batch=await connect(true,true),batchEvents=[];batch.client.on('chat.event',e=>batchEvents.push(e));
+  await batch.client.request('chat.prompt',{sessionId:batch.id,message:'propose-batch'});
+  for(let i=0;i<300&&!batchEvents.some(e=>e.kind==='approval_requested');i++)await delay(10);
+  const batchApproval=batchEvents.find(e=>e.kind==='approval_requested').approval;assert.equal(batchApproval.files.length,2);
+  const batchResult=(await batch.client.request('changes.decide',{sessionId:batch.id,proposalId:batchApproval.proposalId,revision:batchApproval.revision,decision:'approve'})).result;
+  for(let i=0;i<300&&!batchEvents.some(e=>e.kind==='completed');i++)await delay(10);
+  assert.ok(!(await owner.client.request('changes.list',{sessionId:owner.id})).result.checkpoints.some(c=>c.checkpointId===batchResult.checkpointId));
+  assert.equal((await owner.client.request('changes.previewRestore',{sessionId:owner.id,checkpointId:batchResult.checkpointId})).error.code,-32005);
+  const batchPreview=(await batch.client.request('changes.previewRestore',{sessionId:batch.id,checkpointId:batchResult.checkpointId})).result;
+  assert.equal((await batch.client.request('changes.restore',{sessionId:batch.id,checkpointId:batchResult.checkpointId,revision:batchPreview.revision})).result.restored,true);
+  assert.equal(await readFile(join(env.root,'Second.cs'),'utf8'),'second\n');
  }finally{for(const client of clients)client.close();await daemon?.close();await env.close();}
 });

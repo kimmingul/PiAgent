@@ -35,10 +35,18 @@ try {
             & $compiler -B -Q "-U$(Join-Path $BdsRoot "lib\$platform\release")" "-N0$output" "-LE$output" "-LN$output" PiAgent.dpk
             if ($LASTEXITCODE -ne 0) { throw "$platform BPL build failed" }
         } finally { Pop-Location }
+        $uiOutput = Join-Path $output 'ui'
+        New-Item -ItemType Directory -Path $uiOutput -Force | Out-Null
+        Copy-Item -LiteralPath ui/src/chat.html,ui/src/chat.css,ui/dist/chat.js -Destination $uiOutput
+        $loaderArch = if ($platform -eq 'Win32') { 'win-x86' } else { 'win-x64' }
+        $loader = Join-Path $env:USERPROFILE ".nuget\packages\microsoft.web.webview2\1.0.4258.31\runtimes\$loaderArch\native\WebView2Loader.dll"
+        Copy-Item -LiteralPath $loader -Destination $output
         Push-Location adapters/radstudio/tests
         try {
             & $compiler -B -Q "-U$(Join-Path $BdsRoot "lib\$platform\release")" "-N0$output" "-E$output" PipeSmoke.dpr
             if ($LASTEXITCODE -ne 0) { throw "$platform transport smoke build failed" }
+            & $compiler -B -Q "-U$(Join-Path $BdsRoot "lib\$platform\release")" "-N0$output" "-E$output" ChatSmoke.dpr
+            if ($LASTEXITCODE -ne 0) { throw "$platform chat smoke build failed" }
         } finally { Pop-Location }
     }
 } finally { Pop-Location }

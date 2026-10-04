@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto';
+import { dirname,join } from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { SessionStore,UsageService } from '@piagent/core';
 import { createServer } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { Session, ChatSession, WorkspaceReader, WorkspaceChanges, Authentication } from '@piagent/core';
@@ -47,6 +51,10 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     const done = chat.dispose().catch(error => options.onDiagnostic?.(error));
     cleanup.add(done); void done.finally(() => cleanup.delete(done));
   };
+  const services:{sessions?:SessionStore;usage?:UsageService}={};
+  if(options.omp)services.usage=new UsageService(options.omp);
+  let servicesResolve:()=>void=()=>{};
+  const servicesReady=new Promise<void>(resolve=>{servicesResolve=resolve;});
   const accept = (socket: Duplex, token?: string): void => {
     if (sockets.size >= maxConnections) { socket.destroy(); return; }
     sockets.add(socket);
@@ -67,7 +75,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
         });
       } catch (error) { close(error instanceof Error ? error : new Error(String(error))); }
     };
-    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace, changes) : undefined;
+    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace, changes, services) : undefined;
     if (chat) chats.set(socket, chat);
     const session = new Session(chat, token ? new Authentication(token, options.pipeName ?? 'piagent-dev') : undefined);
     const authTimer = token ? setTimeout(() => { if (!session.ready) close(new Error('Authentication/handshake deadline exceeded')); }, 10_000) : undefined;
@@ -83,7 +91,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
           if (socket.destroyed) return;
           nextReadDeadline(); // Full-frame progress only; trickled bytes do not extend deadline.
           if (++inFlight > 16) throw new Error('Too many pending RPC requests');
-          void session.handleAsync(body).then(reply => { if (reply !== undefined) send(reply); })
+          void servicesReady.then(()=>session.handleAsync(body)).then(reply => { if (reply !== undefined) send(reply); })
             .catch(error => close(error instanceof Error ? error : new Error(String(error))))
             .finally(() => { inFlight--; });
         });
@@ -109,6 +117,14 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
       options.secure.brokerPath ?? defaultBroker, accept, options.onDiagnostic);
     closeTransport = host.close;
     securityDescriptor = host.securityDescriptor;
+    try{if(options.omp){
+      const scope=await realpath(options.workspaceRoot??options.omp.cwd);
+      const namespace=createHash('sha256').update(scope.toLowerCase()).digest('hex');
+      const authPath=options.secure.authFile??credentialPath(options.pipeName??'piagent-dev');
+      // Resolve the broker-validated private parent once (Windows packaged apps may virtualize LocalAppData).
+      services.sessions=new SessionStore(join(await realpath(dirname(authPath)),'sessions',namespace));
+      await services.sessions.initialize();
+    }}catch(error){await host.close();throw error;}
   } else {
     const server = createServer(accept);
     server.on('error', error => options.onDiagnostic?.(error));
@@ -119,6 +135,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     });
     closeTransport = () => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
+  servicesResolve();
   let closing: Promise<void> | undefined;
   return {
     path,
@@ -129,6 +146,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
         await closeTransport();
         await Promise.all([...cleanup]);
         await changes?.drain();
+        await services.usage?.drain();
       })();
       return closing;
     },

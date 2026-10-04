@@ -1,49 +1,49 @@
 # RAD Studio adapter
 
-0.6.0은 hello 전에 Core/adapter 상호 HMAC 인증을 수행한다. pipe별 credential을 자동 발견하며
-PIAGENT_AUTH_FILE로 다른 경로를 지정할 수 있다. [보안 설정](../../docs/SECURITY.md).
+0.7.0 Delphi design-time BPL은 Help → Help Wizards → **PiAgent: Open Chat**에서 Vcl.Edge
+WebView2 채팅 창을 연다. VS와 같은 TypeScript UI로 채팅, 승인·복원, 저장 대화 재개 및 사용량을 표시한다.
+hello 전에 Core/adapter 상호 HMAC 인증을 수행하며 credential은 WebView에 전달하지 않는다.
+[보안 설정](../../docs/SECURITY.md) · [승인 변경](../../docs/APPROVED-CHANGES.md).
 
-Delphi design-time BPL 최소 vertical slice다. IDE의 PiAgent: Check Core Connection wizard 메뉴가
-worker에서 Core와 hello/capability negotiation/ping을 수행하고 연결을 닫는다.
-결과는 IDE Messages에 표시한다. pipe I/O는 worker에 있고 ToolsAPI 호출은 메인 스레드다.
-공개 IOTAMenuWizard / RegisterPackageWizard로 등록하며 IDE가 command menu의 생성과 제거를 관리한다.
-수동 TMenuItem이나 시작 retry callback을 보관하지 않는다. unload 때 worker를 cancel/join하고 polling timer를 해제한다.
+PiAgent.ChatWorker의 전용 worker가 pipe와 runtime session을 단독 소유한다. bounded queue와
+메인 스레드 timer polling으로 UI를 연결하며 ToolsAPI/WebView 호출은 메인 스레드에서만 실행한다.
+모든 대상 파일의 미저장 editor를 검사한 뒤 승인·복원을 요청한다. 패키지 unload에서 timer와
+worker를 cancel/join한다. queued callback/notifier를 남기지 않는다. IDE가 wizard 메뉴 수명을 관리한다.
 
-PiAgent.PipeClient는 ToolsAPI에 의존하지 않으며 1 MiB length-prefix framing, Unicode nonce,
-request ID 검증과 5초 deadline을 제공한다. overlapped I/O를 cancel event로 취소하고,
-BPL unload 전에 worker를 join한다. queued callback을 사용하지 않아 unload 후 package code가 실행되지 않는다.
-현재 ideVersion metadata는 Delphi compiler version이다. 실제 IDE 제품 version 조회는 후속 작업이다.
+PiAgent.PipeClient는 ToolsAPI에 의존하지 않는다. strict UTF-8, 1 MiB length-prefix framing,
+request ID 검증과 overlapped cancellable I/O를 사용한다. 일반 RPC는 5초, chat.open과
+usage/session/changes는 60초 제한이다. 20초 ping이 연결을 유지한다.
+IDE metadata의 ideVersion은 현재 Delphi compiler version이다.
 
-## Build
+## Build and install
 
-루트에서 scripts/build-adapters.ps1을 실행한다. -BdsRoot로 설치본을 지정할 수 있다.
-IDE에서는 src/PiAgent.dproj를 열어 Win32/Win64를 각각 빌드한다.
-Requires는 rtl, vcl, designide뿐이며 BPL suffix는 compiler의 LIBSUFFIX AUTO를 따른다.
-이 PC의 RAD Studio 13.2 결과:
+루트에서 `scripts/build-adapters.ps1`을 실행한다. `-BdsRoot`로 설치본을 지정할 수 있다.
+requires는 rtl, vcl, vcledge, designide이며 이 PC의 RAD Studio 13.2/Delphi 37.0 결과는 다음과 같다.
 
-- bin/Win32/0.6.0/PiAgent370.bpl
-- bin/Win64/0.6.0/PiAgent370.bpl
-- bin/Win32/0.6.0/PipeSmoke.exe 및 bin/Win64/0.6.0/PipeSmoke.exe
+- bin/Win32/0.7.0/PiAgent370.bpl + WebView2Loader.dll + ui/
+- bin/Win64/0.7.0/PiAgent370.bpl + WebView2Loader.dll + ui/
+- 각 디렉터리의 PipeSmoke.exe / ChatSmoke.exe 테스트 harness
 
-실행 중인 이전 BPL을 덮어쓰지 않도록 script는 버전별 디렉터리에 빌드한다.
-새 BPL로 교체하려면 IDE에서 기존 package를 해제하고 새 파일을 설치한다. 배포 ZIP은 bitness별 파일을 제공한다.
+현재 사용자에게 설치된 WebView2 Runtime을 사용한다. loader는 package 폴더의 절대 경로로 로드한다.
+IDE와 같은 bitness의 BPL만 Component → Install Packages에서 설치한다. 해당 디렉터리의 loader/UI를
+같이 유지한다. 다른 Delphi version의 BPL은 해당 SDK로 재빌드해야 한다.
+기존 BPL을 unload하거나 IDE를 종료한 뒤 교체한다. 빌드 스크립트는 버전별 출력 디렉터리를 사용한다.
 
-## IDE에서 확인
+1. secure Core를 `--omp <omp.exe> --workspace <Git-root> --allow-writes`로 실행한다.
+2. IDE를 실행하고 Help → Help Wizards → PiAgent: Open Chat → 연결을 선택한다.
+3. 파일 diff를 확인해 승인한다. 변경 기록에서 역방향 diff를 확인한 뒤 복원 적용한다.
+4. 저장된 대화에서 재개하고 사용량·비용을 펼쳐 확인한다.
 
-1. npm start -- --pipe piagent-dev로 Core를 실행한다.
-2. IDE의 Component → Install Packages에서 해당 IDE와 같은 bitness의 BPL만 선택한다.
-3. Help → Help Wizards → PiAgent: Check Core Connection 메뉴를 실행한다.
-4. Messages의 handshake/capability/ping OK 또는 오류를 확인한다.
+다른 endpoint는 IDE 실행 전에 PIAGENT_PIPE_NAME으로 지정한다(기본 piagent-dev).
+자동 Core 실행과 선택 코드 캡처는 제공하지 않는다. 설치·실행·제거는
+[INSTALLATION.md](../../docs/INSTALLATION.md)를 따른다. RADAgent source/package/설정은 수정하지 않는다.
 
-다른 endpoint는 IDE 실행 전에 PIAGENT_PIPE_NAME을 지정한다. BPL을 rebuild하기 전에는
-IDE에서 unload하거나 IDE를 닫는다. 기존 RADAgent package/설정은 변경하지 않는다.
-Core 자동 실행, persistent session, WebView UI나 IDE host tool은 아직 없다.
+## Validation
 
-## 검증 상태
-
-RAD Studio 13.2 compiler로 Win32/Win64 BPL과 콘솔 harness를 빌드했다.
-npm run test:adapters는 같은 transport로 실제 Core hello/ping, Unicode echo,
-무응답 서버에서의 cancel과 oversized response 거절을 두 bitness에서 확인한다.
-RAD Studio 13.2 Win32/Win64 IDE에서 최종 BPL load, Help Wizards 메뉴 등록, Core hello/ping과
-Messages의 handshake/capability/ping OK를 확인했다. Win32에서는 IDE의 정상 종료도 확인했다.
-다른 RAD Studio version은 아직 미검증이다.
+Win32/Win64 BPL과 두 harness를 빌드했다. 실제 secure Named Pipe 통합 테스트에서 두 bitness의
+worker가 다중 파일 승인·적용·복원, 세션 교체·재개와 사용량을 검증했다.
+2026-10-04 Win64 IDE의 별도 PiAgentValidation07 프로필에서 package load, WebView 연결,
+두 파일 승인·복원, 저장 대화 재개 및 토큰/USD 비용/계정 한도 표시를 실제 화면에서 확인했다.
+승인 UI 검증은 deterministic fixture OMP를 사용했고 원본 파일 바이트와 Git diff 없음도 확인했다.
+최종 Win32 채팅 창과 다른 RAD Studio 버전은 실제 UI 검증이 남아 있다.
+[전체 검증 기록](../../docs/VALIDATION.md).

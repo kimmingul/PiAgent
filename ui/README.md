@@ -1,20 +1,22 @@
 # Shared WebView UI
 
-0.4.0은 session의 readOnly/workspaceUri와 tool_started/tool_completed를 표시한다.
-UI/adapter가 읽기 root를 공급하지 않으며 도구 실행은 Core 책임이다.
+VS와 RAD Studio가 사용하는 strict TypeScript HTML/CSS UI이다. RADAgent의 composer/host bridge
+패턴을 참고했으며 reference repository는 수정하지 않았다.
 
-RADAgent의 composer/host bridge 패턴을 참고해 최소 입력·응답·취소 UI를 TypeScript로 작성했다.
-reference repository는 수정하지 않는다. 전체 RADAgent UI 포팅은 하지 않는다.
+채팅 스트리밍·취소·새 대화, 저장된 대화 재개, 사용량·비용·계정 한도, 전체 파일 diff 검토와
+명시적 승인, 체크포인트의 역방향 diff 검토·복원을 제공한다. 다중 파일 제안은 모든 파일의 diff를
+한 승인 카드에 표시한다. 선택 코드 캡처는 해당 기능을 제공하는 VS adapter에서만 표시한다.
 
-현재 UI는 transcript/status와 typed chat event를 받는다. usage/approval은 후속 범위다.
-VS adapter의 WebView host bridge가 메시지를 typed Core API로 연결한다. RAD WebView host는 후속 범위이다.
-Delphi ToolsAPI와 VS SDK 코드는 UI에 넣지 않는다. Core protocol과 OMP raw frame도
-HTML에서 직접 처리하지 않고 typed session/event 계층에서 변환한다.
+UI는 OMP raw command, shell, IDE SDK에 접근하지 않는다. 제한된 bridge action을 adapter가
+Core RPC로 변환하고 proposal revision은 adapter가 보관한다. 미저장 문서는 adapter가 검사한다.
+모델 출력과 저장 대화는 textContent/TextNode로 렌더링하며 HTML로 실행하지 않는다.
+두 host 모두 local virtual origin, CSP, navigation/download/permission 차단을 사용한다.
 
-src/chat.ts를 루트 npm run build로 dist/chat.js에 빌드한다. VSIX build가 HTML/CSS/JS를 패키징한다.
-WebView2는 bridge의 ready/connect/reset/prompt/cancel/captureSelection/clearSelection을 사용한다.
-0.3.0은 host가 캡처한 선택 코드의 URI·언어·범위·텍스트를 미리 표시한다. UI가 임의 context를 공급하지 않는다.
-외부 네트워크 콘텐츠는 로드하지 않는다.
-모델 출력은 HTML로 해석하지 않는다. Enter 전송, Shift+Enter 줄바꿈, 연결·새 대화·취소를 지원한다.
-Tool window 숨김/재표시는 연결을 유지한다. IDE/tool window disposal은 pipe와 OMP session을 정리한다.
-approval 카드는 승인 ID/취소 상태를, checkpoint/usage view는 Core가 관리하는 모델을 사용한다.
+`npm run build`는 src/chat.ts를 dist/chat.js로 빌드한다. VSIX에 HTML/CSS/JS를 포함하고
+BPL에는 같은 자산과 해당 bitness WebView2Loader.dll을 나란히 배포한다.
+Enter 전송, Shift+Enter 줄바꿈과 키보드 승인·복원을 지원한다. 작은 창에서는 본문을 스크롤한다.
+창을 숨겨도 연결은 유지하며 IDE 종료/package unload는 pipe와 OMP child를 정리한다.
+
+`tests/ui.test.mjs`는 최소 DOM으로 capability gating, 안전한 기록 표시, 승인·복원·실패 재시도,
+세션 bridge action과 알려지지 않은 사용량을 검사한다. 실제 WebView host 검증은
+[VALIDATION.md](../docs/VALIDATION.md)에 기록한다.
