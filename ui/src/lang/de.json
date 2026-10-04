@@ -310,7 +310,7 @@
   "page.chat.queuedSteer": "in den laufenden Durchgang eingefügt",
   "page.chat.scrollBottom": "↓ Neue Nachrichten",
   "page.checkpoints.branchLabel": "⑂ Branch ab hier",
-  "page.checkpoints.branchTitle": "Neuen git-Branch aus dem Zustand vor dem Senden dieser Nachricht erstellen",
+  "page.checkpoints.branchTitle": "Eigenes Gespräch vor dieser Nachricht erstellen; unterstützte Dateiänderungen zuerst prüfen",
   "page.checkpoints.revertLabel": "↶ Hierhin zurückkehren",
   "page.checkpoints.revertTitle": "Dateien und Unterhaltung auf den Zustand vor dem Senden dieser Nachricht zurücksetzen",
   "page.composer.approvalAlwaysAsk": "Immer fragen",

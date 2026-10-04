@@ -1,6 +1,7 @@
 program ChatSmoke;
 {$APPTYPE CONSOLE}
 uses System.SysUtils, System.JSON, Winapi.Windows, PiAgent.ChatWorker in '../src/PiAgent.ChatWorker.pas',
+  PiAgent.CoreRuntime in '../src/PiAgent.CoreRuntime.pas',
   PiAgent.PipeClient in '../src/PiAgent.PipeClient.pas';
 var Worker: TPiChatWorker; Id: string; Frame,Data,Review,Decision: TJSONObject; Started: UInt64;
 function WaitType(const Expected: string): TJSONObject;
@@ -26,7 +27,7 @@ end;
 begin
   Worker := nil;
   try
-    Worker := TPiChatWorker.Create; Worker.Start; Worker.Enqueue('{"action":"connect"}');
+    Worker := TPiChatWorker.Create; Worker.Start; Decision := TJSONObject.Create.AddPair('action','connect').AddPair('workspaceUri',GetEnvironmentVariable('PIAGENT_WORKSPACE_URI'));try Worker.Enqueue(Decision.ToJSON);finally Decision.Free;end;
     Frame := WaitType('session'); Id := Frame.GetValue<string>('savedSessionId',''); Frame.Free;
     Worker.Enqueue('{"action":"prompt","message":"propose-batch"}');
     Frame := WaitType('approval_requested');
@@ -46,6 +47,11 @@ begin
     Frame := WaitType('restored'); Frame.Free;
     Worker.Enqueue('{"action":"reset"}'); Frame := WaitType('session'); Frame.Free;
     Worker.Enqueue('{"action":"resumeSession","savedSessionId":"'+Id+'"}'); Frame := WaitType('session'); Frame.Free;
+    Worker.Enqueue('{"action":"preferences"}');Frame := WaitType('preferences');if Frame.GetValue('values')=nil then raise Exception.Create('Preferences missing');Frame.Free;
+    Worker.Enqueue('{"action":"listFiles"}');Frame := WaitType('files');if Frame.GetValue('items')=nil then raise Exception.Create('Files missing');Frame.Free;
+    Worker.Enqueue('{"action":"export"}');Frame := WaitType('exportReady');if not FileExists(Frame.GetValue<string>('path','')) then raise Exception.Create('Export missing');Frame.Free;
+    Worker.Enqueue('{"action":"btw","id":"side","text":"question"}');Frame := WaitType('btwAccepted');Frame.Free;
+    Worker.Enqueue('{"action":"btwList"}');Frame := WaitType('btwList');if Frame.GetValue('items')=nil then raise Exception.Create('BTW list missing');Frame.Free;
     Worker.Enqueue('{"action":"usage"}'); Frame := WaitType('usage'); Frame.Free;
     WriteLn('{"applied":true,"restored":true,"resumed":true,"usage":true}');
   except on E: Exception do begin WriteLn(E.Message); ExitCode := 1; end; end;

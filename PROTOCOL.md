@@ -215,8 +215,9 @@ prompt_result.agentInvoked:false도 완료로 처리한다. thinking/raw frames�
 setStatus 같은 정보성 OMP UI 요청은 무시한다. select/confirm/input/editor 또는 미협상 host tool 요청은
 unsupported error로 턴을 종료하고 세션을 닫는다. 임의 승인 응답을 보내지 않는다.
 
-cancel은 OMP abort를 보내며 그 응답이 턴 종료를 의미하지 않는다. terminal event를 기다리고,
-5초 내 종료 이벤트가 없으면 취소 처리 후 해당 세션의 process를 정리한다. 턴 제한은 10분이다.
+cancel은 OMP abort 응답을 기다리지 않고 `{requested:true}`를 반환한다. abort 전부터 5초
+종료 deadline을 시작한다. terminal event가 없거나 abort가 실패하면 취소 이벤트를 한 번 전달하고
+해당 세션의 process를 정리한다. 정리 중 같은 abort를 다시 기다리지 않는다. 턴 제한은 10분이다.
 prompt acknowledgement timeout은 세션을 폐기해 늦은 응답이 다음 턴에 섞이지 않게 한다.
 close, pipe disconnect, daemon graceful shutdown은 OMP stdin EOF/2초 kill fallback으로 정리한다.
 VS chat은 20초마다 ping해 idle connection을 유지한다. RPC는 기본 5초, chat.open은 adapter에서
@@ -371,8 +372,8 @@ Only after approval does it send setProperty with the exact inspected document/r
 rechecks document, dirty state, revision and property before mutation on the IDE main thread.
 `designer_resolved {proposalId,approved}` completes the card; errors do not count as successful edits.
 One mutating host-tool proposal is active per session; read operations may run concurrently.
-Disconnect/cancel invalidates all pending designer requests/approvals. Core checkpoint restore
-is not supported for these designer-native edits yet.
+Disconnect/cancel invalidates all pending designer requests/approvals. Saved Git-tracked UTF-8 designer changes can be recorded by the bounded turn observer. Unsaved buffers,
+new/deleted/binary files and message-level conversation rollback remain outside this restore contract.
 
 ### Designer snapshot schema 2 (additive, PiAgent 0.9.0)
 
@@ -395,3 +396,78 @@ schemaVersion 2; existing inspect/setProperty behavior remains compatible.
 Unsupported/dirty adapters advertise no write operations. Existing writable scalar fields remain guarded
 by canSetProperty. New reference setters can update related properties; approval discloses this. Native
 save failure leaves a dirty buffer after attempted relationship restoration, not a durable rollback guarantee.
+
+## Additive chat UI service contract (VSIX 0.9.8)
+
+Named Pipe `protocolVersion:1` and JSON-RPC 2.0 framing remain unchanged.
+`chat.btw.v1` / `chat.preferences.v1` are optional negotiated capabilities in addition to chat.v1.
+Methods without the corresponding capability fail with -32005. Chat open results contain
+`btwEnabled`, `preferencesEnabled`, `exportEnabled`, `filesEnabled`, `checkpointsEnabled`;
+UI enables controls from these flags rather than guessing from IDE version or connection alone.
+All following methods require the current connection-owned `sessionId`; unexpected params are rejected.
+
+| Method | Additional params | Result |
+|---|---|---|
+| `chat.preferences` | optional `values` | validated `values`, `ompExecutable`, `ompProfile`; omit values for read |
+| `btw.ask` | `text`, optional `topicId` | `accepted`, `topicId`; processing continues in independent child |
+| `btw.list` | optional `offset` | `t:btwList`, stable main `session`, `items`, `append`, optional `nextOffset` |
+| `btw.cancel` | `topicId` | `stopped:true` after child is joined |
+| `btw.delete` | `topicId` | refreshed list; child is stopped and private topic JSON/session directory removed |
+| `workspace.files` | none | `items:string[]` relative slash paths, maximum 1000 files/500 KiB listing |
+| `chat.export` | none | private HTML `path` from OMP export_html; adapter chooses final destination |
+| `chat.addFolder` | user-selected absolute `path` | `added`, `path`; native idle `/add-dir` execution |
+| `chat.proceedPlan` | exact card `path` | new runtime session response + `planPrompt`, same savedSessionId, always-ask |
+
+BTW events are `chat.event(kind:omp_event,frame:{type:ui_event,event:{t:btw,topic,turn}})`.
+Public topics contain id/mainSession/mainTitle/created/turns and optional normalized usage;
+private `sessionFile`/fork baseline are never forwarded. Turns contain q/a/state/asked and optional error.
+States are running/done/stopped/error. Topic history and list pagination are bounded; see implementation document.
+Question ack and streamed topic events can arrive in either order. UI correlates composer and panel requests by ID.
+Cancel/delete are topic-owned actions and never abort the main turn.
+
+Preference fields: language auto/ko/en/ja/de/fr; fontSize integer 10–24;
+showThinking/showTools/showTodos/showSubagents/notifications/highContrast booleans;
+defaultApproval always-ask/write/yolo/plan. Unknown keys are errors. Defaults apply to new sessions only.
+Adapter response type preferences is the save ack. Failure stays operationError, never a successful local toggle.
+
+`chat.prompt` optionally accepts attachments:string[] (maximum 16 paths). Paths are data references;
+validated image files additionally become OMP ImageContent `{type:image,data:<base64>,mimeType}`.
+Per-image 512 KiB, 8 images, combined base64 700,000 bytes. Text/selection context retains existing bounds.
+The adapter's native picker is the user selection boundary. Attachments are not queued during a running turn.
+
+OMP controls add steer/follow_up `{message}` for an active main turn. Queue cancellation uses exact
+`remove_queued_message {message,queue:steering|followUp}` and reports actual `removed`.
+get_subagent_messages uses `subagentId`, optional `fromByte`; returned private sessionFile is removed.
+get_available_commands is bounded/normalized and combined with local commands, local names taking precedence.
+`/fresh`, `/switch`, `/session`, `/branch`, `/tree`, `/wt`, `/worktree`, `/move`, `/handoff` are rejected by Core
+because they can change private session/workspace ownership. Use PiAgent new/resume. Other native slash commands
+use the ordinary tracked prompt path. Native MCP toggles use this same main turn ownership.
+
+Adapter errors carry `action`, optional request `id`, `command`, `fields`, `ownerSessionId`.
+Replies belonging to an old session are ignored. Pending model/preference/submission states clear only on their own
+success/error or connection/session retirement. Approval errors re-open manual review without automatic resubmission.
+Clipboard response `copied {id}` means the native copy completed. URLs permit HTTP(S) only.
+
+Session schema 2 persists safe presentation events, optional timing and attachment paths. Replay never dispatches
+approval/interaction/host actions from transcript text. Schema 1 remains readable and upgrades on save.
+`chat.usage` adds queriedAt, scope main-session, and separate BTW scope retained-side-topics;
+BTW totals subtract the fork baseline and become null if unavailable/running. They do not include deleted topics.
+Checkpoint restore still restores files only. The native turn observer covers existing Git-tracked UTF-8 files,
+not the complete filesystem or conversation timeline. See [implementation limits](docs/CHAT-UI-IMPLEMENTATION.md).
+
+## Message timeline capability: chat.timeline.v1
+
+Negotiated together with private sessions and OMP controls. `chat.open` returns `messageRestoreEnabled`.
+Persisted user transcript entries carry a positive `seq`; older entries without checkpoints remain viewable.
+`chat.previewMessageRestore {sessionId,seq,branch:boolean}` returns `messageRestoreId`, `revision`, `seq`,
+`branch`, `prompt`, `scope`, `checkedPaths` and the bounded file proposal/diff. Preview expires after five minutes.
+`chat.restoreMessage {sessionId,messageRestoreId,revision}` requires a completed turn and current preview.
+The Core rechecks response baseline and proposal hashes; adapters reject any dirty checked IDE documents.
+Both actions preserve the original conversation, restore supported changed files after explicit approval and
+create a private session with `parent {savedSessionId,message,mode:branch|restore}`. They do not create Git branches.
+The response is a new session with `restoredDraft` and `restoreNotice`; the draft must not auto-submit.
+If reopening/applying fails, `restoreError` accompanies the reopened original session.
+Snapshots contain full private OMP JSONL (64 MiB max), up to 50 message points, and bounded existing Git-tracked
+UTF-8 files. New/deleted/binary/untracked/non-Git/additional roots and unsaved buffers are explicitly excluded.
+MCP toggles return extension state only after the slash-command turn and chained snapshot writes finish,
+then verify the requested state; prompt admission is not a configuration-save acknowledgement.

@@ -113,7 +113,7 @@ export class OmpProcess extends EventEmitter {
 
   request(command: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     if (this.currentState !== 'ready' || this.child === undefined) return Promise.reject(new Error('OMP is not ready'));
-    if (!['negotiate_protocol','get_state', 'get_available_commands', 'get_session_stats', 'abort', 'new_session', 'switch_session', 'prompt', 'set_host_tools',
+    if (!['negotiate_protocol','get_state', 'get_available_commands', 'get_session_stats', 'abort', 'fork', 'new_session', 'switch_session', 'prompt', 'set_host_tools',
       'get_available_models','set_model','get_available_thinking_levels','set_thinking_level','set_event_filter',
       'steer','follow_up','remove_queued_message','promote_queued_message','abort_retry','compact','get_subagents',
       'get_subagent_messages','cancel_subagent','steer_subagent','set_subagent_subscription','get_messages_page',

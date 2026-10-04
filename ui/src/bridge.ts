@@ -1,12 +1,22 @@
 import {Controller, type Frame} from './controller.js';
 import {interaction,clearInteractions} from './interactions.js';
+import {settings,settingsResult,applyPreferences} from './settings.js';
 interface Host { postMessage(frame: Frame): void; addEventListener(type: string, listener: (event: MessageEvent) => void): void; }
 const hostWindow = window as unknown as {chrome: {webview: Host}; piagentPost: (frame: Frame) => void; __agentHost: (frame: Frame) => void};
 const element = (id: string): HTMLElement => document.getElementById(id)!;
 const disable = (id: string, disabled = true): void => { (element(id) as HTMLButtonElement).disabled = disabled; };
+let lastStatus:Frame|undefined,lastCapabilities:Frame|undefined;
+const applyCapabilities=(frame:Frame):void=>{
+  disable('btw-btn',!frame['btwEnabled']||!frame['connected']);disable('export-btn',!frame['exportEnabled']||!frame['connected']||!!frame['busy']);
+  disable('approval-select',!frame['approvalModes']||!frame['connected']||!!frame['busy']);disable('plus-btn',!frame['attachmentsEnabled']||!frame['connected']||!!frame['busy']);
+  disable('model-btn',!frame['ompControlsEnabled']||!frame['connected']||!!frame['busy']);disable('thinking-select',!frame['ompControlsEnabled']||!frame['connected']||!!frame['busy']);
+};
 const controller = new Controller(frame => hostWindow.chrome.webview.postMessage(frame), {
   interaction, clearInteractions,
-  emit: frame => hostWindow.__agentHost(frame),
+  settingsResult,
+  settings:(frame,save)=>settings(frame,save,msg=>controller.action(msg)),
+  sheet:(title,text,next)=>{hostWindow.__agentHost({t:'sheet',title,text});if(next){const button=document.createElement('button');button.className='icon-btn popup-item';button.textContent='다음 기록';button.onclick=next;element('sheet-body').append(button);}},
+  emit: frame => {if(frame['t']==='status')lastStatus=frame;if(frame['t']==='preferences'){const values=frame['values'] as Frame;applyPreferences(values);const lang=values['language']==='auto'?(['ko','en','ja','de','fr'].find(lang=>navigator.language.startsWith(lang))??'en'):String(values['language']);void fetch(`lang/${lang}.json`).then(r=>r.json()).then(items=>{hostWindow.__agentHost({t:'strings',lang,items});if(lastStatus)hostWindow.__agentHost(lastStatus);if(lastCapabilities)applyCapabilities(lastCapabilities);}).catch(()=>{});return;}hostWindow.__agentHost(frame);},
   list: (title, items) => {
     hostWindow.__agentHost({t: 'sheet', title, text: ''});
     const body = element('sheet-body');
@@ -19,9 +29,7 @@ const controller = new Controller(frame => hostWindow.chrome.webview.postMessage
   },
   capabilities: frame => {
     // Preserve the original controls and placement, but never advertise unsupported Core commands.
-    for (const id of ['btw-btn', 'export-btn']) disable(id);
-    disable('approval-select',!frame['approvalModes']||!frame['connected']||!!frame['busy']);disable('plus-btn',!frame['attachmentsEnabled']||!frame['connected']||!!frame['busy']);
-    disable('model-btn',!frame['ompControlsEnabled']);disable('thinking-select',!frame['ompControlsEnabled']);
+    lastCapabilities=frame;applyCapabilities(frame);
   }
 });
 hostWindow.piagentPost = frame => {

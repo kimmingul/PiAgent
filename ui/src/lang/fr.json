@@ -310,7 +310,7 @@
   "page.chat.queuedSteer": "inséré dans le tour en cours",
   "page.chat.scrollBottom": "↓ Nouveaux messages",
   "page.checkpoints.branchLabel": "⑂ Créer une branche ici",
-  "page.checkpoints.branchTitle": "Créer une nouvelle branche git à partir de l'état antérieur à l'envoi de ce message",
+  "page.checkpoints.branchTitle": "Créer une conversation distincte avant ce message ; vérifier les changements de fichiers pris en charge",
   "page.checkpoints.revertLabel": "↶ Revenir à ce point",
   "page.checkpoints.revertTitle": "Restaurer les fichiers et la conversation à l'état antérieur à l'envoi de ce message",
   "page.composer.approvalAlwaysAsk": "Toujours demander",

@@ -310,7 +310,7 @@
   "page.chat.queuedSteer": "진행 중인 턴에 끼워 넣음",
   "page.chat.scrollBottom": "↓ 새 메시지",
   "page.checkpoints.branchLabel": "⑂ 여기서 브랜치",
-  "page.checkpoints.branchTitle": "이 메시지를 보내기 전 상태에서 새 git 브랜치를 만듭니다",
+  "page.checkpoints.branchTitle": "이 메시지 직전에서 별도 대화를 만듭니다. 지원되는 파일 변경은 먼저 검토합니다",
   "page.checkpoints.revertLabel": "↶ 여기로 되돌리기",
   "page.checkpoints.revertTitle": "이 메시지를 보내기 전 상태로 파일과 대화를 되돌립니다",
   "page.composer.approvalAlwaysAsk": "항상 묻기",

@@ -10,6 +10,14 @@ function fixture() {
  const event=(kind,extra={})=>receive({type:'event',data:{sessionId:'s',turnId:'t',sequence:++sequence,kind,...extra}});
  return {sent,shown,receive,action,event,menu:()=>menu};
 }
+test('plan execution failure reports the real error to the pending original card',()=>{
+ const f=fixture();f.receive({type:'session',sessionId:'s',approvalMode:'plan'});
+ f.action({t:'proceedPlan',path:'docs/plans/example.md'});
+ assert.equal(f.sent.at(-1).action,'proceedPlan');
+ f.receive({type:'operationError',action:'proceedPlan',message:'Plan changed after preview'});
+ assert.deepEqual(f.shown.find(m=>m.t==='planResult'),{t:'planResult',ok:false,text:'Plan changed after preview'});
+ f.action({t:'proceedPlan',path:'docs/plans/example.md'});assert.equal(f.sent.at(-1).action,'proceedPlan');
+});
 test('disconnected controls report connection recovery instead of unsupported feature state',()=>{
  const f=fixture();f.receive({type:'disconnected',message:'authentication error'});
  f.action({t:'listFiles'});assert.match(f.shown.at(-1).text,/연결을 다시 시도/);
@@ -72,9 +80,10 @@ test('sessions serialize; usage retains unknown values and actual model',()=>{
 
 test('original model/effort controls discover actual state and designer approval uses its own endpoint',()=>{
  const f=fixture();f.receive({type:'session',sessionId:'s',ompControlsEnabled:true,ompProfile:'native',writeEnabled:true});
- assert.deepEqual(f.sent.filter(m=>m.action==='ompControl').map(m=>m.command),['get_available_models','get_available_thinking_levels','get_state']);
+ assert.deepEqual(f.sent.filter(m=>m.action==='ompControl').map(m=>m.command),['get_available_models','get_available_thinking_levels','get_state','get_available_commands']);
  f.action({t:'setModel',value:'provider/model/variant'});
  assert.deepEqual(f.sent.at(-1),{action:'ompControl',command:'set_model',fields:{provider:'provider',modelId:'model/variant'}});
+ f.receive({type:'ompControl',command:'set_model',data:{}});
  f.receive({type:'ompControl',command:'get_state',data:{model:{provider:'provider',id:'model'},thinkingLevel:'high'}});
  assert.equal(f.shown.at(-1).thinking,'high');
  f.event('started');f.event('omp_event',{frame:{type:'designer_approval',proposalId:'d',path:'Form.xaml',reason:'Width',diff:'-100\n+200'}});
@@ -93,8 +102,19 @@ test('reference CSS, icons and renderer modules retain the recorded source bytes
  const {createHash}=await import('node:crypto');
  const hashes=JSON.parse(await readFile(new URL('../ui/reference-files.json',import.meta.url),'utf8'));
  for(const [name,hash] of Object.entries(hashes)) {
-  if(['chat.html','chat.js','composer.js'].includes(name))continue;
+  // Integration changes are documented in ui/README.md; retain original provenance hashes.
+  if(['chat.html','chat.js','composer.js','clicks.js','plusmenu.js','btw.js','checkpoints.js','approval.js','markdown.js'].includes(name)||name.startsWith('lang/'))continue;
   const bytes=await readFile(new URL('../ui/src/'+name,import.meta.url));
   assert.equal(createHash('sha256').update(bytes).digest('hex'),hash,name);
  }
+});
+
+test('file references cover both IDE families without matching extension prefixes',async()=>{
+ const {runInNewContext}=await import('node:vm');
+ const scope={};runInNewContext(await readFile(new URL('../ui/src/markdown.js',import.meta.url),'utf8'),scope);
+ for(const [path,line]of [['Program.cs',3],['View.xaml',2],['Main.fmx',1],['MAIN.PAS',4],['D:/fixture/Editor.csproj',5],['D:/fixture/Header.hpp',6]]){
+  const html=scope.Markdown.linkFileRefs(`${path}:${line}`);
+  assert.ok(html.includes(`data-path="${path}"`),html);assert.ok(html.includes(`data-line="${line}"`),html);
+ }
+ for(const path of ['D:/fixture/Unknown.csharp:1','Unknown.exe:1'])assert.ok(!scope.Markdown.linkFileRefs(path).includes('file-ref'));
 });

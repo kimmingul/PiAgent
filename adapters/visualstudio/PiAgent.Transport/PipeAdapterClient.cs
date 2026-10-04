@@ -56,7 +56,7 @@ public sealed class PipeAdapterClient : IDisposable
         var offered = chat ? new JArray("core.ping", "chat.v1") : new JArray("core.ping");
         if (selectionContext) { if (!chat) throw new ArgumentException("Selection context requires chat"); offered.Add("context.selection.v1"); }
         var required = (JArray)offered.DeepClone();
-        if(chat) { offered.Add("omp.controls.v1"); offered.Add("workspace.bind.v1"); offered.Add("chat.approval.v1"); }
+        if(chat) { offered.Add("chat.btw.v1"); offered.Add("chat.preferences.v1");offered.Add("chat.timeline.v1"); offered.Add("omp.controls.v1"); offered.Add("workspace.bind.v1"); offered.Add("chat.approval.v1"); }
         if(chat && designers) offered.Add("ide.designer.v1");
         if (chat) { offered.Add("chat.sessions.v1"); offered.Add("chat.usage.v1"); offered.Add("workspace.read.v1"); } // Optional; the daemon owner must opt in with --workspace.
         if (writes) { if (!chat) throw new ArgumentException("Writes require chat"); offered.Add("workspace.edit.v1"); offered.Add("workspace.edit.batch.v1"); }
@@ -112,9 +112,9 @@ public sealed class PipeAdapterClient : IDisposable
     }
     public Task<JObject> RequestAsync(string method, JObject parameters, CancellationToken cancellation)
     {
-        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "chat.extensions", "chat.setApproval", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
+        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "chat.setApproval", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
             throw new InvalidOperationException("Unsupported request or handshake required");
-        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.open", "chat.usage", "chat.setApproval", "chat.extensions", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
+        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.open", "chat.usage", "chat.setApproval", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
     }
     private async Task<JObject> CallAsync(string method, JObject parameters, CancellationToken cancellation, int timeout = 5000)
     {

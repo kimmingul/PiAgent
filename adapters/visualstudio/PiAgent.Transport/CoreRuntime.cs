@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 using Newtonsoft.Json.Linq;
 namespace PiAgent.Transport;
 
@@ -14,12 +15,18 @@ namespace PiAgent.Transport;
 public static class CoreRuntime
 {
     private static readonly SemaphoreSlim Startup = new SemaphoreSlim(1, 1);
-    private static async Task<bool> ListeningAsync(string name, CancellationToken cancellation)
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WaitNamedPipe(string name, uint timeout);
+    private static Task<bool> ListeningAsync(string name, CancellationToken cancellation)
     {
-        using var probe = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
-        try { await probe.ConnectAsync(100, cancellation).ConfigureAwait(false); return true; }
-        catch (TimeoutException) { return false; }
-        catch (IOException) { return false; }
+        cancellation.ThrowIfCancellationRequested();
+        // Do not connect then abandon a peer just to test listener readiness.
+        if (WaitNamedPipe(@"\\.\pipe\" + name, 100)) return Task.FromResult(true);
+        var error = Marshal.GetLastWin32Error();
+        if (error == 2) return Task.FromResult(false);
+        if (error == 121 || error == 231) return Task.FromResult(true); // Existing listener is busy.
+        throw new System.ComponentModel.Win32Exception(error);
     }
     private static string Quote(string value)
     {

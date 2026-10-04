@@ -5,6 +5,7 @@
   // submitted plans (proceed / revise). chat.js owns turns and passes messages in.
   let ctx = null;
   const cards = new Map();
+  let pendingPlan = null;
   function T(key, ...args) {
     return global.T ? global.T(key, ...args) : key;
   }
@@ -85,6 +86,7 @@
     actions.appendChild(button(T('page.approval.proceedPlan'), 'primary', () => {
       actions.querySelectorAll('button').forEach(b => { b.disabled = true; });
       status.textContent = T('page.approval.proceedingStatus');
+      pendingPlan = { actions, status };
       ctx.post({ t: 'proceedPlan', path: msg.path });
     }));
     actions.appendChild(button(T('page.approval.revisePlan'), '', () => {
@@ -96,9 +98,16 @@
     ctx.newContent(wasNear);
   }
 
+  function planResult(msg) {
+    if (!pendingPlan) return;
+    pendingPlan.status.textContent = msg.text || '';
+    if (!msg.ok) pendingPlan.actions.querySelectorAll('button').forEach(b => { b.disabled = false; });
+    pendingPlan = null;
+  }
+
   global.ChatCards = {
     init: c => { ctx = c; },
-    approval, approvalResult, plan,
-    clear: () => cards.clear()
+    approval, approvalResult, plan, planResult,
+    clear: () => { cards.clear(); pendingPlan = null; }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

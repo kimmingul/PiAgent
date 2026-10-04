@@ -6,6 +6,17 @@
   // Answers come from a separate omp child on the IDE side; this file only shows them.
   let ctx = null;
   let mainSession = '';
+  const pending = new Map();
+  let requestSequence = 0;
+  function submit(input, topic) {
+    const text = input.value.trim(); if (!text || input.disabled) return;
+    const id = "btw-panel-" + (++requestSequence); pending.set(id, {input, value: input.value}); input.disabled = true;
+    ctx.post({t: "btw", text, topic, id, composer: true});
+  }
+  function submitted(id, ok) {
+    const entry = pending.get(id); if (!entry) return; pending.delete(id); entry.input.disabled = false;
+    if (ok && entry.input.value === entry.value) entry.input.value = "";
+  }
   const topics = new Map();   // id -> topic
   const cards = new Map();    // id/turn -> card refs
   const items = new Map();    // id -> panel item refs
@@ -63,8 +74,7 @@
       if (!text) return;
       const t = topics.get(id);
       if (t && t.turns.some(x => x.state === 'running')) return;
-      ctx.post({ t: 'btw', text, topic: id });
-      input.value = '';
+      submit(input, id);
     };
     input.addEventListener('keydown', e => {
       if (e.isComposing || e.keyCode === 229) return;
@@ -237,7 +247,7 @@
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         const text = newInput.value.trim();
-        if (text) { ctx.post({ t: 'btw', text }); newInput.value = ''; }
+        if (text) submit(newInput);
       }
     });
     ctx.post({ t: 'btwList' });
@@ -254,14 +264,14 @@
 
   function setList(msg) {
     mainSession = msg.session || '';
-    topics.clear();
+    if (!msg.append) topics.clear();
     for (const t of msg.items || []) topics.set(t.id, t);
     for (const id of [...items.keys()]) if (!topics.has(id)) items.delete(id);
     renderList();
   }
 
   global.ChatBtw = {
-    wire, update, setList, open, close,
+    wire, update, setList, open, close, submitted,
     // The transcript was cleared: the cards go, the notes stay.
     clear: () => cards.clear()
   };

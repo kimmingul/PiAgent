@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -16,6 +18,7 @@ namespace PiAgent.Vsix;
 
 public sealed class ChatControl : UserControl, IDisposable
 {
+    [DllImport("user32.dll")] private static extern bool FlashWindow(IntPtr hwnd,bool invert);
     private readonly JoinableTaskCollection jobs;
     private readonly JoinableTaskFactory factory;
     private const string Page = "https://piagent.local/chat.html";
@@ -26,7 +29,7 @@ public sealed class ChatControl : UserControl, IDisposable
     private string? sessionId;
     private string? turnId;
     private JObject? selectionContext;
-    private JObject? approval, restorePreview;
+    private JObject? approval, restorePreview, messageRestorePreview;
     private string? workspaceUri;
     private string currentApprovalMode="always-ask";
     private EnvDTE.SolutionEvents? solutionEvents;
@@ -74,37 +77,85 @@ public sealed class ChatControl : UserControl, IDisposable
     private async Task HandleMessageAsync(CoreWebView2WebMessageReceivedEventArgs args)
     {
         if (disposed || args.Source != Page) return;
+        string? action=null;JToken? requestId=null,requestFields=null,requestCommand=null;
+        var ownerSession=sessionId;
         try
         {
             if (args.WebMessageAsJson.Length > 400000) throw new InvalidDataException("Message exceeds limit");
             var message = JObject.Parse(args.WebMessageAsJson);
+            action=(string?)message["action"];requestId=message["id"]?.DeepClone();
+            requestFields=message["fields"]?.DeepClone();requestCommand=message["command"]?.DeepClone();
             switch ((string?)message["action"])
             {
+                case "notify":if(!browser.IsKeyboardFocusWithin)FlashWindow(Process.GetCurrentProcess().MainWindowHandle,true);break;
+                case "openFile":
+                    await factory.SwitchToMainThreadAsync(lifetime.Token);
+                    var requested=(string?)message["path"]??throw new IOException("Missing file path");
+                    var rootPath=new Uri(CurrentWorkspaceUri()).LocalPath;
+                    var filePath=Path.GetFullPath(requested.StartsWith("file:",StringComparison.OrdinalIgnoreCase)?new Uri(requested).LocalPath:Path.IsPathRooted(requested)?requested:Path.Combine(rootPath,requested));
+                    if(!filePath.StartsWith(Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)||!File.Exists(filePath))throw new IOException("File must exist inside the current solution workspace");
+                    var ide=Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE??throw new IOException("IDE unavailable");
+                    ide.ItemOperations.OpenFile(filePath);
+                    var line=(int?)message["line"]??0;if(line>0&&ide.ActiveDocument?.Selection is EnvDTE.TextSelection textSelection)textSelection.GotoLine(line,false);break;
+                case "openUrl":
+                    var url=(string?)message["url"]??"";if(!Uri.TryCreate(url,UriKind.Absolute,out var uri)||(uri.Scheme!="https"&&uri.Scheme!="http"))throw new IOException("Only HTTP(S) URLs can be opened");
+                    Process.Start(new ProcessStartInfo(uri.AbsoluteUri){UseShellExecute=true});break;
+                case "copy":
+                    await factory.SwitchToMainThreadAsync(lifetime.Token);var copy=(string?)message["text"]??"";if(copy.Length>1000000)throw new IOException("Clipboard text exceeds limit");Clipboard.SetText(copy);Post(new JObject {["type"]="copied",["id"]=requestId});break;
+                case "listFiles":case "export":case "preferences":case "btw":case "btwList":case "btwStop":case "btwDelete":case "queuePrompt":
+                    if(client==null||sessionId==null)throw new IOException("Core session unavailable");
+                    var uiParams=new JObject {["sessionId"]=sessionId};string method;
+                    switch(action) {
+                        case "listFiles":method="workspace.files";break;
+                        case "export":method="chat.export";break;
+                        case "preferences":method="chat.preferences";if(message["values"]!=null)uiParams["values"]=message["values"];break;
+                        case "btw":method="btw.ask";uiParams["text"]=message["text"];if(message["topicId"]?.Type==JTokenType.String)uiParams["topicId"]=message["topicId"];break;
+                        case "btwList":method="btw.list";if(message["offset"]!=null)uiParams["offset"]=message["offset"];break;
+                        case "btwStop":method="btw.cancel";uiParams["topicId"]=message["topicId"];break;
+                        case "btwDelete":method="btw.delete";uiParams["topicId"]=message["topicId"];break;
+                        default:method="omp.control";uiParams["command"]=message["command"];uiParams["fields"]=new JObject {["message"]=message["message"]};break;
+                    }
+                    var uiReply=await client.RequestAsync(method,uiParams,lifetime.Token);
+                    if(action=="export") {
+                        await factory.SwitchToMainThreadAsync(lifetime.Token);var save=new Microsoft.Win32.SaveFileDialog {Filter="HTML|*.html",FileName="PiAgent-conversation.html"};if(save.ShowDialog()==true)File.Copy((string)uiReply["path"]!,save.FileName,true);
+                    } else if(action=="btw")Post(new JObject {["type"]="btwAccepted",["id"]=requestId,["ownerSessionId"]=ownerSession});
+                    else if(action=="queuePrompt")Post(new JObject {["type"]="queueAccepted",["id"]=requestId,["ownerSessionId"]=ownerSession});
+                    else if(action!="btwStop") {uiReply["type"]=action=="listFiles"?"files":action=="preferences"?"preferences":"btwList";uiReply["ownerSessionId"]=ownerSession;Post(uiReply);}
+                    break;
                 case "ready": pageReady = true; break;
+                case "proceedPlan":
+                    if(client==null||sessionId==null)throw new IOException("Core unavailable");AcceptSession(await client.RequestAsync("chat.proceedPlan",new JObject {["sessionId"]=sessionId,["path"]=message["path"]},lifetime.Token));break;
                 case "setApproval":
                     if(client==null||sessionId==null||turnId!=null||approval!=null)return;
                     AcceptSession(await client.RequestAsync("chat.setApproval",new JObject {["sessionId"]=sessionId,["mode"]=message["mode"]},lifetime.Token));break;
-                case "attachFiles":case "addFolder":
+                case "addFolder":
+                    await factory.SwitchToMainThreadAsync(lifetime.Token);
+                    if(client==null||sessionId==null||turnId!=null)throw new IOException("Wait for an idle Core session");
+                    using(var folderPicker=new System.Windows.Forms.FolderBrowserDialog {Description="OMP 작업영역에 폴더 추가",SelectedPath=new Uri(CurrentWorkspaceUri()).LocalPath}) {
+                        if(folderPicker.ShowDialog()==System.Windows.Forms.DialogResult.OK){var added=await client.RequestAsync("chat.addFolder",new JObject {["sessionId"]=sessionId,["path"]=folderPicker.SelectedPath},lifetime.Token);added["type"]="folderAdded";added["ownerSessionId"]=ownerSession;Post(added);}
+                    }break;
+                case "attachFiles":
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
                     if(turnId!=null)return;
-                    var picker=new Microsoft.Win32.OpenFileDialog {InitialDirectory=new Uri(CurrentWorkspaceUri()).LocalPath,Multiselect=(string?)message["action"]=="attachFiles",CheckFileExists=(string?)message["action"]=="attachFiles",FileName=(string?)message["action"]=="addFolder"?"이 폴더 선택":"",ValidateNames=(string?)message["action"]!="addFolder"};
+                    var picker=new Microsoft.Win32.OpenFileDialog {InitialDirectory=new Uri(CurrentWorkspaceUri()).LocalPath,Multiselect=true,CheckFileExists=true};
                     if(picker.ShowDialog()==true) {
-                        var items=new JArray();foreach(var selected in picker.FileNames){var path=(string?)message["action"]=="addFolder"?Path.GetDirectoryName(selected)!:selected; items.Add(new JObject {["path"]=path,["name"]=Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar))});}
-                        Post(new JObject {["type"]="attachments",["items"]=items});
+                        var items=new JArray();foreach(var selected in picker.FileNames){items.Add(new JObject {["path"]=selected,["name"]=Path.GetFileName(selected)});}
+                        Post(new JObject {["type"]="attachments",["items"]=items,["ownerSessionId"]=ownerSession});
                     }break;
                 case "listExtensions":case "manageExtensions":case "togglePlugin":case "toggleMcpServer":
                     if(client==null||sessionId==null||turnId!=null)return;
                     var extensions=await client.RequestAsync("chat.extensions",new JObject {["sessionId"]=sessionId,["action"]=message["action"],["id"]=message["id"],["enabled"]=message["enabled"]},lifetime.Token);
+                    if(ownerSession!=sessionId)break;
                     if((string?)message["action"]=="manageExtensions") {
                         await factory.SwitchToMainThreadAsync(lifetime.Token);
                         foreach(var config in (extensions["configFiles"] as JArray??new JArray())) (Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE)?.ItemOperations.OpenFile((string)config!);
                     }
-                    extensions["type"]="extensions";Post(extensions);
+                    extensions["type"]="extensions";extensions["ownerSessionId"]=ownerSession;Post(extensions);
                     if((string?)message["action"]=="togglePlugin")AcceptSession(await client.RequestAsync("chat.setApproval",new JObject {["sessionId"]=sessionId,["mode"]=currentApprovalMode},lifetime.Token));
                     break;
                 case "compile":
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
-                    (Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE)?.Solution.SolutionBuild.Build(false);break;
+                    var build=(Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE)?.Solution.SolutionBuild??throw new IOException("Solution unavailable");build.Build(true);Post(new JObject {["type"]="buildResult",["success"]=build.LastBuildInfo==0,["failedProjects"]=build.LastBuildInfo});break;
                 case "designerDecide":
                     if(client == null || sessionId == null) return;
                     await client.RequestAsync("designer.decide",new JObject { ["sessionId"]=sessionId,["proposalId"]=message["proposalId"],["approved"]=message["approved"] },lifetime.Token); break;
@@ -116,7 +167,7 @@ public sealed class ChatControl : UserControl, IDisposable
                     var controlReply = await client.RequestAsync("omp.control", new JObject {
                         ["sessionId"] = sessionId, ["command"] = message["command"], ["fields"] = message["fields"] ?? new JObject()
                     }, lifetime.Token);
-                    Post(new JObject { ["type"] = "ompControl", ["command"] = message["command"], ["data"] = controlReply }); break;
+                    Post(new JObject { ["type"] = "ompControl", ["command"] = message["command"], ["fields"]=requestFields,["data"] = controlReply,["ownerSessionId"]=ownerSession }); break;
                 case "captureSelection":
                     if (turnId != null) return;
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
@@ -143,10 +194,11 @@ public sealed class ChatControl : UserControl, IDisposable
                 case "usage":
                     if (client == null || sessionId == null || turnId != null) return;
                     var usage = await client.RequestAsync("chat.usage", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
-                    Post(new JObject { ["type"] = "usage", ["data"] = usage }); break;
+                    Post(new JObject { ["type"] = "usage", ["data"] = usage,["ownerSessionId"]=ownerSession }); break;
                 case "prompt":
                     if (client == null || sessionId == null || turnId != null) throw new IOException("Session unavailable or busy");
                     await SynchronizeWorkspaceAsync();
+                    if(sessionId!=ownerSession)throw new IOException("솔루션이 변경되었습니다. 초안을 새 프로젝트에서 다시 보내 주세요.");
                     var parameters = new JObject { ["sessionId"] = sessionId, ["message"] = message["message"],["attachments"]=message["attachments"]??new JArray() };
                     var attached = selectionContext;
                     // Only the host-captured snapshot can cross the pipe; WebView cannot supply arbitrary context.
@@ -168,24 +220,39 @@ public sealed class ChatControl : UserControl, IDisposable
                 case "listCheckpoints":
                     if (client == null || sessionId == null || turnId != null) return;
                     var history = await client.RequestAsync("changes.list", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
-                    Post(new JObject { ["type"] = "checkpoints", ["items"] = history["checkpoints"] }); break;
+                    Post(new JObject { ["type"] = "checkpoints", ["items"] = history["checkpoints"],["ownerSessionId"]=ownerSession }); break;
                 case "previewRestore":
                     if (client == null || sessionId == null || turnId != null) return;
-                    restorePreview = await client.RequestAsync("changes.previewRestore", new JObject { ["sessionId"] = sessionId, ["checkpointId"] = message["checkpointId"] }, lifetime.Token);
-                    Post(new JObject { ["type"] = "restorePreview", ["data"] = restorePreview.DeepClone() }); break;
+                    var pendingPreview = await client.RequestAsync("changes.previewRestore", new JObject { ["sessionId"] = sessionId, ["checkpointId"] = message["checkpointId"] }, lifetime.Token);
+                    if(ownerSession!=sessionId)break;restorePreview=pendingPreview;
+                    Post(new JObject { ["type"] = "restorePreview", ["data"] = restorePreview.DeepClone(),["ownerSessionId"]=ownerSession }); break;
+                case "previewMessageRestore":
+                    if(client==null||sessionId==null||turnId!=null)throw new IOException("Finish the current response before message restore");
+                    var timelinePreview=await client.RequestAsync("chat.previewMessageRestore",new JObject {["sessionId"]=sessionId,["seq"]=message["seq"],["branch"]=message["branch"]??false},lifetime.Token);
+                    if(ownerSession!=sessionId)break;messageRestorePreview=timelinePreview;
+                    Post(new JObject {["type"]="messageRestorePreview",["data"]=timelinePreview,["ownerSessionId"]=ownerSession});break;
+                case "restoreMessage":
+                    if(client==null||sessionId==null||messageRestorePreview==null||(string?)message["messageRestoreId"]!=(string?)messageRestorePreview["messageRestoreId"])throw new IOException("Message preview unavailable");
+                    await factory.SwitchToMainThreadAsync(lifetime.Token);EnsureTargetsSaved(messageRestorePreview);
+                    if(ownerSession!=sessionId)throw new IOException("Conversation changed during message restore");
+                    var restoredMessage=await client.RequestAsync("chat.restoreMessage",new JObject {["sessionId"]=sessionId,["messageRestoreId"]=messageRestorePreview["messageRestoreId"],["revision"]=messageRestorePreview["revision"]},lifetime.Token);
+                    AcceptSession(restoredMessage);break;
                 case "restoreChange":
                     if (client == null || sessionId == null || turnId != null || restorePreview == null || (string?)message["checkpointId"] != (string?)restorePreview["checkpointId"]) return;
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
                     EnsureTargetsSaved(restorePreview);
                     var restored = await client.RequestAsync("changes.restore", new JObject { ["sessionId"] = sessionId, ["checkpointId"] = restorePreview["checkpointId"], ["revision"] = restorePreview["revision"] }, lifetime.Token);
                     restorePreview = null; Post(new JObject { ["type"] = "restored", ["warning"] = restored["warning"] }); break;
+                default:throw new IOException("Unsupported UI action: "+action);
             }
         }
-        catch (Exception error) { Post(new JObject { ["type"] = "operationError", ["message"] = error.Message }); }
+        catch (Exception error) { Post(new JObject { ["type"] = "operationError", ["message"] = error.Message,["action"]=action,["id"]=requestId,["command"]=requestCommand,["fields"]=requestFields,["ownerSessionId"]=ownerSession }); }
     }
     private void EnsureTargetsSaved(JObject view)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
+        if (view["checkedPaths"] is JArray checkedPaths)
+            foreach (var path in checkedPaths) EnsureTargetSaved((string?)path);
         if (view["files"] is JArray files) {
             foreach (var file in files) EnsureTargetSaved((string?)file["path"]);
         } else EnsureTargetSaved((string?)view["path"]);
@@ -261,7 +328,7 @@ public sealed class ChatControl : UserControl, IDisposable
     {
         sessionId = (string?)result["sessionId"] ?? throw new InvalidDataException("Missing session ID"); turnId = null;
         currentApprovalMode=(string?)result["approvalMode"]??"always-ask";
-        workspaceUri = (string?)result["workspaceUri"]; approval = null; restorePreview = null;
+        workspaceUri = (string?)result["workspaceUri"]; approval = null; restorePreview = null;messageRestorePreview=null;
         selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null });
         result["type"] = "session"; result["selectionEnabled"] = true; result["attachmentsEnabled"] = true; if(!approvalModes)result.Remove("approvalModes"); Post(result);
     }
@@ -291,7 +358,7 @@ public sealed class ChatControl : UserControl, IDisposable
     private void Disconnect(string message)
     {
         heartbeat.Stop(); sessionId = null; turnId = null;
-        approval = null; restorePreview = null; workspaceUri = null;
+        approval = null; restorePreview = null;messageRestorePreview=null; workspaceUri = null;
         var previous = client; client = null; previous?.Dispose();
         Post(new JObject { ["type"] = "disconnected", ["message"] = message });
     }

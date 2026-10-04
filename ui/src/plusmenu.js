@@ -44,9 +44,7 @@
     row.addEventListener('click', e => {
       e.stopPropagation();
       if (global.ChatComposer.isBusy()) return;
-      item.enabled = !item.enabled;
-      sw.classList.toggle('on', item.enabled);
-      onToggle(item);
+      onToggle({...item, enabled: !item.enabled});
     });
     return row;
   }
@@ -56,7 +54,7 @@
     sub.innerHTML = '';
     const isMcp = openSub === 'mcpServers';
     const manage = el('div', 'popup-item', isMcp ? T('page.plusmenu.manageMcpServers') : T('page.plusmenu.managePlugins'));
-    manage.addEventListener('click', () => { close(); post({ t: 'manageExtensions' }); });
+    manage.addEventListener('click', () => { close(); post({ t: 'manageExtensions', kind: isMcp ? 'mcpServers' : 'plugins' }); });
     sub.appendChild(manage);
     sub.appendChild(el('div', 'popup-sep'));
     const items = isMcp ? data.mcpServers : data.plugins;

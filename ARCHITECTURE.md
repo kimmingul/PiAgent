@@ -241,14 +241,16 @@ v2를 협상하고 stdout rpc_chunk를 검증·재조립한다. IDE Named Pipe J
 `--omp-profile native`는 내장 도구/확장/skills/rules/LSP를 제거하지 않는다. secure transport,
 명시한 workspace, --allow-writes, durable session과 adapter의 쓰기/controls 협상이 모두 필요하다.
 세션별 exclusive config 파일로 tools.approvalMode=always-ask를 설정한다. 이 모드는 OS sandbox가 아니며,
-OMP 내장 도구/확장에 의한 변경에는 PiAgent WorkspaceChanges 체크포인트가 적용되지 않는다.
+OMP 내장 도구/확장에 의한 변경은 turn 시작/종료에 관찰 가능한 Git 추적 기존 UTF-8 파일에 한해
+PiAgent checkpoint에 기록한다. 생성/삭제/바이너리/미저장 IDE buffer/non-Git 파일은 포함하지 않는다.
 따라서 현재 설치본의 기본 모드는 restricted이며 native는 개발 검증용 opt-in이다.
 시작 중 UI가 아직 없는 시점의 대화형 확장 요청은 취소하며, 전체 확장 UX 호환은 아직 완료되지 않았다.
 
 `ide.designer.v1`의 SDK-neutral broker는 inspect → 속성 제안 → 사용자 승인 → revision 재검사 → 적용을
 중계한다. 실제 IDE API는 adapter에서만 호출한다. Core에는 WinForms/WPF/VCL 타입이 없다.
 읽기 전용 연결에는 inspect만 등록한다. 문서가 workspace 밖이거나 저장되지 않았으면 변경을 거절한다.
-디자이너 편집의 IDE undo/save는 Core Git checkpoint와 별도이며 자동 복원을 보장하지 않는다.
+디자이너 편집의 IDE undo/save는 별도이다. 저장된 Git 추적 UTF-8 변경만 turn 관찰 checkpoint 대상으로 삼는다.
+미저장 editor buffer 또는 지원 범위 밖 파일의 자동 복원을 보장하지 않는다.
 
 디자이너 capability가 협상된 연결은 일반 모델 요청에 GUI 개발 지침을 함께 전달한다.
 GUI 작업은 열린 폼의 inspect부터 시작하고 지원하는 시각 속성은 승인된 디자이너 도구로 편집한다.
@@ -265,3 +267,28 @@ The inspect host-tool result delivers this guidance directly to OMP. SDK-specifi
 inside adapters; the Core broker validates advertised operations and approval/revision boundaries.
 RAD adds existing-component reparenting and typed reference linking; Visual Studio exposes XAML syntax
 hierarchy and binding references without claiming a runtime visual tree. See [GUI harness](docs/GUI-HARNESS.md).
+
+## Chat UI services (VSIX 0.9.8 development acceptance)
+
+원본 RADAgent composer/menu/cards/notes 레이아웃을 유지하며 typed action inventory와 ESM bridge로 연결한다.
+`chat.btw.v1`은 tool-free 독립 OMP child, main snapshot fork, topic resume/persistence/취소/삭제를 제공한다.
+BTW 질문은 main turn으로 전송하지 않는다. busy main 질문에는 prompt 직전의 고정 snapshot을 사용한다.
+`chat.preferences.v1`은 프로젝트 private store의 schema-validated preferences이며 provider credential을 저장하지 않는다.
+workspace.files/export/이미지 payload/queue/retry/subagent 로그는 explicit API와 bounded schema로 연결한다.
+Core에는 IDE SDK 타입이 없고 clipboard/picker/open/build/selection은 adapter main thread에서 처리한다.
+
+표시용 session schema 2는 상태·안전한 rich event·첨부·시간을 포함하며 schema 1을 읽을 수 있다.
+Plan mode는 쓰기 권한을 확장하지 않고 fresh `docs/plans/piagent-UUID.md` 생성만 전용 서비스로 허용한다.
+승인된 계획은 hash 검사 후 같은 saved session의 always-ask 모드에서 실행한다.
+Main 사용량과 BTW fork baseline을 차감한 보관 topic 사용량을 분리한다. unknown 비용은 추정하지 않는다.
+
+Native command의 OMP session/worktree switching은 PiAgent private ownership과 충돌하므로 거절한다.
+New conversation / saved sessions 진입점으로 PiAgent lease와 workspace를 함께 관리한다.
+메시지별 대화 분기·복원과 파일-only checkpoint 복원은 구분한다.
+`chat.timeline.v1`은 prompt 직전의 private OMP JSONL과 표시 기록, 지원 파일 snapshot을 저장한다.
+메시지 복원/분기는 원본 saved session을 보존하고 parent가 지정된 새 session에서 실제 OMP context를 fork한다.
+5분 유효 preview/revision, 응답 이후 수동 변경 검사, adapter의 미저장 buffer 검사를 거쳐 승인한다.
+선택한 메시지는 초안으로 돌아오며 자동 제출하지 않는다. Git HEAD/index는 변경하지 않는다.
+RAD는 디스크 복원 후 IDE thread에서 버퍼를 재검사하고 연관 모듈을 ToolsAPI Refresh로 갱신한다.
+Node bootstrap은 Named Pipe를 연결했다 끊는 probe 대신 WaitNamedPipe를 사용해 최초 인증 연결을 방해하지 않는다.
+구현 범위, 검증 근거와 아직 미완료인 acceptance는 [chat UI implementation](docs/CHAT-UI-IMPLEMENTATION.md)을 따른다.

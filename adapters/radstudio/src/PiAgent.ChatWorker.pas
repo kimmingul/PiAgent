@@ -8,8 +8,8 @@ type
     FCancel: THandle;
     FInput, FOutput: TThreadList<string>;
     FClient: TPiPipeClient;
-    FSession, FTurn: string;
-    FApproval, FRestore: TJSONObject;
+    FSession, FTurn, FWorkspace, FRequestSession, FSavedSession, FMode: string;
+    FApproval, FRestore, FMessageRestore: TJSONObject;
     procedure Handle(const Json: string);
     procedure Notification(const Json: string);
     procedure Post(Obj: TJSONObject);
@@ -24,10 +24,12 @@ type
     function Pop: string;
   end;
 implementation
+uses PiAgent.CoreRuntime;
 procedure TPiChatWorker.Post(Obj: TJSONObject);
 var Items: TList<string>;
 begin
   try
+    if (FRequestSession<>'') and (Obj.GetValue<string>('type','')<>'event') and (Obj.GetValue<string>('type','')<>'session') and (Obj.GetValue<string>('type','')<>'disconnected') then Obj.AddPair('ownerSessionId',FRequestSession);
     Items := FOutput.LockList;
     try
       if Items.Count >= 256 then raise Exception.Create('UI event queue limit reached');
@@ -43,7 +45,7 @@ end;
 destructor TPiChatWorker.Destroy;
 begin
   Terminate; if FCancel <> 0 then begin SetEvent(FCancel); WaitFor; CloseHandle(FCancel); end;
-  FInput.Free; FOutput.Free; FApproval.Free; FRestore.Free; inherited;
+  FInput.Free; FOutput.Free; FApproval.Free; FRestore.Free; FMessageRestore.Free; inherited;
 end;
 procedure TPiChatWorker.Enqueue(const Json: string);
 var Items: TList<string>;
@@ -66,11 +68,14 @@ procedure TPiChatWorker.OpenSession(const Saved: string);
 var Params, Reply: TJSONObject;
 begin
   Params := TJSONObject.Create; if Saved <> '' then Params.AddPair('savedSessionId',Saved);
+  if FWorkspace <> '' then Params.AddPair('workspaceUri',FWorkspace);
+  if (Saved <> '') and (FMode <> '') then Params.AddPair('approvalMode',FMode);
   Reply := Rpc('chat.open',Params);
   try
-    FSession := Reply.GetValue<string>('sessionId',''); FTurn := '';
-    FreeAndNil(FApproval); FreeAndNil(FRestore);
-    Reply.AddPair('type','session'); Reply.AddPair('selectionEnabled',TJSONBool.Create(False));
+    FSession := Reply.GetValue<string>('sessionId',''); FSavedSession := Reply.GetValue<string>('savedSessionId',''); FMode := Reply.GetValue<string>('approvalMode','always-ask'); FTurn := '';
+    FreeAndNil(FApproval); FreeAndNil(FRestore);FreeAndNil(FMessageRestore);
+    Reply.AddPair('type','session'); Reply.AddPair('selectionEnabled',TJSONBool.Create(True));
+    Reply.AddPair('attachmentsEnabled',TJSONBool.Create(True));
     Post(TJSONObject(Reply.Clone));
   finally Reply.Free; end;
 end;
@@ -91,18 +96,26 @@ begin
   finally Frame.Free; end;
 end;
 procedure TPiChatWorker.Handle(const Json: string);
-var Msg, Params, Reply: TJSONObject; Action, Name: string;
+var Msg, Params, Reply: TJSONObject; Action, Name, Method, ReplyType: string;
 begin
   Msg := TJSONObject.ParseJSONValue(Json) as TJSONObject;
   if Msg = nil then raise Exception.Create('Invalid UI request');
   try
     Action := Msg.GetValue<string>('action','');
-    // This adapter has no selection capture. The shared composer clears an
-    // optional selection before every prompt; acknowledge that harmless action.
+    FRequestSession := FSession;
+    // Selection is captured on the IDE thread; clearSelection is acknowledged here for smoke clients.
     if Action = 'clearSelection' then Exit;
     if Action = 'connect' then begin
-      if FClient <> nil then Exit;
+      if FTurn <> '' then raise Exception.Create('Finish or cancel the current turn before changing project');
+      if FClient <> nil then begin
+        if SameText(FWorkspace,Msg.GetValue<string>('workspaceUri','')) then Exit;
+        if FSession <> '' then begin Reply := Rpc('chat.close',TJSONObject.Create.AddPair('sessionId',FSession));Reply.Free;end;
+        FWorkspace := Msg.GetValue<string>('workspaceUri','');if FWorkspace = '' then raise Exception.Create('Workspace unavailable');OpenSession;Exit;
+      end;
+      FWorkspace := Msg.GetValue<string>('workspaceUri','');
+      if FWorkspace = '' then raise Exception.Create('Open a RAD Studio project before connecting');
       Name := GetEnvironmentVariable('PIAGENT_PIPE_NAME'); if Name = '' then Name := 'piagent-dev';
+      EnsureInstalledCore(Name,FCancel);
       FClient := TPiPipeClient.Create(Name,FCancel); FClient.OnNotification := Notification;
       FClient.Hello('RAD-Chat','rad-chat-' + IntToStr(GetCurrentProcessId),True); OpenSession; Exit;
     end;
@@ -118,9 +131,34 @@ begin
     end;
     if FSession = '' then raise Exception.Create('Session unavailable');
     Params := TJSONObject.Create.AddPair('sessionId',FSession);
-    if Action = 'setApproval' then begin
-      Params.AddPair('mode',Msg.GetValue<string>('mode',''));Reply := Rpc('chat.setApproval',Params);
-      try FSession := Reply.GetValue<string>('sessionId',''); FTurn := '';Reply.AddPair('type','session');Post(TJSONObject(Reply.Clone)); finally Reply.Free; end; Exit;
+    if Action = 'addWorkspaceFolder' then begin Params.AddPair('path',Msg.GetValue<string>('path',''));Reply := Rpc('chat.addFolder',Params);try Reply.AddPair('type','folderAdded');Post(TJSONObject(Reply.Clone));finally Reply.Free;end;Exit;end;
+    if (Action = 'preferences') or (Action = 'listFiles') or (Action = 'export') or
+      (Action = 'btw') or (Action = 'btwList') or (Action = 'btwStop') or (Action = 'btwDelete') or (Action = 'queuePrompt') then begin
+      Method := ''; ReplyType := '';
+      if Action = 'preferences' then begin Method := 'chat.preferences'; ReplyType := 'preferences'; if Msg.GetValue('values') <> nil then Params.AddPair('values',TJSONValue(Msg.GetValue('values').Clone)); end;
+      if Action = 'listFiles' then begin Method := 'workspace.files'; ReplyType := 'files'; end;
+      if Action = 'export' then begin Method := 'chat.export'; ReplyType := 'exportReady'; end;
+      if Action = 'btw' then begin Method := 'btw.ask'; ReplyType := 'btwAccepted'; Params.AddPair('text',Msg.GetValue<string>('text','')); if Msg.GetValue('topicId') is TJSONString then Params.AddPair('topicId',Msg.GetValue<string>('topicId','')); end;
+      if Action = 'btwList' then begin Method := 'btw.list'; ReplyType := 'btwList';if Msg.GetValue('offset')<>nil then Params.AddPair('offset',TJSONValue(Msg.GetValue('offset').Clone));end;
+      if Action = 'btwStop' then begin Method := 'btw.cancel'; ReplyType := 'btwStopped'; Params.AddPair('topicId',Msg.GetValue<string>('topicId','')); end;
+      if Action = 'btwDelete' then begin Method := 'btw.delete'; ReplyType := 'btwList'; Params.AddPair('topicId',Msg.GetValue<string>('topicId','')); end;
+      if Action = 'queuePrompt' then begin Method := 'omp.control'; ReplyType := 'queueAccepted'; Params.AddPair('command',Msg.GetValue<string>('command','')); Params.AddPair('fields',TJSONObject.Create.AddPair('message',Msg.GetValue<string>('message',''))); end;
+      Reply := Rpc(Method,Params);
+      try Reply.AddPair('type',ReplyType); if Msg.GetValue('id') <> nil then Reply.AddPair('id',TJSONValue(Msg.GetValue('id').Clone)); Post(TJSONObject(Reply.Clone)); finally Reply.Free; end; Exit;
+    end;
+    if (Action = 'listExtensions') or (Action = 'manageExtensions') or (Action = 'toggleMcpServer') or (Action = 'togglePlugin') then begin
+      Params.AddPair('action',Action);
+      if Msg.GetValue('id') <> nil then Params.AddPair('id',TJSONValue(Msg.GetValue('id').Clone));
+      if Msg.GetValue('enabled') <> nil then Params.AddPair('enabled',TJSONValue(Msg.GetValue('enabled').Clone));
+      Reply := Rpc('chat.extensions',Params);
+      try Reply.AddPair('type','extensions');Post(TJSONObject(Reply.Clone));finally Reply.Free;end;
+      if Action = 'togglePlugin' then begin Reply := Rpc('chat.close',TJSONObject.Create.AddPair('sessionId',FSession));Reply.Free;OpenSession(FSavedSession);end;Exit;
+    end;
+    if (Action = 'setApproval') or (Action = 'proceedPlan') then begin
+      if Action = 'setApproval' then begin Params.AddPair('mode',Msg.GetValue<string>('mode',''));Method := 'chat.setApproval';end
+      else begin Params.AddPair('path',Msg.GetValue<string>('path',''));Method := 'chat.proceedPlan';end;
+      Reply := Rpc(Method,Params);
+      try FSession := Reply.GetValue<string>('sessionId',''); FSavedSession := Reply.GetValue<string>('savedSessionId','');FMode := Reply.GetValue<string>('approvalMode','always-ask'); FTurn := '';Reply.AddPair('type','session');Reply.AddPair('attachmentsEnabled',TJSONBool.Create(True));Reply.AddPair('selectionEnabled',TJSONBool.Create(True));Post(TJSONObject(Reply.Clone)); finally Reply.Free; end; Exit;
     end;
     if Action = 'designerReply' then begin
       Params.AddPair('requestId',Msg.GetValue<string>('requestId',''));
@@ -139,16 +177,17 @@ begin
       Reply := Rpc('omp.respond',Params); Reply.Free; Exit;
     end;
     if Action = 'ompControl' then begin
+      if Msg.GetValue('fields')=nil then Msg.AddPair('fields',TJSONObject.Create);
       Params.AddPair('command',Msg.GetValue<string>('command',''));
       if Msg.GetValue('fields') is TJSONObject then Params.AddPair('fields',TJSONValue(Msg.GetValue('fields').Clone))
       else Params.AddPair('fields',TJSONObject.Create);
       Reply := Rpc('omp.control',Params);
-      try Post(TJSONObject.Create.AddPair('type','ompControl').AddPair('command',Msg.GetValue<string>('command','')).AddPair('data',TJSONValue(Reply.Clone))); finally Reply.Free; end; Exit;
+      try Post(TJSONObject.Create.AddPair('type','ompControl').AddPair('command',Msg.GetValue<string>('command','')).AddPair('fields',TJSONValue(Msg.GetValue('fields').Clone)).AddPair('data',TJSONValue(Reply.Clone))); finally Reply.Free; end; Exit;
     end;
     if Action = 'reset' then begin
       Reply := Rpc('chat.close',Params); Reply.Free; OpenSession; Exit;
     end;
-    if Action = 'prompt' then begin Params.AddPair('message',Msg.GetValue<string>('message','')); Reply := Rpc('chat.prompt',Params); Reply.Free; Exit; end;
+    if Action = 'prompt' then begin Params.AddPair('message',Msg.GetValue<string>('message','')); if Msg.GetValue('context') is TJSONObject then Params.AddPair('context',TJSONValue(Msg.GetValue('context').Clone)); if Msg.GetValue('attachments') is TJSONArray then Params.AddPair('attachments',TJSONValue(Msg.GetValue('attachments').Clone)); Reply := Rpc('chat.prompt',Params); Reply.Free; Exit; end;
     if Action = 'cancel' then begin Params.AddPair('turnId',FTurn); Reply := Rpc('chat.cancel',Params); Reply.Free; Exit; end;
     if Action = 'decideChange' then begin
       if (FApproval = nil) or (Msg.GetValue<string>('proposalId','') <> FApproval.GetValue<string>('proposalId','')) then begin Params.Free; raise Exception.Create('Approval unavailable'); end;
@@ -158,6 +197,15 @@ begin
     if Action = 'listCheckpoints' then begin
       Reply := Rpc('changes.list',Params);
       try Post(TJSONObject.Create.AddPair('type','checkpoints').AddPair('items',TJSONValue(Reply.GetValue('checkpoints').Clone))); finally Reply.Free; end; Exit;
+    end;
+    if Action = 'previewMessageRestore' then begin
+      Params.AddPair('seq',TJSONNumber.Create(Msg.GetValue<Integer>('seq',0)));Params.AddPair('branch',TJSONBool.Create(Msg.GetValue<Boolean>('branch',False)));
+      FreeAndNil(FMessageRestore);FMessageRestore := Rpc('chat.previewMessageRestore',Params);Post(TJSONObject.Create.AddPair('type','messageRestorePreview').AddPair('data',TJSONValue(FMessageRestore.Clone)));Exit;
+    end;
+    if Action = 'restoreMessage' then begin
+      if (FMessageRestore=nil) or (Msg.GetValue<string>('messageRestoreId','')<>FMessageRestore.GetValue<string>('messageRestoreId','')) then begin Params.Free;raise Exception.Create('Message preview unavailable');end;
+      Params.AddPair('messageRestoreId',FMessageRestore.GetValue<string>('messageRestoreId',''));Params.AddPair('revision',FMessageRestore.GetValue<string>('revision',''));Reply := Rpc('chat.restoreMessage',Params);
+      try FSession := Reply.GetValue<string>('sessionId','');FSavedSession := Reply.GetValue<string>('savedSessionId','');FTurn := '';Reply.AddPair('type','session');Reply.AddPair('attachmentsEnabled',TJSONBool.Create(True));Reply.AddPair('selectionEnabled',TJSONBool.Create(True));Post(TJSONObject(Reply.Clone));finally Reply.Free;end;FreeAndNil(FMessageRestore);Exit;
     end;
     if Action = 'previewRestore' then begin
       Params.AddPair('checkpointId',Msg.GetValue<string>('checkpointId',''));
@@ -178,7 +226,7 @@ begin
   finally Msg.Free; end;
 end;
 procedure TPiChatWorker.Execute;
-var Items: TList<string>; Json: string; PingAt: UInt64;
+var Items: TList<string>; Json: string; PingAt: UInt64; Failed, ErrorFrame: TJSONObject;
 begin
   PingAt := GetTickCount64;
   try
@@ -186,7 +234,10 @@ begin
       Json := ''; Items := FInput.LockList;
       try if Items.Count > 0 then begin Json := Items[0]; Items.Delete(0); end; finally FInput.UnlockList; end;
       if Json <> '' then try Handle(Json); except on E: Exception do begin
-        Post(TJSONObject.Create.AddPair('type','operationError').AddPair('message',E.Message));
+        Failed := TJSONObject.ParseJSONValue(Json) as TJSONObject;
+        ErrorFrame := TJSONObject.Create.AddPair('type','operationError').AddPair('message',E.Message);
+        try if Failed <> nil then begin ErrorFrame.AddPair('action',Failed.GetValue<string>('action',''));ErrorFrame.AddPair('command',Failed.GetValue<string>('command',''));if Failed.GetValue('fields')<>nil then ErrorFrame.AddPair('fields',TJSONValue(Failed.GetValue('fields').Clone));if Failed.GetValue('id')<>nil then ErrorFrame.AddPair('id',TJSONValue(Failed.GetValue('id').Clone));end;finally Failed.Free;end;
+        Post(ErrorFrame);
         if FSession = '' then FreeAndNil(FClient);
       end; end;
       if FClient <> nil then begin

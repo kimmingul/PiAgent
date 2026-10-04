@@ -22,6 +22,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Secure pipe host build failed' }
     & dotnet build adapters/visualstudio/PiAgent.Transport.Smoke/PiAgent.Transport.Smoke.csproj -c Release
     if ($LASTEXITCODE -ne 0) { throw 'C# transport build failed' }
+    & dotnet build adapters/visualstudio/PiAgent.Bootstrap.Smoke/PiAgent.Bootstrap.Smoke.csproj -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'C# .NET Framework bootstrap build failed' }
     & npm run build
     if ($LASTEXITCODE -ne 0) { throw 'Core/UI TypeScript build failed' }
     $codeSign = if ($SkipCodeSign) { 'false' } else { 'true' }
@@ -48,7 +50,7 @@ try {
         $uiOutput = Join-Path $output 'ui'
         New-Item -ItemType Directory -Path $uiOutput -Force | Out-Null
         Get-ChildItem -LiteralPath ui/src | Where-Object Extension -ne '.ts' | Copy-Item -Destination $uiOutput -Recurse -Force
-        Copy-Item -LiteralPath ui/dist/bridge.js,ui/dist/controller.js,ui/dist/interactions.js -Destination $uiOutput -Force
+        Copy-Item -LiteralPath ui/dist/bridge.js,ui/dist/controller.js,ui/dist/interactions.js,ui/dist/settings.js,ui/dist/contracts.js -Destination $uiOutput -Force
         $loaderArch = if ($platform -eq 'Win32') { 'win-x86' } else { 'win-x64' }
         $loader = Join-Path $env:USERPROFILE ".nuget\packages\microsoft.web.webview2\1.0.4258.31\runtimes\$loaderArch\native\WebView2Loader.dll"
         Copy-Item -LiteralPath $loader -Destination $output
@@ -58,6 +60,8 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "$platform transport smoke build failed" }
             & $compiler -B -Q "-U$(Join-Path $BdsRoot "lib\$platform\release")" "-N0$output" "-E$output" ChatSmoke.dpr
             if ($LASTEXITCODE -ne 0) { throw "$platform chat smoke build failed" }
+            & $compiler -B -Q "-U$(Join-Path $BdsRoot "lib\$platform\release")" "-N0$output" "-E$output" BootstrapSmoke.dpr
+            if ($LASTEXITCODE -ne 0) { throw "$platform bootstrap smoke build failed" }
         } finally { Pop-Location }
         if (!$SkipCodeSign) { & "$PSScriptRoot\sign-artifacts.ps1" -Directory $output }
     }

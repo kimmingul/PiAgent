@@ -8,10 +8,14 @@ export const SESSION_CAPABILITY = 'chat.sessions.v1';
 export const USAGE_CAPABILITY = 'chat.usage.v1';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const canonical=(path:string):string=>process.platform==='win32'?resolve(path).toLowerCase():resolve(path);
-export interface TranscriptLine { role: 'user'|'assistant'|'status'; text: string; }
+export interface TranscriptLine { role: 'user'|'assistant'|'status'|'event'; text: string; seq?:number; ts?:number;started?:number;ended?:number;stopped?:boolean;event?:Record<string,unknown>;attachments?:string[]; }
 export interface SavedSession {
-  version: 1; savedSessionId: string; title: string; createdAt: number; updatedAt: number;
+  version: 1|2; savedSessionId: string; title: string; createdAt: number; updatedAt: number;
   ompFile?: string; approvalMode?:string; transcript: TranscriptLine[];
+  plan?:{path:string;hash:string};
+  needsFork?:boolean;
+  messagePoints?:{seq:number;id:string}[];
+  parent?:{savedSessionId:string;message:number;mode:'branch'|'restore'};
 }
 /** Storage is scoped by the daemon to one workspace and private credential directory. */
 export class SessionStore {
@@ -33,10 +37,15 @@ export class SessionStore {
     const file=join(dir,'session.json'), stat=await lstat(file);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink!==1 || stat.size>3*1024*1024) throw new Error('Invalid saved session');
     const value:unknown=JSON.parse(await readFile(file,'utf8'));
-    if (!isObject(value) || value['version']!==1 || value['savedSessionId']!==id || typeof value['title']!=='string'
+    if (!isObject(value) || ![1,2].includes(Number(value['version'])) || value['savedSessionId']!==id || typeof value['title']!=='string'
       || typeof value['createdAt']!=='number' || typeof value['updatedAt']!=='number' || !Array.isArray(value['transcript'])
-      || value['transcript'].length>200 || value['transcript'].some(line=>!isObject(line)||!['user','assistant','status'].includes(String(line['role']))||typeof line['text']!=='string')) throw new Error('Invalid saved session');
+      || value['transcript'].length>200 || value['transcript'].some(line=>!isObject(line)||!['user','assistant','status','event'].includes(String(line['role']))||typeof line['text']!=='string')) throw new Error('Invalid saved session');
     if(value['approvalMode']!==undefined&&!['always-ask','write','yolo','plan'].includes(String(value['approvalMode'])))throw new Error('Invalid approval mode');
+    if(value['plan']!==undefined&&(!isObject(value['plan'])||!/^docs\/plans\/piagent-[0-9a-f-]{36}\.md$/.test(String(value['plan']['path']))||!/^[0-9a-f]{64}$/.test(String(value['plan']['hash']))))throw new Error('Invalid saved plan');
+    if(value['messagePoints']!==undefined&&(!Array.isArray(value['messagePoints'])||value['messagePoints'].length>50||value['messagePoints'].some(point=>!isObject(point)||!Number.isSafeInteger(point['seq'])||Number(point['seq'])<1||typeof point['id']!=='string'||!uuid.test(point['id']))))throw new Error('Invalid message checkpoints');
+    if(value['needsFork']!==undefined&&typeof value['needsFork']!=='boolean')throw new Error('Invalid pending fork');
+    if(value['parent']!==undefined&&(!isObject(value['parent'])||typeof value['parent']['savedSessionId']!=='string'||!uuid.test(value['parent']['savedSessionId'])||!Number.isSafeInteger(value['parent']['message'])||Number(value['parent']['message'])<1||!['branch','restore'].includes(String(value['parent']['mode']))))throw new Error('Invalid conversation parent');
+    if(value['transcript'].some(line=>isObject(line)&&line['seq']!==undefined&&(!Number.isSafeInteger(line['seq'])||Number(line['seq'])<1)))throw new Error('Invalid message sequence');
     if (value['ompFile']!==undefined) await this.verifyOmpFile(String(id),value['ompFile']);
     return value as unknown as SavedSession;
   }
@@ -52,7 +61,7 @@ export class SessionStore {
     if (id!==undefined) record=await this.load(id);
     else {
       if ((await readdir(this.root)).filter(name=>uuid.test(name)).length>=1000) throw new Error('Saved session limit reached');
-      record={version:1,savedSessionId:randomUUID(),title:'New conversation',createdAt:Date.now(),updatedAt:Date.now(),transcript:[]};
+      record={version:2,savedSessionId:randomUUID(),title:'New conversation',createdAt:Date.now(),updatedAt:Date.now(),transcript:[]};
       await mkdir(this.path(record.savedSessionId));
     }
     const dir=this.path(record.savedSessionId); await this.directory(dir);
@@ -79,6 +88,7 @@ export class SessionStore {
     await this.verifyOmpFile(record.savedSessionId,basename(path));record.ompFile=basename(path);
   }
   async save(record:SavedSession):Promise<void> {
+    record.version=2;
     const dir=this.path(record.savedSessionId);await this.directory(dir);
     // Keep bounded displayed history; the full model conversation remains in OMP's JSONL.
     record.transcript=record.transcript.slice(-200);
@@ -92,10 +102,17 @@ export class SessionLease {
   private tail:Promise<void>=Promise.resolve();private released=false;
   constructor(readonly store:SessionStore,readonly record:SavedSession,private readonly lock:FileHandle) {}
   save():Promise<void> {const next=this.tail.then(()=>this.store.save(this.record));this.tail=next.catch(()=>{});return next;}
-  append(role:TranscriptLine['role'],text:string):void {
+  append(role:TranscriptLine['role'],text:string,timing?:{started:number;ended:number;stopped:boolean},attachments?:string[]):void {
     if (!text) return;
-    const part=text.slice(0,2_000_000);this.record.transcript.push({role,text:part});this.record.updatedAt=Date.now();
+    const part=text.slice(0,2_000_000);this.record.transcript.push({role,text:part,ts:Date.now(),...timing,...(attachments?.length?{attachments}: {})});this.record.updatedAt=Date.now();
     if (role==='user'&&this.record.title==='New conversation') this.record.title=part.replace(/\s+/g,' ').slice(0,100);
+  }
+  appendEvent(event:Record<string,unknown>):void {
+    if(!['thinkingDelta','thinkingEnd','toolStart','toolInputDelta','toolUpdate','toolEnd','todos','subagent','notice','model','plan'].includes(String(event['t'])))return;
+    const last=this.record.transcript.at(-1);
+    if(event['t']==='toolInputDelta'&&last?.role==='event'&&last.event?.['t']==='toolInputDelta'&&last.event['id']===event['id']&&typeof last.event['text']==='string'){last.event['text']=(last.event['text']+String(event['text']??'')).slice(0,32768);return;}
+    if(event['t']==='thinkingDelta'&&last?.role==='event'&&last.event?.['t']==='thinkingDelta'&&typeof last.event['text']==='string'){last.event['text']=(last.event['text']+String(event['text']??'')).slice(0,32768);return;}
+    this.record.transcript.push({role:'event',text:'',ts:Date.now(),event});
   }
   async release():Promise<void> {if(this.released)return;this.released=true;try{await this.save();}finally{await this.lock.close();await unlink(join(this.store.root,this.record.savedSessionId,'active.lock'));}}
 }

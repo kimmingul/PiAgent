@@ -1,8 +1,8 @@
 (function (global) {
   'use strict';
 
-  // Every user message has a git checkpoint of the project just before it (IDE side). Hovering a
-  // message offers going back to that state (files and conversation) or a git branch from there.
+  // Negotiated message snapshots offer conversation restoration or branching.
+  // The host previews the supported file scope before changing any files.
   let post = null;
   function T(key, ...args) {
     return global.T ? global.T(key, ...args) : key;

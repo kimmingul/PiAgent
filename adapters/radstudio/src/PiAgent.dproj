@@ -14,7 +14,7 @@
   </PropertyGroup>
   <ItemGroup><DelphiCompile Include="PiAgent.dpk"><MainSource>MainSource</MainSource></DelphiCompile>
     <DCCReference Include="rtl.dcp"/><DCCReference Include="vcl.dcp"/><DCCReference Include="vcledge.dcp"/><DCCReference Include="designide.dcp"/>
-    <DCCReference Include="PiAgent.ChatWorker.pas"/><DCCReference Include="PiAgent.ChatForm.pas"/>
+    <DCCReference Include="PiAgent.ChatWorker.pas"/><DCCReference Include="PiAgent.ChatForm.pas"/><DCCReference Include="PiAgent.CoreRuntime.pas"/>
     <DCCReference Include="PiAgent.PipeClient.pas"/><DCCReference Include="PiAgent.Wizard.pas"/>
   </ItemGroup>
   <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets"/>

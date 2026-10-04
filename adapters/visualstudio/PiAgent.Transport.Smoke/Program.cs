@@ -14,6 +14,7 @@ using var client = new PipeAdapterClient(name);
 using var cancellation = new CancellationTokenSource();
 var mode = args.Length > 2 ? args[2] : "normal";
 if (mode == "credential") { Console.WriteLine(client.AuthenticationCredentialPath); return; }
+if (mode == "bootstrap") { cancellation.CancelAfter(30000);await CoreRuntime.EnsureRunningAsync(name,cancellation.Token);Console.WriteLine("Core bootstrap connected");return; }
 if (mode == "controls")
 {
     cancellation.CancelAfter(60000);
@@ -31,6 +32,24 @@ if (mode == "controls")
     var extensions = await client.RequestAsync("chat.extensions", new JObject { ["sessionId"] = opened["sessionId"], ["action"] = "listExtensions" }, cancellation.Token);
     await client.RequestAsync("chat.close", new JObject { ["sessionId"] = opened["sessionId"] }, cancellation.Token);
     Console.WriteLine(new JObject { ["workspaceUri"] = workspace, ["modes"] = modes, ["plugins"] = extensions["plugins"], ["savedSessionPreserved"] = true }.ToString(Formatting.None)); return;
+}
+if (mode == "ui-services")
+{
+    cancellation.CancelAfter(30000);
+    await client.InitializeAsync("visual-studio", version, "ui-services-smoke", cancellation.Token, chat:true, writes:true);
+    var opened=await client.RequestAsync("chat.open",new JObject {["workspaceUri"]=args[3]},cancellation.Token);
+    var sid=opened["sessionId"];
+    async Task<JObject> Call(string method,JObject? fields=null) {var parameters=fields??new JObject();parameters["sessionId"]=sid;return await client.RequestAsync(method,parameters,cancellation.Token);}
+    var prefs=await Call("chat.preferences");var values=(JObject)prefs["values"]!;values["fontSize"]=17;
+    var saved=await Call("chat.preferences",new JObject {["values"]=values});if((int?)saved["values"]?["fontSize"]!=17)throw new IOException("Preferences not applied");
+    var files=await Call("workspace.files");if(files["items"] is not JArray)throw new IOException("Files missing");
+    var export=await Call("chat.export");if(!File.Exists((string)export["path"]!))throw new IOException("Export missing");
+    var side=await Call("btw.ask",new JObject {["text"]="side question"});if((bool?)side["accepted"]!=true)throw new IOException("BTW rejected");
+    await Call("btw.cancel",new JObject {["topicId"]=side["topicId"]});
+    var topics=await Call("btw.list");if(topics["items"] is not JArray)throw new IOException("BTW list missing");
+    await Call("btw.delete",new JObject {["topicId"]=side["topicId"]});
+    var commands=await Call("omp.control",new JObject {["command"]="get_available_commands",["fields"]=new JObject()});if(commands["commands"] is not JArray)throw new IOException("Commands missing");
+    await Call("chat.close");Console.WriteLine("{\"preferences\":true,\"files\":true,\"export\":true,\"btw\":true,\"commands\":true}");return;
 }
 if (mode == "changes")
 {

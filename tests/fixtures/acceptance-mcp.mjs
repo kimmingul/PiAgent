@@ -1,0 +1,3 @@
+import readline from 'node:readline';
+const lines=readline.createInterface({input:process.stdin});
+lines.on('line',line=>{const message=JSON.parse(line);if(message.id===undefined)return;const result=message.method==='initialize'?{protocolVersion:message.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'piagent-acceptance',version:'1.0.0'}}:message.method==='tools/list'?{tools:[{name:'acceptance_echo',description:'Echo isolated acceptance input',inputSchema:{type:'object',properties:{text:{type:'string'}},required:['text']}}]}:message.method==='tools/call'?{content:[{type:'text',text:String(message.params.arguments?.text??'acceptance')}]}:{};process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:message.id,result})+'\n');});

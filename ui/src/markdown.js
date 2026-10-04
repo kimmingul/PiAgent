@@ -14,7 +14,7 @@
     return escapeHtml(str);
   }
 
-  const FILE_REF_RE = /(?:([A-Za-z]:[\\/](?:[^\s\\/:*?"<>|()]+[\\/])*[^\s\\/:*?"<>|()]+\.(?:pas|dpr|dproj|dfm|inc|PAS|DPR|DPROJ|DFM|INC))(?:(?:\((\d+)(?:,\s*(\d+))?\))|(?::(\d+)))?)|(?:\b((?:[A-Za-z0-9_.\-]+[\\/])*[A-Za-z0-9_]+\.(?:pas|dpr|dproj|dfm|inc|PAS|DPR|DPROJ|DFM|INC))(?:(?:\((\d+)(?:,\s*(\d+))?\))|(?::(\d+))))/g;
+  const FILE_REF_RE = /(?:([A-Za-z]:[\\/](?:[^\s\\/:*?"<>|()]+[\\/])*[^\s\\/:*?"<>|()]+\.(?:dproj|csproj|vbproj|pas|dpr|dfm|fmx|inc|xaml|resx|cpp|hpp|json|tsx|jsx|cs|vb|ts|js|h))(?![A-Za-z0-9_])(?:(?:\((\d+)(?:,\s*(\d+))?\))|(?::(\d+)))?)|(?:\b((?:[A-Za-z0-9_.\-]+[\\/])*[A-Za-z0-9_]+\.(?:dproj|csproj|vbproj|pas|dpr|dfm|fmx|inc|xaml|resx|cpp|hpp|json|tsx|jsx|cs|vb|ts|js|h))(?![A-Za-z0-9_])(?:(?:\((\d+)(?:,\s*(\d+))?\))|(?::(\d+))))/gi;
 
   function linkFileRefs(text) {
     if (!text) return '';

@@ -520,3 +520,63 @@ This repeat validates VCL; it does not add FMX live coverage or native AMD64 har
 - Only VS2026 and Core were selected for this installation; VS2022 and RAD live
   validation were not performed in this pass. Encrypted-PIN provider caching remains
   a separate unverified feature; authentication dialogs were not automated.
+
+## 2026-10-05 chat UI implementation (development build)
+
+- Core strict TypeScript build and `npm test`: 83/83 passed. New regression tests include BTW process isolation,
+  preferences acknowledgement/schema/concurrent writes, immutable plan execution, image payload/bounds,
+  native/designer observed file checkpoint restoration, schema migration, old-owner replies, all 33 renderer actions,
+  tool argument ownership and actual secure Named Pipe services.
+- `tests/adapters.integration.mjs`: 15/15 passed, including C# preferences/files/export/BTW and Delphi Win64 chat
+  worker new UI services plus approval/restore/resume. Transport-only fixtures for VS2022/Win32 are metadata tests;
+  no VS2022 or RAD32 IDE runtime acceptance was performed.
+- VSIX 0.9.6 and RAD Studio Win64 BPL compiled with `-SkipCodeSign`. Native RAD selection snapshot uses
+  IOTAEditorServices.TopView.Block; actual IDE selection/dirty document acceptance remains pending.
+- Actual bundled page in WebView2: BTW composer and notes failures preserve drafts, successful composer ack clears
+  the draft, folded answer cards/notes render, five settings areas and save failure work, @ files autocomplete,
+  no JS/CSP errors. Twelve docking/tab/hide transitions preserve browser/DOM/Korean draft.
+- Actual OMP 18.5.0 and separately downloaded 18.6.0 executables passed discovery/private session/export/add-dir
+  with a space-containing folder, BTW model answer 4 and resumed follow-up 8, and byte-unchanged main session.
+  These are isolated tool-free model probes, not production IDE project validation. Installed OMP was not upgraded.
+- Evidence: artifacts/chat-ui-implementation/{tests.log,adapters.log,build.log,webview.log,real-omp-18.6.log}.
+- Installed signed VSIX 0.9.5 / setup F97E42076F6896EF4B9083175A650B51BA450BE16A1619CF4A1C5B15D39F5322
+  remain unchanged. USB signing credential DPAPI file is absent; no PIN dialogs were automated.
+- Message-level conversation/file branching restore, complete native checkpoint coverage and installed VS2026 +
+  RAD13.2 Win64 feature acceptance remain pending. See CHAT-UI-IMPLEMENTATION.md for exact support boundaries.
+
+## 2026-10-05 message timeline and installed acceptance update
+
+- Current unsigned dev VSIX 0.9.8 and RAD13.2 Win64 BPL are installed on this ARM64 PC.
+- Full regression 89/89; authenticated C#/Delphi adapter integration 15/15; shipped WebView2 UI passed
+  message branch/restore, failed plan ack recovery, CSP checks and twelve docking transitions.
+- Actual VS2026 and RAD64 cold bootstrap, own project binding, actual OMP model/approval, conversation branch,
+  message restore and source-session preservation verified. VS CRLF bytes restored and dirty editor blocked.
+- Actual FMX ToolsAPI Caption changed under approval, then original fmx bytes restored. Found and fixed stale
+  designer state via IOTAModule.Refresh; repeated live test restored Object Inspector/loaded form values.
+- Actual VS pinned tab return, + IDE build, MCP off/on/off, linked local plugin off/on, plan/hash rejection,
+  usage and both IDE native HTML export verified. Test plugin was removed; unrelated global settings preserved.
+- Evidence and remaining per-action installed UI cases are in MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md.
+  This is not a claim that every installed UI scenario passed. Signed installer creation remains on hold.
+- Latest acceptance release: `0.9.0-acceptance-20261004202000`, package `piagent-2026-10-04T20-17-13-590Z`.
+- Both IDEs passed live cancellation/reuse, independent BTW stop, queued follow-up cancellation, model/thinking
+  and four access modes, native source-reference opening, copy, settings title/state preservation, selection
+  round-trip, @ completion, MCP/plugin off/on and private folder addition. RAD plan/revise/proceed completed a
+  real FMX inspection without writes. VS actual OMP subagent 3+4=7 and detailed log sheet passed.
+- Found and fixed unanswered abort RPC timeout, preferences resetting dynamic header/busy state, RAD MCP
+  editor not showing, Pascal-only file references and unowned legacy RAD folder-picker modality.
+- `timeline-conditional-webview.log` validates the **installed** UI assets in real WebView2, including a
+  controlled provider-retry cancellation and twelve dock/tab/hide transitions. Actual provider failure was
+  not induced. Test plugin removed; original global plugin settings restored.
+
+## 2026-10-05 version 0.9.9 release preparation
+
+- Root/workspaces/VSIX/setup versions aligned to 0.9.9.
+- Fresh regression 89/89, adapter integration 15/15, VSIX and RAD Win32/Win64 builds passed.
+- Unified installer payload hashes and bundled ARM64/x64 authenticated runtime probes passed;
+  setup diagnostics detected both RAD architectures and VS2022/2026. Installer safety tests passed.
+- Final installed acceptance additionally verified VS native MCP editor and RAD actual subagent log
+  (3+4=7 / Result submitted). RAD HTTPS click opened another Edge Example Domain tab; final
+  browser capture stopped because Computer Use could not enforce URL policy with confidence.
+- User explicitly requested signing and release. Signing is pending local DPAPI PIN registration;
+  no unencrypted credential, PIN prompt automation, or unsigned public setup release is used.
+- See RELEASE-0.9.9.md and MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md for remaining limitations.

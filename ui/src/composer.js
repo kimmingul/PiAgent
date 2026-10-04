@@ -7,6 +7,7 @@
   let input, sendBtn, slash;
   let commands = [];
   let files = null;
+  let fileFailure = false;
   let menuKind = '';
   let atStart = 0;
   let matches = [];
@@ -129,8 +130,8 @@
       if (files === null) { files = []; post({ t: 'listFiles' }); }
       menuKind = 'at';
       atStart = at.start;
-      const part = at.part.replace(/\//g, '\\');
-      matches = files.filter(f => f.toLowerCase().includes(part))
+      const part = at.part.replace(/\\/g, '/');
+      matches = files.filter(f => f.toLowerCase().replace(/\\/g, '/').includes(part))
         .sort((a, b) => a.length - b.length).slice(0, 12).map(f => ({ name: f, description: '' }));
       renderMenu();
       return;
@@ -302,7 +303,7 @@
     input = $('input');
     sendBtn = $('send-btn');
     slash = $('slash-menu');
-    input.addEventListener('input', () => { active = 0; autosize(); updateSlash(); refreshSend(); });
+    input.addEventListener('input', () => { if (fileFailure) { files = null; fileFailure = false; } active = 0; autosize(); updateSlash(); refreshSend(); });
     input.addEventListener('click', () => updateSlash());
     input.addEventListener('keydown', onKeyDown);
     input.addEventListener('blur', () => { setTimeout(() => { slash.hidden = true; }, 150); });
@@ -338,7 +339,7 @@
     isBusy: () => !!state.busy || !state.connected,
     context: renderChips,
     commands: items => { commands = Array.isArray(items) ? items : []; },
-    files: items => { files = Array.isArray(items) ? items : []; if (menuKind === 'at') updateSlash(); },
+    files: (items, error) => { fileFailure = !!error; files = items === null ? null : Array.isArray(items) ? items : []; if (menuKind === 'at') updateSlash(); },
     focus: () => input && input.focus()
   };
 })(typeof window !== 'undefined' ? window : globalThis);

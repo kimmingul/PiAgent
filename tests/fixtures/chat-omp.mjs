@@ -12,6 +12,7 @@ if (process.argv[2] === 'plugin') {
 const directoryIndex = process.argv.indexOf('--session-dir');
 const directory = directoryIndex === -1 ? undefined : process.argv[directoryIndex + 1];
 let sessionFile, previousMessages=[];
+if(directory){mkdirSync(directory,{recursive:true});sessionFile=join(directory,randomUUID()+'.jsonl');const resume=process.argv.indexOf('--resume'),fork=process.argv.indexOf('--fork');if(resume!==-1)sessionFile=process.argv[resume+1];else writeFileSync(sessionFile,fork!==-1?readFileSync(process.argv[fork+1]):'');previousMessages=readFileSync(sessionFile,'utf8').split('\n').filter(Boolean).map(JSON.parse);}
 const emit = frame => process.stdout.write(JSON.stringify(frame) + '\n');
 const pidFile = process.argv.indexOf('--pid-file');
 if (pidFile !== -1) writeFileSync(process.argv[pidFile + 1], String(process.pid));
@@ -34,10 +35,14 @@ lines.on('line', line => {
     response({ argv: process.argv.slice(2) }); return;
   }
   if (command.type === 'switch_session') { sessionFile=command.sessionPath;previousMessages=readFileSync(sessionFile,'utf8').split('\n').filter(Boolean).map(JSON.parse);response({cancelled:false});return; }
+  if (command.type === 'fork') { const source=sessionFile;sessionFile=join(directory,randomUUID()+'.jsonl');writeFileSync(sessionFile,readFileSync(source));response({cancelled:false});return; }
+  if(command.type==='export_html'){writeFileSync(command.outputPath,'<!doctype html><title>Fixture export</title>');response({path:command.outputPath});return;}
+  if(command.type==='get_available_commands'){response({commands:[{name:'model',description:'Model'},{name:'fixture-command',description:'Fixture'}]});return;}
   if (command.type === 'get_state') { response({sessionFile,model:{provider:'fixture',id:'test-model'}});return; }
   if (command.type === 'get_session_stats') { response({tokens:{input:10,output:20,total:30},cost:0.004,premiumRequests:0,contextUsage:{tokens:30,contextWindow:200000}});return; }
   if (command.type === 'set_host_tools') { tools = command.tools; response({}); return; }
   if (command.type === 'abort') {
+    if (process.argv.includes('--ignore-abort')) return;
     timers.forEach(clearTimeout); timers = []; active = false;
     emit({ type: 'agent_end', isTerminal: true }); response({}); return;
   }
@@ -47,6 +52,14 @@ lines.on('line', line => {
   if (command.message === 'reject') { emit({ type: 'response', id: command.id, command: 'prompt', success: false }); active = false; return; }
   if (command.message === 'local') { response({ agentInvoked: false }); return; }
   response({});
+  if(command.message.startsWith('/mcp ')) {
+    timers.push(setTimeout(()=>{
+      const [,action,id]=command.message.split(' '),path=join(process.cwd(),'.omp','mcp.json');
+      const config=JSON.parse(readFileSync(path,'utf8'));config.mcpServers[id].enabled=action==='enable';
+      writeFileSync(path,JSON.stringify(config));active=false;
+      emit({type:'prompt_result',agentInvoked:false,status:'completed',sessionSettled:true});
+    },200));return;
+  }
   const prior=previousMessages.slice(); previousMessages.push(command.message);
   if(sessionFile) appendFileSync(sessionFile,JSON.stringify(command.message)+'\n');
   if(command.message==='recall') {emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:prior.join('|')}});emit({type:'agent_end',isTerminal:true});return;}

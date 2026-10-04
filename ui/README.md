@@ -12,11 +12,15 @@ Future capabilities must use the original interaction points, rather than add a 
 ## Integration boundary
 
 - `chat.html`: original structure; PiAgent title, local-only CSP and ESM bridge added.
-- `chat.js`: original renderer; one outbound `piagentPost` hook added.
-- `composer.js`: capability guard disables unsupported mid-turn queueing without changing layout.
-- Other original JS/CSS/assets: unchanged.
+- `chat.js`: outbound hook, safe schema-2 rich history and acknowledged clipboard/BTW callbacks.
+- `composer.js`: negotiated queue capability and bounded workspace autocomplete/error recovery.
+- `clicks.js`: native copy acknowledgement; `plusmenu.js`: actual toggle results and distinct manage actions.
+- `btw.js`: list pagination and success acknowledgements for notes/follow-up drafts.
+- `approval.js`: failed plan execution restores original card actions and displays the actual host error.
+- Other original JS/CSS/assets: unchanged. Reference hashes are preserved as original provenance; changed modules are documented here.
 - `bridge.ts`: WebView transport, locale loading and original sheet-based list host.
 - `controller.ts`: strict TypeScript translation between RADAgent UI frames and PiAgent host actions.
+- `settings.ts`: original sheet entry point and five settings areas; `contracts.ts`: original 33 action inventory.
 - No Core or IDE-specific business logic is placed in the renderer.
 
 Chat connects automatically. The title opens saved sessions; + in the top bar starts a new session.
@@ -25,15 +29,24 @@ from `/restore` or the settings sheet, requires a preview and approval, and rest
 `/selection` captures IDE selection; click its original composer chip to include it in a question.
 An unchecked chip never attaches code. Failed submissions retain the original draft.
 
-OMP model/thinking selection is connected when omp.controls.v1 is negotiated. OMP select/confirm/input/editor
-requests use the original card styles through interactions.ts. Approval modes other than always-ask, BTW,
-attachments, export, plugins and MCP controls are not yet fully connected through PiAgent Core. Their original controls
-remain in place but disabled. Mid-turn steering/queueing is not supported; Enter leaves the draft unsent
-without clearing the draft. No direct RPC passthrough or automatic approval is introduced.
+OMP model/thinking selection, approvals, independent BTW, preferences, attachments, export, files/links/copy,
+queue/retry/subagent controls now connect through explicit Core/adapter endpoints. Controls are enabled from
+negotiated session flags. Settings save and submitted drafts are acknowledged before local success is shown.
+Native credentials stay OMP-owned. See [implementation/limits](../docs/CHAT-UI-IMPLEMENTATION.md) for preset/account
+settings delegation, bounded file checkpoint coverage and the installed IDE acceptance matrix.
+
+Original message hover actions now use negotiated `chat.timeline.v1`: preview and approve a restore/branch,
+preserve the source conversation, reopen the context before that message and return its text as a draft.
+This differs from file-only `/restore`. Unsupported snapshot files are not silently claimed as restored.
+
+`markdown.js` retains the original renderer and styling; file-reference recognition additionally accepts
+C#/VB/XAML/project and FMX references (case-insensitive), with extension boundaries and original line navigation.
+Original provenance hashes remain in `reference-files.json`; this integration change is excluded from the byte-retention guard.
+The bridge replays current status/capability gates after preference translations so dynamic titles and busy state survive settings.
 
 ## Verification
 
 `npm test` tests bridge state transitions and asset completeness. Build PiAgent.WebView.Smoke
 and run `--ui <extracted-VSIX-ui-folder>` to test the actual bundled page in WebView2, including
 CSP, Markdown, safe text rendering, original approval cards and 12 docking transitions.
-Both VSIX and RAD Studio BPL packaging include the full UI asset tree plus compiled bridge/controller/interactions.
+Both VSIX and RAD Studio BPL packaging include the full UI asset tree plus compiled bridge/controller/interactions/settings/contracts.

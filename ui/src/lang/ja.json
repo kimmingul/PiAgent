@@ -310,7 +310,7 @@
   "page.chat.queuedSteer": "実行中のターンに割り込み",
   "page.chat.scrollBottom": "↓ 新しいメッセージ",
   "page.checkpoints.branchLabel": "⑂ ここからブランチ",
-  "page.checkpoints.branchTitle": "このメッセージを送信する前の状態から新しい git ブランチを作成します",
+  "page.checkpoints.branchTitle": "このメッセージの直前から別の会話を作成します。対応するファイル変更を先に確認します",
   "page.checkpoints.revertLabel": "↶ ここまで戻す",
   "page.checkpoints.revertTitle": "ファイルと会話をこのメッセージを送信する前の状態に戻します",
   "page.composer.approvalAlwaysAsk": "常に確認",

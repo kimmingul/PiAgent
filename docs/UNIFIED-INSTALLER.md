@@ -1,6 +1,6 @@
 # PiAgent unified Windows installer
 
-Output: `dist/PiAgent-Setup-0.9.0.exe`. A single self-contained setup supports Windows
+Output: `dist/PiAgent-Setup-0.9.9.exe`. A single self-contained setup supports Windows
 x64 and ARM64. The setup executable uses Windows x64 compatibility on ARM64; installed
 Node.js, .NET and OMP use the host's native architecture. No system PATH or runtime is replaced.
 
@@ -39,9 +39,9 @@ prerequisite; existing installations on this PC already have it. Git is required
 workspace writes. Initial Core settings are read-only, with no workspace and no login autorun.
 
 Per-user destination: `%LOCALAPPDATA%/Programs/PiAgent`. No administrator rights are requested.
-Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. VSIX 0.9.3 automatically
-starts the installed Core when opening its chat; RAD users can start Core from its shortcut before
-opening chat (RAD View/Tools > PiAgent, VS Tools > PiAgent: Open Chat). Configure workspace
+Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. VSIX 0.9.9 and the RAD
+adapter automatically start the installed Core when opening chat
+(RAD View/Tools > PiAgent, VS Tools > PiAgent: Open Chat). Configure workspace
 and write permissions in the installed `core/settings.json` only when needed.
 
 Windows Installed Apps lists PiAgent. Uninstallation requires closing selected IDEs and this

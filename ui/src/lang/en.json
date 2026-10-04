@@ -310,7 +310,7 @@
   "page.chat.queuedSteer": "steering the running turn",
   "page.chat.scrollBottom": "↓ New messages",
   "page.checkpoints.branchLabel": "⑂ Branch from here",
-  "page.checkpoints.branchTitle": "Create a new git branch from the state before this message was sent",
+  "page.checkpoints.branchTitle": "Create a separate conversation from before this message; preview supported file changes first",
   "page.checkpoints.revertLabel": "↶ Rewind to here",
   "page.checkpoints.revertTitle": "Restore files and conversation to the state before this message was sent",
   "page.composer.approvalAlwaysAsk": "Always ask",

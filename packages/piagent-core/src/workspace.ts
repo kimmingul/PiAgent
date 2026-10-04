@@ -68,6 +68,20 @@ export class WorkspaceReader {
   private async text(path: string, signal: AbortSignal): Promise<string> {
     return new TextDecoder('utf-8', { fatal: true }).decode(await this.bytes(path, signal));
   }
+  /** Autocomplete shares the read service's exclusions and never follows links. */
+  async files():Promise<string[]> {
+    const result:string[]=[];let entries=0,bytes=0;
+    const visit=async(dir:string,depth:number):Promise<void>=>{
+      if(depth>20||entries>=5000||result.length>=1000)return;
+      for await(const item of await opendir(dir)) {
+        if(++entries>5000||result.length>=1000)break;
+        if(denied(item.name)||item.isSymbolicLink())continue;
+        const path=join(dir,item.name);
+        if(item.isDirectory())await visit(path,depth+1);
+        else if(item.isFile()){const file=relative(this.root,path).replaceAll('\\','/');const size=Buffer.byteLength(JSON.stringify(file))+1;if(bytes+size>500000)return;bytes+=size;result.push(file);}
+      }
+    };await visit(this.root,0);return result.sort();
+  }
   /** Internal snapshot for approved changes; never exposes an arbitrary filesystem path on the wire. */
   async snapshot(value: unknown, signal: AbortSignal): Promise<{ absolute: string; bytes: Buffer }> {
     const absolute = await this.path(value);

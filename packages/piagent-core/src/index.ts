@@ -44,17 +44,24 @@ export class Session {
     let value: unknown;
     try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)) as unknown; }
     catch { return fallback; }
-    if (!isObject(value) || typeof value['method'] !== 'string' || !['designer.reply','designer.decide','omp.respond','omp.control','chat.extensions','chat.setApproval','chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore','sessions.list','chat.usage'].includes(value['method'])
+    if (!isObject(value) || typeof value['method'] !== 'string' || !['chat.previewMessageRestore','chat.restoreMessage','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','designer.reply','designer.decide','omp.respond','omp.control','chat.extensions','chat.setApproval','chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore','sessions.list','chat.usage'].includes(value['method'])
       || !('id' in value) || !validId(value['id']) || fallback?.error?.code !== -32601) return fallback;
     const id = value['id'];
     if (!this.ready) return failure(id, -32002, 'Handshake required');
     if (!this.chat || !this.negotiated.includes(CHAT_CAPABILITY)) return failure(id, -32005, 'Capability not negotiated');
+    if(['chat.previewMessageRestore','chat.restoreMessage'].includes(value['method'])&&!this.negotiated.includes('chat.timeline.v1'))return failure(id,-32005,'Message timeline capability not negotiated');
+    if(value['method'].startsWith('btw.')&&!this.negotiated.includes('chat.btw.v1'))return failure(id,-32005,'BTW capability not negotiated');
+    if(value['method']==='chat.preferences'&&!this.negotiated.includes('chat.preferences.v1'))return failure(id,-32005,'Preferences capability not negotiated');
     if (value['method'] === 'chat.prompt' && isObject(value['params']) && 'context' in value['params']
       && !this.negotiated.includes(CONTEXT_CAPABILITY)) return failure(id, -32005, 'Selection context capability not negotiated');
     if (!isObject(value['params'] ?? {})) return failure(id, -32602, 'Invalid params');
     if ((value['method']==='chat.setApproval'||(value['method']==='chat.open'&&isObject(value['params'])&&'approvalMode' in value['params']))&&!this.negotiated.includes(APPROVAL_MODE_CAPABILITY)) return failure(id,-32005,'Approval mode capability not negotiated');
     if (value['method']==='chat.open'&&isObject(value['params'])&&'workspaceUri' in value['params']&&!this.negotiated.includes(WORKSPACE_BIND_CAPABILITY))return failure(id,-32005,'Workspace binding capability not negotiated');
-    try { return success(id, await this.chat.handle(value['method'], (value['params'] ?? {}) as Record<string, unknown>, this.negotiated.includes(WORKSPACE_CAPABILITY), this.negotiated.includes(EDIT_CAPABILITY),this.negotiated.includes(SESSION_CAPABILITY),this.negotiated.includes(USAGE_CAPABILITY),this.negotiated.includes(BATCH_CAPABILITY),this.negotiated.includes(OMP_CONTROL_CAPABILITY),this.negotiated.includes(DESIGNER_CAPABILITY))); }
+    try {
+      const result=await this.chat.handle(value['method'], (value['params'] ?? {}) as Record<string, unknown>, this.negotiated.includes(WORKSPACE_CAPABILITY), this.negotiated.includes(EDIT_CAPABILITY),this.negotiated.includes(SESSION_CAPABILITY),this.negotiated.includes(USAGE_CAPABILITY),this.negotiated.includes(BATCH_CAPABILITY),this.negotiated.includes(OMP_CONTROL_CAPABILITY),this.negotiated.includes(DESIGNER_CAPABILITY),this.negotiated.includes('chat.timeline.v1'));
+      if(['chat.open','chat.setApproval','chat.proceedPlan','chat.restoreMessage'].includes(value['method'])){result['messageRestoreEnabled']=result['messageRestoreEnabled']===true&&this.negotiated.includes('chat.timeline.v1');result['btwEnabled']=result['btwEnabled']===true&&this.negotiated.includes('chat.btw.v1');result['preferencesEnabled']=result['preferencesEnabled']===true&&this.negotiated.includes('chat.preferences.v1');}
+      return success(id,result);
+    }
     catch (error) { return failure(id, error instanceof ChatError ? error.code : -32010,
       error instanceof Error ? error.message : 'Chat failed'); }
   }
@@ -113,7 +120,7 @@ export class Session {
       return failure(id, -32001, 'Unsupported protocol version', { supportedProtocolVersions: [PROTOCOL_VERSION] });
     }
     const negotiated: string[] = offered.filter(capability => capability === 'core.ping'
-      || (this.chat && (capability === CHAT_CAPABILITY || (capability===APPROVAL_MODE_CAPABILITY&&this.chat.supportsSessions&&offered.includes(CHAT_CAPABILITY)) || (capability===WORKSPACE_BIND_CAPABILITY&&this.chat.supportsWorkspaceBinding&&offered.includes(CHAT_CAPABILITY)) || ([OMP_CONTROL_CAPABILITY,DESIGNER_CAPABILITY].includes(capability) && offered.includes(CHAT_CAPABILITY)) || (capability === CONTEXT_CAPABILITY && offered.includes(CHAT_CAPABILITY))
+      || (this.chat && (capability === CHAT_CAPABILITY || (capability===APPROVAL_MODE_CAPABILITY&&this.chat.supportsSessions&&offered.includes(CHAT_CAPABILITY)) || (capability===WORKSPACE_BIND_CAPABILITY&&this.chat.supportsWorkspaceBinding&&offered.includes(CHAT_CAPABILITY)) || ([OMP_CONTROL_CAPABILITY,DESIGNER_CAPABILITY,'chat.btw.v1','chat.preferences.v1','chat.timeline.v1'].includes(capability) && offered.includes(CHAT_CAPABILITY)) || (capability === CONTEXT_CAPABILITY && offered.includes(CHAT_CAPABILITY))
         || (capability === WORKSPACE_CAPABILITY && this.chat.supportsWorkspace && offered.includes(CHAT_CAPABILITY))
         || (capability === SESSION_CAPABILITY && this.chat.supportsSessions && offered.includes(CHAT_CAPABILITY))
         || (capability === USAGE_CAPABILITY && this.chat.supportsUsage && offered.includes(CHAT_CAPABILITY))

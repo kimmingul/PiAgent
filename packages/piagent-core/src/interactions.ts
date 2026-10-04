@@ -9,7 +9,11 @@ export class Interactions {
     if(Buffer.byteLength(JSON.stringify(frame))>256*1024)throw new Error('OMP interaction exceeds limit');
     const method=frame['method'],id=frame['id'];
     if(method==='cancel') {this.remove(String(frame['targetId']));this.emit(frame);return;}
-    if(!['select','confirm','input','editor'].includes(String(method))) {this.emit(frame);return;}
+    if(!['select','confirm','input','editor'].includes(String(method))) {
+      if(['notify','setStatus','setTitle','setWidget','set_editor_text','open_url'].includes(String(method))){this.emit(frame);return;}
+      if(typeof id==='string')void this.omp.uiResponse(id,{cancelled:true}).catch(()=>{});
+      this.emit({type:'extension_ui_request',method:'notify',message:'Unsupported OMP interaction was cancelled: '+String(method)});return;
+    }
     if(typeof id!=='string'||!id||id.length>256||this.pending.has(id)||this.pending.size>=16)throw new Error('Invalid OMP interaction');
     if(method==='select'&&(!Array.isArray(frame['options'])||frame['options'].length>1024||!frame['options'].every(option=>typeof option==='string')))throw new Error('Invalid OMP select options');
     if(Buffer.byteLength(JSON.stringify(frame))>256*1024)throw new Error('OMP interaction exceeds limit');

@@ -4,6 +4,7 @@
     <LangVersion>latest</LangVersion><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget><Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <Compile Include="../PiAgent.Vsix/ChatWebView.cs" Link="ChatWebView.cs" />
   </ItemGroup>

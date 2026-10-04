@@ -102,6 +102,25 @@ test('chat cancellation is cooperative and the session supports another turn', w
     await until(() => events.some(event => event.kind === 'completed'));
   } finally { await env.close(); }
 });
+test('unresponsive OMP abort is acknowledged immediately and retires within a bounded deadline', windows, async () => {
+  const env = await setup({ omp: { executable: process.execPath, executableArgs: [fixture, '--ignore-abort'], cwd: process.cwd(), requestTimeoutMs: 30_000, shutdownTimeoutMs: 100 } });
+  try {
+    const client = await env.client(), events = [];
+    client.on('chat.event', event => events.push(event));
+    const sessionId = (await client.request('chat.open')).result.sessionId;
+    const turnId = (await client.request('chat.prompt', { sessionId, message: 'wait' })).result.turnId;
+    const started = Date.now();
+    assert.equal((await client.request('chat.cancel', { sessionId, turnId })).result.requested, true);
+    assert.ok(Date.now() - started < 1000, 'abort admission must not await the provider');
+    assert.equal((await client.request('core.ping', { nonce: 'aborting' })).result.pong, true);
+    for (let i = 0; i < 700 && !events.some(event => event.kind === 'closed'); i++) await delay(10);
+    assert.ok(events.some(event => event.kind === 'closed'), 'unresponsive owned child must retire');
+    assert.equal(events.filter(event => event.kind === 'cancelled').length, 1);
+    assert.ok(!events.some(event => event.kind === 'error'));
+    assert.ok(Date.now() - started < 8000);
+    assert.ok((await client.request('chat.open')).result.sessionId, 'session lease must be released');
+  } finally { await env.close(); }
+});
 test('chat reports model failures and splits large Unicode deltas without breaking surrogate pairs', windows, async () => {
   const env = await setup();
   try {

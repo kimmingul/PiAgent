@@ -9,7 +9,7 @@ type
     FWorker: TPiChatWorker;
     FReady: Boolean;
     FWorkspace: string;
-    FApproval, FRestore: TJSONObject;
+    FApproval, FRestore, FSelection, FMessageRestore: TJSONObject;
     FLoader: NativeUInt;
     procedure Created(Sender: TCustomEdgeBrowser; AResult: HRESULT);
     procedure MessageReceived(Sender: TCustomEdgeBrowser; Args: TWebMessageReceivedEventArgs);
@@ -20,6 +20,8 @@ type
     procedure Poll(Sender: TObject);
     procedure Post(const Json: string);
     procedure EnsureSaved(View: TJSONObject);
+    procedure RefreshRestored(View: TJSONObject);
+    function CurrentWorkspace: string;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -27,7 +29,7 @@ type
 procedure ShowPiAgentChat;
 implementation
 uses System.SysUtils, System.IOUtils, System.NetEncoding, System.Win.ComObj, Winapi.Windows, Winapi.ActiveX,
-  Winapi.WebView2, Vcl.Controls, Vcl.StdCtrls, ToolsAPI, PiAgent.Designer;
+  Winapi.WebView2, Winapi.ShellAPI, Vcl.Controls, Vcl.StdCtrls, Vcl.Dialogs, Vcl.FileCtrl, Vcl.Clipbrd, ToolsAPI, PiAgent.Designer;
 const Page = 'https://piagent.local/chat.html';
   // Windows SDK flags, absent from older Delphi Winapi.Windows declarations.
   LoadFromDllDirectory = $00000100;
@@ -56,7 +58,7 @@ destructor TPiChatForm.Destroy;
 begin
   FReady := False;
   if FTimer <> nil then begin FTimer.Enabled := False; FTimer.OnTimer := nil; end;
-  FreeAndNil(FWorker); FApproval.Free; FRestore.Free;
+  FreeAndNil(FWorker); FApproval.Free; FRestore.Free; FSelection.Free; FMessageRestore.Free;
   if FBrowser <> nil then begin
     FBrowser.OnCreateWebViewCompleted := nil; FBrowser.OnWebMessageReceived := nil;
     FBrowser.OnNavigationStarting := nil; FBrowser.OnNewWindowRequested := nil;
@@ -94,6 +96,14 @@ procedure TPiChatForm.Download(Sender: TCustomEdgeBrowser; Args: TDownloadStarti
 begin Args.ArgsInterface.Set_Cancel(1); end;
 procedure TPiChatForm.Post(const Json: string);
 begin if FReady and (FBrowser.DefaultInterface <> nil) then FBrowser.DefaultInterface.PostWebMessageAsJson(PChar(Json)); end;
+function TPiChatForm.CurrentWorkspace: string;
+var Project: IOTAProject; Root: string;
+begin
+  Project := GetActiveProject;
+  if (Project = nil) or (Project.FileName = '') then raise Exception.Create('Open a RAD Studio project before connecting');
+  Root := ExcludeTrailingPathDelimiter(ExtractFilePath(TPath.GetFullPath(Project.FileName))).Replace('\','/');
+  Result := 'file:///' + TNetEncoding.URL.Encode(Root).Replace('%2F','/').Replace('%3A',':').Replace('+','%20');
+end;
 procedure TPiChatForm.EnsureSaved(View: TJSONObject);
 var Services: IOTAModuleServices; Files: TJSONArray; K: Integer;
   procedure CheckPath(const RelativePath: string);
@@ -112,12 +122,36 @@ var Services: IOTAModuleServices; Files: TJSONArray; K: Integer;
 begin
   if View = nil then raise Exception.Create('Review unavailable');
   if not Supports(BorlandIDEServices,IOTAModuleServices,Services) then raise Exception.Create('IDE document state unavailable');
+  Files := View.GetValue('checkedPaths') as TJSONArray;
+  if Files <> nil then for K := 0 to Files.Count-1 do CheckPath(Files.Items[K].Value);
   Files := View.GetValue('files') as TJSONArray;
   if Files <> nil then for K := 0 to Files.Count-1 do CheckPath((Files.Items[K] as TJSONObject).GetValue<string>('path',''))
   else CheckPath(View.GetValue<string>('path',''));
 end;
+procedure TPiChatForm.RefreshRestored(View: TJSONObject);
+var Services: IOTAModuleServices; Files: TJSONArray; I,J,K: Integer;
+  Root,Target: string; Module: IOTAModule; Match: Boolean;
+begin
+  // Disk restoration does not invalidate a loaded Delphi form automatically.
+  // Recheck buffers on the IDE thread before refreshing any associated module.
+  EnsureSaved(View);
+  if not Supports(BorlandIDEServices,IOTAModuleServices,Services) then raise Exception.Create('IDE document state unavailable');
+  Files := View.GetValue('files') as TJSONArray;if Files=nil then Exit;
+  Root := IncludeTrailingPathDelimiter(TPath.GetFullPath(TNetEncoding.URL.Decode(Copy(FWorkspace,9,MaxInt).Replace('+','%2B')).Replace('/','\')));
+  for I := 0 to Services.ModuleCount-1 do begin
+    Module := Services.Modules[I];Match := False;
+    for K := 0 to Files.Count-1 do begin
+      Target := TPath.GetFullPath(TPath.Combine(Root,(Files.Items[K] as TJSONObject).GetValue<string>('path','')));
+      if not Target.StartsWith(Root,True) then raise Exception.Create('Invalid workspace path');
+      for J := 0 to Module.ModuleFileCount-1 do
+        if SameText(Module.ModuleFileEditors[J].FileName,Target) then Match := True;
+    end;
+    if Match then Module.Refresh(True);
+  end;
+end;
 procedure TPiChatForm.MessageReceived(Sender: TCustomEdgeBrowser; Args: TWebMessageReceivedEventArgs);
-var Source, Json: PWideChar; Msg: TJSONObject; Action: string; Error: TJSONObject;
+var Source, Json: PWideChar; Msg: TJSONObject; Action,Path,Root,Folder,Url,RequestId: string; Error,Reply: TJSONObject;
+  Dialog: TOpenDialog; FolderDialog: TFileOpenDialog; Items: TJSONArray; I,Line: Integer; Module: IOTAModule; Editor: IOTAEditor; SourceEditor: IOTASourceEditor; Project: IOTAProject; EditPos: TOTAEditPos; EditorServices: IOTAEditorServices; View: IOTAEditView; Block: IOTAEditBlock; SelectionText: string;
 begin
   Source := nil; Json := nil;
   try
@@ -126,21 +160,79 @@ begin
     OleCheck(Args.ArgsInterface.Get_webMessageAsJson(Json)); if Length(string(Json)) > 400000 then Exit;
     Msg := TJSONObject.ParseJSONValue(string(Json)) as TJSONObject; if Msg = nil then Exit;
     try
-      Action := Msg.GetValue<string>('action','');
+      Action := Msg.GetValue<string>('action','');RequestId := Msg.GetValue<string>('id','');
       if Action = 'ready' then begin FReady := True; Exit; end;
+      if Action = 'notify' then begin if not Active then FlashWindow(Handle,True);Exit;end;
+      if Action = 'connect' then Msg.AddPair('workspaceUri',CurrentWorkspace);
+      if (Action = 'prompt') and not SameText(CurrentWorkspace,FWorkspace) then begin
+        Reply := TJSONObject.Create.AddPair('action','connect').AddPair('workspaceUri',CurrentWorkspace);try FWorker.Enqueue(Reply.ToJSON);finally Reply.Free;end;
+        raise Exception.Create('The active project changed. PiAgent is reconnecting; your draft was preserved. Send again after connection completes');
+      end;
+      if Action = 'clearSelection' then begin FreeAndNil(FSelection);Exit;end;
+      if Action = 'captureSelection' then begin
+        if not Supports(BorlandIDEServices,IOTAEditorServices,EditorServices) then raise Exception.Create('Editor unavailable');
+        View := EditorServices.TopView;if (View=nil) or (View.Buffer=nil) or (View.Buffer.FileName='') then raise Exception.Create('Open a source editor and select text');
+        Block := View.Block;if (Block=nil) or not Block.IsValid or (Block.Size=0) then raise Exception.Create('Select text in the source editor');
+        SelectionText := Block.Text;if TEncoding.UTF8.GetByteCount(SelectionText)>32768 then raise Exception.Create('Selection exceeds 32 KiB');
+        Path := TPath.GetFullPath(View.Buffer.FileName).Replace('\','/');
+        FreeAndNil(FSelection);FSelection := TJSONObject.Create.AddPair('documentUri','file:///'+TNetEncoding.URL.Encode(Path).Replace('%2F','/').Replace('%3A',':').Replace('+','%20')).AddPair('workspaceUri',CurrentWorkspace).AddPair('language','Delphi');
+        FSelection.AddPair('selection',TJSONObject.Create.AddPair('text',SelectionText).AddPair('startLine',TJSONNumber.Create(Block.StartingRow)).AddPair('startColumn',TJSONNumber.Create(Block.StartingColumn)).AddPair('endLine',TJSONNumber.Create(Block.EndingRow)).AddPair('endColumn',TJSONNumber.Create(Block.EndingColumn)));
+        Reply := TJSONObject.Create.AddPair('type','selection').AddPair('context',TJSONValue(FSelection.Clone));try Post(Reply.ToJSON);finally Reply.Free;end;Exit;
+      end;
+      if (Action='prompt') and (FSelection<>nil) then Msg.AddPair('context',TJSONValue(FSelection.Clone));
+      if Action = 'copy' then begin
+        Path := Msg.GetValue<string>('text','');if Length(Path)>1000000 then raise Exception.Create('Clipboard text exceeds limit');Clipboard.AsText := Path;
+        Reply := TJSONObject.Create.AddPair('type','copied');if Msg.GetValue('id')<>nil then Reply.AddPair('id',TJSONValue(Msg.GetValue('id').Clone));try Post(Reply.ToJSON);finally Reply.Free;end;Exit;
+      end;
+      if Action = 'openUrl' then begin
+        Url := Msg.GetValue<string>('url','');if not Url.StartsWith('https://',True) and not Url.StartsWith('http://',True) then raise Exception.Create('Only HTTP(S) URLs can be opened');
+        if ShellExecute(Handle,'open',PChar(Url),nil,nil,SW_SHOWNORMAL)<=32 then RaiseLastOSError;Exit;
+      end;
+      if Action = 'openFile' then begin
+        Root := TPath.GetFullPath(TNetEncoding.URL.Decode(Copy(CurrentWorkspace,9,MaxInt)).Replace('/','\'));
+        Path := Msg.GetValue<string>('path','');if Path.StartsWith('file:///') then Path := TNetEncoding.URL.Decode(Copy(Path,9,MaxInt)).Replace('/','\');
+        if not TPath.IsPathRooted(Path) then Path := TPath.Combine(Root,Path);Path := TPath.GetFullPath(Path);
+        if not Path.StartsWith(IncludeTrailingPathDelimiter(Root),True) or not FileExists(Path) then raise Exception.Create('File must exist inside the active project workspace');
+        Module := (BorlandIDEServices as IOTAModuleServices).OpenModule(Path);
+        Line := Msg.GetValue<Integer>('line',0);
+        if Module<>nil then for I := 0 to Module.ModuleFileCount-1 do begin Editor := Module.ModuleFileEditors[I];if Supports(Editor,IOTASourceEditor,SourceEditor) then begin SourceEditor.Show;if (Line>0) and (SourceEditor.EditViewCount>0) then begin EditPos.Line := Line;EditPos.Col := 1;SourceEditor.EditViews[0].CursorPos := EditPos;end;Break;end;end;Exit;
+      end;
+      if (Action = 'attachFiles') or (Action = 'addFolder') then begin
+        Items := TJSONArray.Create;
+        try
+          if Action = 'addFolder' then begin
+            FolderDialog := TFileOpenDialog.Create(Self);
+            try
+              FolderDialog.Title := 'Add folder';
+              FolderDialog.Options := [fdoPickFolders,fdoPathMustExist,fdoForceFileSystem];
+              FolderDialog.DefaultFolder := TNetEncoding.URL.Decode(Copy(CurrentWorkspace,9,MaxInt)).Replace('/','\');
+              if FolderDialog.Execute(Handle) then begin
+                Folder := FolderDialog.FileName;
+                Reply := TJSONObject.Create.AddPair('action','addWorkspaceFolder').AddPair('path',Folder);
+                try FWorker.Enqueue(Reply.ToJSON);finally Reply.Free;end;
+              end;
+            finally FolderDialog.Free;end;
+            Exit;
+          end
+          else begin Dialog := TOpenDialog.Create(Self);try Dialog.Options := [ofFileMustExist,ofAllowMultiSelect,ofEnableSizing];if Dialog.Execute then for I := 0 to Dialog.Files.Count-1 do Items.AddElement(TJSONObject.Create.AddPair('path',Dialog.Files[I]).AddPair('name',ExtractFileName(Dialog.Files[I])));finally Dialog.Free;end;end;
+          Reply := TJSONObject.Create.AddPair('type','attachments').AddPair('items',TJSONValue(Items.Clone));try Post(Reply.ToJSON);finally Reply.Free;end;
+        finally Items.Free;end;Exit;
+      end;
+      if Action = 'compile' then begin Project := GetActiveProject;if Project=nil then raise Exception.Create('Project unavailable');Reply := TJSONObject.Create.AddPair('type','buildResult').AddPair('success',TJSONBool.Create(Project.ProjectBuilder.BuildProject(cmOTABuild,True)));try Post(Reply.ToJSON);finally Reply.Free;end;Exit;end;
       if (Action = 'connect') and FWorker.Finished then begin FreeAndNil(FWorker); FWorker := TPiChatWorker.Create; FWorker.Start; end;
       if (Action = 'decideChange') and (Msg.GetValue<string>('decision','') = 'approve') then EnsureSaved(FApproval);
-      if Action = 'restoreChange' then EnsureSaved(FRestore);
+      if Action = 'restoreChange' then EnsureSaved(FRestore);if Action='restoreMessage' then EnsureSaved(FMessageRestore);
       FWorker.Enqueue(Msg.ToJSON);
     finally Msg.Free; end;
   except on E: Exception do begin
-    Error := TJSONObject.Create.AddPair('type','operationError').AddPair('message',E.Message);
+    Error := TJSONObject.Create.AddPair('type','operationError').AddPair('message',E.Message).AddPair('action',Action).AddPair('id',RequestId);
     try Post(Error.ToJSON); finally Error.Free; end;
   end; end;
   finally CoTaskMemFree(Source); CoTaskMemFree(Json); end;
 end;
 procedure TPiChatForm.Poll(Sender: TObject);
-var Json: string; Msg, Data, Frame, Reply: TJSONObject; Kind: string; I: Integer;
+var Json: string; Msg, Data, Frame, Reply: TJSONObject; Kind,Path: string; I,K,J: Integer; Dialog: TSaveDialog; Files: TJSONArray;
+  Module: IOTAModule; SourceEditor: IOTASourceEditor;
 begin
   // Bound work on the IDE thread. All SDK and browser access remains on this thread.
   for I := 1 to 32 do begin
@@ -148,7 +240,31 @@ begin
     Msg := TJSONObject.ParseJSONValue(Json) as TJSONObject;
     try
       Kind := Msg.GetValue<string>('type','');
-      if Kind = 'session' then begin FWorkspace := Msg.GetValue<string>('workspaceUri',''); FreeAndNil(FApproval); FreeAndNil(FRestore); end;
+      if Kind = 'exportReady' then begin Dialog := TSaveDialog.Create(Self);try Dialog.Filter := 'HTML|*.html';Dialog.FileName := 'PiAgent-conversation.html';Dialog.Options := [ofOverwritePrompt,ofEnableSizing];if Dialog.Execute then TFile.Copy(Msg.GetValue<string>('path',''),Dialog.FileName,True);finally Dialog.Free;end;Continue;end;
+      if Kind = 'extensions' then begin
+        Files := Msg.GetValue('configFiles') as TJSONArray;
+        if Files<>nil then for K := 0 to Files.Count-1 do begin
+          try
+            Path := Files.Items[K].Value;Module := (BorlandIDEServices as IOTAModuleServices).OpenModule(Path);
+            if Module=nil then raise Exception.Create('IDE could not open MCP configuration: '+Path);
+            for J := 0 to Module.ModuleFileCount-1 do
+              if Supports(Module.ModuleFileEditors[J],IOTASourceEditor,SourceEditor) then begin SourceEditor.Show;Break;end;
+          except on E:Exception do begin
+            Reply := TJSONObject.Create.AddPair('type','operationError').AddPair('action','manageExtensions').AddPair('message',E.Message);
+            try Post(Reply.ToJSON);finally Reply.Free;end;
+          end;end;
+        end;
+      end;
+      if ((Kind='session') and (Msg.GetValue('restoredDraft')<>nil) and (Msg.GetValue('restoreError')=nil)) or (Kind='restored') then begin
+        try
+          if Kind='restored' then RefreshRestored(FRestore) else RefreshRestored(FMessageRestore);
+        except on E:Exception do begin
+          Reply := TJSONObject.Create.AddPair('type','operationError').AddPair('action','refreshRestored').AddPair('message','Files restored; IDE reload failed: '+E.Message);
+          try Post(Reply.ToJSON);finally Reply.Free;end;
+        end;end;
+      end;
+      if Kind = 'session' then begin FWorkspace := Msg.GetValue<string>('workspaceUri',''); FreeAndNil(FApproval); FreeAndNil(FRestore); FreeAndNil(FSelection); FreeAndNil(FMessageRestore); end;
+      if Kind = 'messageRestorePreview' then begin FreeAndNil(FMessageRestore);FMessageRestore := TJSONObject(Msg.GetValue('data').Clone);end;
       if Kind = 'restorePreview' then begin FreeAndNil(FRestore); FRestore := TJSONObject(Msg.GetValue('data').Clone); end;
       if Kind = 'event' then begin
         Data := Msg.GetValue('data') as TJSONObject; Kind := Data.GetValue<string>('kind','');

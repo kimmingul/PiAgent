@@ -16,6 +16,7 @@ const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const signal = (): AbortSignal => new AbortController().signal;
 const decode = (bytes: Buffer): string => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
 export interface FileEdit {path:string;before:Buffer;after:Buffer;beforeHash:string;afterHash:string;}
+export interface TurnSnapshot {files:{path:string;bytes:Buffer}[];excluded:number;}
 export interface Proposal {
   files?:FileEdit[];
   id: string; path: string; reason: string; before: Buffer; after: Buffer; beforeHash: string; afterHash: string; revision: string; expiresAt: number;
@@ -160,6 +161,31 @@ export class WorkspaceChanges {
     this.tail = operation.catch(() => {}); return operation;
   }
   async drain(): Promise<void> { await this.tail; }
+  /** Observe native OMP/designer edits without attributing user edits or touching their index. */
+  async beginTurn():Promise<TurnSnapshot> {
+    await this.drain();const paths=(await this.git(['ls-files','-z'])).toString('utf8').split('\0').filter(Boolean);
+    if(paths.length>500)throw new Error('Turn checkpoint is limited to 500 tracked files');
+    const files:TurnSnapshot['files']=[];let excluded=0,total=0;
+    for(const path of paths){try{await this.tracked(path);const snapshot=await this.reader.snapshot(path,signal());if(snapshot.bytes.length>32768||total+snapshot.bytes.length>8*1024*1024){excluded++;continue;}total+=snapshot.bytes.length;files.push({path,bytes:snapshot.bytes});}catch{excluded++;}}
+    return {files,excluded};
+  }
+  async observeTurn(snapshot:TurnSnapshot):Promise<Record<string,unknown>> {
+    await this.drain();const files:FileEdit[]=[];let excluded=snapshot.excluded;
+    for(const old of snapshot.files){try{const current=await this.reader.snapshot(old.path,signal());if(current.bytes.equals(old.bytes))continue;if(current.bytes.length>32768){excluded++;continue;}files.push({path:old.path,before:old.bytes,after:current.bytes,beforeHash:hash(old.bytes),afterHash:hash(current.bytes)});}catch{excluded++;}}
+    if(files.length>8||files.reduce((sum,file)=>sum+file.before.length+file.after.length,0)>256*1024)throw new Error('Observed turn exceeds eight files or 256 KiB; no complete turn checkpoint was recorded');
+    if(!files.length)return {recorded:false,excluded};
+    return this.serialize(async()=>{
+      if((await readdir(this.directory)).filter(name=>name.endsWith('.json')).length>=1000)throw new Error('Checkpoint history limit reached');
+      await this.verifyFiles(files,true);const id=randomUUID(),records:CheckpointFile[]=[],refs:string[]=[];
+      for(const [index,file]of files.entries()) {
+        const before=(await this.git(['hash-object','-w','--stdin','--no-filters'],file.before)).toString().trim(),after=(await this.git(['hash-object','-w','--stdin','--no-filters'],file.after)).toString().trim();
+        if(!oidPattern.test(before)||!oidPattern.test(after))throw new Error('Invalid checkpoint Git object');records.push({path:file.path,before,after,beforeHash:file.beforeHash,afterHash:file.afterHash});refs.push(`create refs/piagent/checkpoints/${id}/${index}/before ${before}`,`create refs/piagent/checkpoints/${id}/${index}/after ${after}`);
+      }
+      await this.verifyFiles(files,true);await this.git(['update-ref','--stdin'],Buffer.from(refs.join('\n')+'\n'));
+      await this.metadata({...records[0]!,version:1,id,files:records,createdAt:Date.now(),state:'applied'});
+      return {recorded:true,checkpointId:id,files:records.map(file=>({path:file.path})),excluded};
+    });
+  }
   private async metadata(checkpoint: Checkpoint): Promise<void> {
     const temporary = join(this.directory, `${checkpoint.id}.${randomUUID()}.tmp`);
     const handle = await open(temporary, 'wx');

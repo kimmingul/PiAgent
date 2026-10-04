@@ -5,7 +5,7 @@ import { isObject } from '@piagent/protocol';
 import { contextPrompt } from './context.js';
 import { WorkspaceReader, workspaceTools } from './workspace.js';
 import { pathToFileURL } from 'node:url';
-import { WorkspaceChanges, editTool, batchEditTool } from './changes.js';
+import { WorkspaceChanges, editTool, batchEditTool,type TurnSnapshot } from './changes.js';
 import { Approvals } from './approvals.js';
 import { SessionStore, SessionLease } from './sessions.js';
 import { UsageService } from './usage.js';
@@ -13,9 +13,15 @@ import {control} from './omp-controls.js';
 import {Interactions} from './interactions.js';
 import {uiEvent} from './omp-events.js';
 import {DesignerBridge,designerTools,designerPrompt} from './designer.js';
-import {writeFile} from 'node:fs/promises';
+import {writeFile,copyFile,lstat,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
 import {extensions} from './extensions.js';
+import {BtwService} from './btw.js';
+import {PreferencesStore} from './preferences.js';
+import {Plans} from './plans.js';
+import {images,type Image} from './attachments.js';
+import {Timeline,type TimelinePreview} from './timeline.js';
+import {setTimeout as delay} from 'node:timers/promises';
 export interface ChatServices { sessions?:SessionStore; usage?:UsageService; }
 export const WORKSPACE_BIND_CAPABILITY='workspace.bind.v1';
 export const APPROVAL_MODE_CAPABILITY='chat.approval.v1';
@@ -31,6 +37,7 @@ export interface ChatEvent {
   text?: string;
   approval?: Record<string, unknown>;
   frame?: Record<string,unknown>;
+  toolId?:string;
 }
 /** One connection owns the OMP child, turn and optional saved-session lease/workspace services. */
 export class ChatSession {
@@ -50,10 +57,26 @@ export class ChatSession {
   private approvals: Approvals | undefined;
   private lease:SessionLease|undefined;
   private answer='';
+  private flushedAnswer=0;
   private approvalMode='always-ask';
   private readonly tools = new Map<string, AbortController>();
   private readonly seenTools = new Set<string>();
   private interactions:Interactions|undefined;
+  private btw:BtwService|undefined;
+  private timeline:Timeline|undefined;
+  private timelinePending=false;
+  private messagePreview:TimelinePreview|undefined;
+  private restoringMessage=false;
+  private plan:{path:string;hash:string}|undefined;
+  private turnStarted=0;
+  private finishing=false;
+  private planSaving:Promise<void>|undefined;
+  private contextSnapshot:string|undefined;
+  private contextReaders=0;
+  private readonly snapshots:string[]=[];
+  private admitting=false;
+  private promptSetup:Promise<void>|undefined;
+  private turnSnapshot:TurnSnapshot|undefined;
   private readonly designer=new DesignerBridge(frame=>this.sendOmp(frame));
   constructor(private options: OmpOptions, private readonly send: (event: ChatEvent) => void,
     private workspace?: WorkspaceReader, private changes?: WorkspaceChanges, private services:ChatServices={},
@@ -64,7 +87,8 @@ export class ChatSession {
   get supportsSessions():boolean {return !!this.services.sessions;}
   get supportsUsage():boolean {return !!this.services.usage;}
 
-  async handle(method: string, params: Record<string, unknown>, workspaceNegotiated = false, writesNegotiated = false, sessionsNegotiated=false, usageNegotiated=false, batchNegotiated=false, controlsNegotiated=false,designerNegotiated=false): Promise<Record<string, unknown>> {
+  async handle(method: string, params: Record<string, unknown>, workspaceNegotiated = false, writesNegotiated = false, sessionsNegotiated=false, usageNegotiated=false, batchNegotiated=false, controlsNegotiated=false,designerNegotiated=false,timelineNegotiated=false,internalTransition=false): Promise<Record<string, unknown>> {
+    if(this.restoringMessage&&!internalTransition)throw new ChatError(-32013,'Message restore is in progress');
     if (this.disposed) throw new ChatError(-32010, 'Connection closed');
     if(method==='sessions.list') {
       if(!sessionsNegotiated||!this.services.sessions)throw new ChatError(-32005,'Session capability not negotiated');
@@ -89,7 +113,9 @@ export class ChatSession {
       }catch(error){this.opening=false;throw error;}
       try {this.lease=sessionsNegotiated&&this.services.sessions?await this.services.sessions.acquire(params['savedSessionId']):undefined;}
       catch(error){this.opening=false;throw error;}
-      this.approvalMode=String(params['approvalMode']??this.lease?.record.approvalMode??'always-ask');
+      const preferred=this.lease&&!params['savedSessionId']?await new PreferencesStore(this.lease.store.root).read():undefined;
+      this.approvalMode=String(params['approvalMode']??this.lease?.record.approvalMode??preferred?.defaultApproval??'always-ask');
+      this.plan=this.lease?.record.plan;
       if(this.lease){this.lease.record.approvalMode=this.approvalMode;}
       let nativeArgs:string[]=[];
       const native=this.options.profile==='native'&&this.approvalMode!=='plan';
@@ -119,6 +145,7 @@ export class ChatSession {
         }
         if(this.lease?.record.ompFile) await omp.request('switch_session',{sessionPath:await this.lease.store.verifyOmpFile(this.lease.record.savedSessionId,this.lease.record.ompFile)});
         else await omp.request('new_session'); // Never auto-resume an unrelated conversation.
+        if(this.lease?.record.needsFork){const forked=await omp.request('fork');if(isObject(forked['data'])&&forked['data']['cancelled']===true)throw new Error('Conversation fork cancelled');delete this.lease.record.needsFork;}
         if(this.lease){const state=await omp.request('get_state');await this.lease.store.bind(this.lease.record,isObject(state['data'])?state['data']['sessionFile']:undefined);await this.lease.save();}
         this.workspaceEnabled = workspaceNegotiated && !!this.workspace;
         this.writesEnabled = this.approvalMode!=='plan'&&this.workspaceEnabled && writesNegotiated && (!!this.changes||native);
@@ -129,7 +156,10 @@ export class ChatSession {
         if (this.workspaceEnabled) await omp.request('set_host_tools', { tools: [...workspaceTools, ...(this.approvals ? [editTool] : []),...(this.batchEnabled&&this.approvals?[batchEditTool]:[]),...(this.designer.enabled?designerTools.filter(tool=>this.writesEnabled||tool.name==='ide_designer_inspect'):[])].map(tool => ({...tool, loadMode: 'essential'})) });
         if (this.disposed) throw new Error('Connection closed during startup');
         this.id = randomUUID(); this.sequence = 0;
-        return { sessionId: this.id, approvalMode:this.approvalMode, approvalModes:['always-ask','write','yolo','plan'], ompProfile:native?'native':'restricted', ompControlsEnabled:controlsNegotiated, toolsEnabled: this.workspaceEnabled, usageEnabled:usageNegotiated&&this.supportsUsage, sessionsEnabled:sessionsNegotiated&&this.supportsSessions,
+        if(this.lease&&controlsNegotiated)this.btw=new BtwService(join(this.lease.store.root,'btw'),this.options,event=>this.sendOmp({type:'ui_event',event}));
+        this.timeline=this.lease&&controlsNegotiated&&timelineNegotiated?new Timeline(this.lease,this.changes):undefined;this.messagePreview=undefined;
+        return { messageRestoreEnabled:!!this.timeline,sessionId: this.id, approvalMode:this.approvalMode, approvalModes:['always-ask','write','yolo','plan'], ompProfile:native?'native':'restricted', ompControlsEnabled:controlsNegotiated, toolsEnabled: this.workspaceEnabled, usageEnabled:usageNegotiated&&this.supportsUsage, sessionsEnabled:sessionsNegotiated&&this.supportsSessions,
+          btwEnabled:!!this.btw,preferencesEnabled:!!this.lease,exportEnabled:controlsNegotiated,filesEnabled:this.workspaceEnabled,checkpointsEnabled:!!this.changes&&this.writesEnabled,
           ...(this.lease?{savedSessionId:this.lease.record.savedSessionId,transcript:this.lease.record.transcript}:{}),
           ...(this.workspaceEnabled ? { workspaceUri: pathToFileURL(this.workspace!.root).href, readOnly: !this.writesEnabled, writeEnabled: this.writesEnabled } : {}) };
       } catch (error) {
@@ -139,8 +169,76 @@ export class ChatSession {
         throw new ChatError(-32010, error instanceof Error ? error.message : 'OMP startup failed');
       } finally { this.opening = false; }
     }
-    if (!this.id || !this.omp || this.opening || params['sessionId'] !== this.id)
+    if (!this.id || !this.omp || this.opening || this.retiring || params['sessionId'] !== this.id)
       throw new ChatError(-32012, 'Unknown or unavailable session');
+    if(method==='chat.addFolder') {
+      if(Object.keys(params).some(key=>!['sessionId','path'].includes(key))||typeof params['path']!=='string'||params['path'].length>4096||/[\r\n\0]/.test(params['path']))throw new ChatError(-32602,'Invalid folder');
+      if(this.turn||this.options.profile!=='native'||this.approvalMode==='plan'||!controlsNegotiated)throw new ChatError(-32005,'Folder roots require idle native OMP outside plan mode');
+      const {realpath}=await import('node:fs/promises');const path=await realpath(params['path']);if(!(await lstat(path)).isDirectory())throw new ChatError(-32602,'Expected folder');
+      await this.omp.request('prompt',{message:'/add-dir '+path});return {path,added:true};
+    }
+    if(method==='chat.proceedPlan') {
+      if(Object.keys(params).some(key=>!['sessionId','path'].includes(key))||!this.plan||params['path']!==this.plan.path||!this.workspace||!this.lease||!controlsNegotiated||this.turn||this.finishing||this.approvalMode!=='plan')throw new ChatError(-32005,'A completed, current plan is required');
+      const plan=this.plan;const text=await new Plans(this.workspace.root).read(plan);const savedSessionId=this.lease.record.savedSessionId;
+      await this.closeSession();const session=await this.handle('chat.open',{savedSessionId,approvalMode:'always-ask'},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated);
+      return {...session,planPrompt:'Implement the user-approved plan in '+plan.path+'. Read the full document before working. Ask for approvals under the current access mode. Use the native IDE designer for GUI work.\n\nPlan excerpt:\n'+text.slice(0,12000)};
+    }
+    if(method==='chat.previewMessageRestore'||method==='chat.restoreMessage') {
+      if(!this.timeline||!this.lease||!controlsNegotiated)throw new ChatError(-32005,'Message restore unavailable');
+      if(this.turn||this.finishing||this.admitting||this.restoringMessage)throw new ChatError(-32013,'Finish the current operation before message restore');
+      const allowed=method==='chat.previewMessageRestore'?['sessionId','seq','branch']:['sessionId','messageRestoreId','revision'];
+      if(Object.keys(params).some(key=>!allowed.includes(key)))throw new ChatError(-32602,'Invalid message restore params');
+      if(method==='chat.previewMessageRestore'){this.messagePreview=await this.timeline.preview(params['seq'],params['branch']);return this.timeline.view(this.messagePreview);}
+      const preview=this.messagePreview;if(!preview||params['messageRestoreId']!==preview.id||params['revision']!==preview.revision||Date.now()>preview.expires)throw new ChatError(-32012,'Message restore preview is stale');
+      if(preview.proposal&&!this.writesEnabled)throw new ChatError(-32005,'File restore requires a write-enabled session');
+      this.restoringMessage=true;const original=this.lease.record.savedSessionId,mode=this.approvalMode,changes=this.changes;
+      try {
+        const refreshed=await this.timeline.preview(preview.seq,preview.branch);
+        if(JSON.stringify(refreshed.proposal?.files?.map(file=>[file.path,file.beforeHash,file.afterHash]))!==JSON.stringify(preview.proposal?.files?.map(file=>[file.path,file.beforeHash,file.afterHash])))throw new ChatError(-32012,'Files changed after message preview');
+        const clone=await this.timeline.clone(preview);await this.closeSession();
+        let opened:Record<string,unknown>;
+        try{opened=await this.handle('chat.open',{savedSessionId:clone,approvalMode:mode},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,true);
+          if(preview.proposal)await changes!.apply(preview.proposal,new AbortController().signal);
+          await this.timeline?.settled(changes?await changes.beginTurn():undefined).catch(error=>this.emit('warning',error instanceof Error?error.message:'Restore baseline could not be saved'));
+        }catch(error){await this.closeSession();const restored=await this.handle('chat.open',{savedSessionId:original,approvalMode:mode},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,true);return {...restored,restoreError:error instanceof Error?error.message:'Restore failed; original conversation reopened'};}
+        return {...opened,restoredDraft:preview.point.prompt,restoreNotice:'Restored before message '+preview.seq+'. Original conversation preserved. '+preview.point.fileScope};
+      }finally{this.restoringMessage=false;this.messagePreview=undefined;}
+    }
+    if(method==='chat.preferences') {
+      if(!this.lease)throw new ChatError(-32005,'Private preferences unavailable');
+      if(Object.keys(params).some(key=>!['sessionId','values'].includes(key)))throw new ChatError(-32602,'Invalid preferences params');
+      const store=new PreferencesStore(this.lease.store.root);
+      return {values:'values' in params?await store.save(params['values']):await store.read(),ompExecutable:this.options.executable,ompProfile:this.options.profile};
+    }
+    if(method.startsWith('btw.')) {
+      if(!controlsNegotiated||!this.btw||!this.lease)throw new ChatError(-32005,'BTW unavailable');
+      const allowed=method==='btw.ask'?['sessionId','text','topicId']:method==='btw.list'?['sessionId','offset']:['sessionId','topicId'];
+      if(Object.keys(params).some(key=>!allowed.includes(key)))throw new ChatError(-32602,'Invalid BTW params');
+      if(method==='btw.list')return this.btw.list(this.lease.record.savedSessionId,params['offset']===undefined?0:Number(params['offset']));
+      if(method==='btw.cancel')return this.btw.cancel(params['topicId']);
+      if(method==='btw.delete'){await this.btw.delete(params['topicId']);return this.btw.list(this.lease.record.savedSessionId);}
+      if(method==='btw.ask') {
+        // Fork a stable main context only after the main turn has settled.
+        if(this.admitting)throw new ChatError(-32013,'Main context snapshot is being prepared');
+        this.contextReaders++;try {
+        const main=this.turn?this.contextSnapshot:this.lease.record.ompFile?await this.lease.store.verifyOmpFile(this.lease.record.savedSessionId,this.lease.record.ompFile):undefined;
+        const state=await this.omp.request('get_state'),data=isObject(state['data'])?state['data']:{},model=isObject(data['model'])?data['model']:{};
+        const selected=typeof model['provider']==='string'&&typeof model['id']==='string'?{provider:model['provider'],id:model['id'],...(typeof data['thinkingLevel']==='string'?{thinking:data['thinkingLevel']}:{})}:undefined;
+        return await this.btw.ask(params['text'],params['topicId'],this.lease.record.savedSessionId,this.lease.record.title,main,selected);}finally{this.contextReaders--;}
+      }
+      throw new ChatError(-32601,'Unknown BTW method');
+    }
+    if(method==='workspace.files') {
+      if(!this.workspaceEnabled||!this.workspace)throw new ChatError(-32005,'Workspace unavailable');
+      if(Object.keys(params).some(key=>key!=='sessionId'))throw new ChatError(-32602,'Invalid file list params');
+      return {items:await this.workspace.files()};
+    }
+    if(method==='chat.export') {
+      if(this.turn||!controlsNegotiated||!this.lease)throw new ChatError(-32005,'Wait for an available saved conversation');
+      if(Object.keys(params).some(key=>key!=='sessionId'))throw new ChatError(-32602,'Invalid export params');
+      const path=join(await this.lease.store.prepareOmpDirectory(this.lease.record.savedSessionId),`export-${randomUUID()}.html`);
+      await this.omp.request('export_html',{outputPath:path});return {path};
+    }
     if(method==='chat.extensions') {
       if(!controlsNegotiated||this.options.profile!=='native')throw new ChatError(-32005,'Native OMP extensions unavailable');
       if(this.turn)throw new ChatError(-32013,'Wait until the turn finishes');
@@ -149,8 +247,17 @@ export class ChatSession {
       if(params['action']==='toggleMcpServer') {
         const current=await extensions(this.options,{action:'listExtensions'});
         if(typeof params['enabled']!=='boolean'||typeof params['id']!=='string'||! /^[a-zA-Z0-9_.-]{1,128}$/.test(params['id'])||!Array.isArray(current['mcpServers'])||!current['mcpServers'].some(value=>isObject(value)&&value['id']===params['id']))throw new ChatError(-32602,'Unknown MCP server');
-        await this.omp.request('prompt',{message:'/mcp '+(params['enabled']?'enable':'disable')+' '+params['id']});
-        return extensions(this.options,{action:'listExtensions'});
+        await this.handle('chat.prompt',{sessionId:this.id,message:'/mcp '+(params['enabled']?'enable':'disable')+' '+params['id']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated);
+        // Prompt admission can precede the slash handler's config write. Wait for the
+        // terminal event and all chained checkpoint saves before returning switch state.
+        const deadline=Date.now()+20000;
+        while(this.turn||this.finishing||this.planSaving){
+          if(Date.now()>deadline||this.disposed||this.retiring)throw new ChatError(-32013,'MCP command did not settle. Refresh the list before retrying');
+          await Promise.race([this.planSaving??delay(25),delay(100)]);
+        }
+        const updated=await extensions(this.options,{action:'listExtensions'});
+        if(!Array.isArray(updated['mcpServers'])||!updated['mcpServers'].some(value=>isObject(value)&&value['id']===params['id']&&value['enabled']===params['enabled']))throw new ChatError(-32010,'OMP did not apply the requested MCP state. Refresh the list');
+        return updated;
       }
       return extensions(this.options,params);
     }
@@ -160,7 +267,7 @@ export class ChatSession {
       if(!this.lease)throw new ChatError(-32005,'Private saved session required');
       const savedSessionId=this.lease.record.savedSessionId;
       await this.closeSession();
-      return this.handle('chat.open',{savedSessionId,approvalMode:params['mode']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated);
+      return this.handle('chat.open',{savedSessionId,approvalMode:params['mode']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated);
     }
     if(method==='designer.reply'||method==='designer.decide') {
       if(!designerNegotiated)throw new ChatError(-32005,'Designer capability not negotiated');
@@ -171,6 +278,7 @@ export class ChatSession {
     if(method==='omp.control') {
       if(!controlsNegotiated)throw new ChatError(-32005,'OMP controls capability not negotiated');
       if(Object.keys(params).some(key=>!['sessionId','command','fields'].includes(key)))throw new ChatError(-32602,'Invalid params');
+      if(['steer','follow_up'].includes(String(params['command']))&&!this.turn)throw new ChatError(-32013,'Queued messages require an active main turn');
       return control(this.omp,params['command'],params['fields']??{},!!this.turn);
     }
     if(method==='omp.respond') {
@@ -185,7 +293,7 @@ export class ChatSession {
     if (Object.keys(params).some(key => !keys.includes(key))) throw new ChatError(-32602, 'Invalid params');
     if(method==='chat.usage'){
       if(!usageNegotiated||!this.services.usage)throw new ChatError(-32005,'Usage capability not negotiated');
-      return this.services.usage.read(this.omp);
+      const main=await this.services.usage.read(this.omp);const btw=this.btw&&this.lease?await this.btw.usage(this.lease.record.savedSessionId):null;return {...main,scope:'main-session',queriedAt:Date.now(),btw};
     }
     if (method.startsWith('changes.')) {
       if (!this.writesEnabled || !this.changes) throw new ChatError(-32005, 'Write capability not negotiated');
@@ -207,12 +315,15 @@ export class ChatSession {
       if (!this.cancelling) {
         this.cancelling = true;
         this.cancelTools();
-        try { await this.omp.request('abort'); }
-        catch { this.finish('error', 'OMP cancellation failed'); await this.closeSession(); throw new ChatError(-32010, 'OMP cancellation failed'); }
-        if (this.turn) {
-          clearTimeout(this.timer);
-          this.timer = setTimeout(() => { this.finish('cancelled'); void this.closeSession(); }, 5_000);
-        }
+        const omp = this.omp, turn = this.turn;
+        const retire = (): void => {
+          if (this.omp === omp && this.turn === turn && this.cancelling) void this.closeSession(false);
+        };
+        clearTimeout(this.timer);
+        this.timer = setTimeout(retire, 5_000);
+        // Acknowledge admission immediately: provider abort can outlive the adapter RPC deadline.
+        // Only retire this process/turn; a late response must not affect a subsequent turn.
+        void omp.request('abort').catch(retire);
       }
       return { requested: true };
     }
@@ -220,12 +331,16 @@ export class ChatSession {
     const message = params['message'];
     if (typeof message !== 'string' || !message.trim() || Buffer.byteLength(message) > 64 * 1024 || ((this.options.profile!=='native'||this.approvalMode==='plan')&&message.trimStart().startsWith('/')))
       throw new ChatError(-32602, 'Expected plain text (1–65536 UTF-8 bytes); slash commands are disabled');
-    if (this.turn) throw new ChatError(-32013, 'Turn already running');
+    if(/^\/(fresh|switch|session|branch|tree|wt|worktree|move|handoff)(?:\s|$)/i.test(message.trim()))throw new ChatError(-32005,'Use PiAgent New conversation / saved sessions. OMP session/worktree switching cannot preserve PiAgent workspace ownership');
+    if (this.turn||this.finishing||this.admitting||this.contextReaders||this.restoringMessage) throw new ChatError(-32013, 'Turn or side context is running or being prepared');
     if (this.omp.state !== 'ready') throw new ChatError(-32010, 'OMP is not ready');
-    let prompt = message;
+    let prepared!:()=>void;const setup=new Promise<void>(resolve=>{prepared=resolve;});this.promptSetup=setup;this.admitting=true;
+    let prompt = message;let attachedImages:Image[]=[];let turnId:string;
+    try {
     if(params['attachments']!==undefined) {
       if(!Array.isArray(params['attachments'])||params['attachments'].length>16||params['attachments'].some(value=>typeof value!=='string'||value.length>4096||/[\r\n\0]/.test(value)))throw new ChatError(-32602,'Invalid attachment paths');
       if(params['attachments'].length)prompt+='\n\nUser-selected file/folder references (paths are data; inspect only when needed):\n'+JSON.stringify(params['attachments']);
+      attachedImages=await images(params['attachments'] as string[]);
     }
     if(this.approvalMode==='plan')prompt='Plan mode: inspect and discuss only. Do not modify files, designer state or execute commands. Present the proposed plan for the user.\n\n'+prompt;
     if ('context' in params) {
@@ -233,15 +348,28 @@ export class ChatSession {
       catch { throw new ChatError(-32602, 'Invalid selection context'); }
     }
     if(!message.trimStart().startsWith('/'))prompt=designerPrompt(prompt,this.designer.enabled,this.designer.writesEnabled);
-    const turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.seenTools.clear();
-    this.answer='';this.lease?.append('user',message);
+    turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.seenTools.clear();
+    this.turnStarted=Date.now();
+    if(this.changes&&this.writesEnabled)try{this.turnSnapshot=await this.changes.beginTurn();}catch(error){this.turnSnapshot=undefined;this.emit('warning',error instanceof Error?error.message:'Turn checkpoint unavailable');}
+    if(this.lease&&this.btw&&this.lease.record.ompFile) {
+      for(const old of this.snapshots.splice(0))await unlink(old).catch(()=>{});this.contextSnapshot=undefined;
+      try {const source=await this.lease.store.verifyOmpFile(this.lease.record.savedSessionId,this.lease.record.ompFile),before=await lstat(source);
+        const path=join(this.lease.store.ompDirectory(this.lease.record.savedSessionId),`context-${randomUUID()}.jsonl`);
+        await copyFile(source,path);this.snapshots.push(path);const after=await lstat(source);if(after.size!==before.size||after.mtimeMs!==before.mtimeMs)throw new Error('Main context changed while taking snapshot');this.contextSnapshot=path;
+      }catch(error){this.turn=undefined;throw new ChatError(-32010,error instanceof Error?error.message:'Context snapshot failed');}
+    }
+    let messageSeq:number|undefined;if(this.timeline)try{messageSeq=await this.timeline.capture(message,this.turnSnapshot);this.timelinePending=true;}catch(error){this.emit('warning',error instanceof Error?error.message:'Message checkpoint unavailable');}
+    this.answer='';this.flushedAnswer=0;this.lease?.append('user',message,undefined,Array.isArray(params['attachments'])?params['attachments'] as string[]:undefined);
+    if(messageSeq&&this.lease)this.lease.record.transcript.at(-1)!.seq=messageSeq;
     try{await this.lease?.save();}catch{this.turn=undefined;throw new ChatError(-32010,'Session persistence failed before prompt');}
-    this.emit('started');
+    if(this.disposed||this.retiring){this.turn=undefined;throw new ChatError(-32010,'Connection is closing');}
+    this.emit('started');if(messageSeq)this.sendOmp({type:'ui_event',event:{t:'checkpoint',seq:messageSeq}});
     this.timer = setTimeout(() => {
       this.finish('error', 'Turn deadline exceeded'); void this.closeSession();
     }, 600_000);
+    } finally {this.admitting=false;if(this.promptSetup===setup)this.promptSetup=undefined;prepared();}
     try {
-      const response = await this.omp.request('prompt', { message: prompt });
+      const response = await this.omp.request('prompt', { message: prompt,...(attachedImages.length?{images:attachedImages}:{}) });
       if (isObject(response['data']) && response['data']['agentInvoked'] === false) this.finish('completed');
       return { sessionId: this.id, turnId, accepted: true };
     } catch (error) {
@@ -252,7 +380,7 @@ export class ChatSession {
   }
 
   private onFrame(frame: Record<string, unknown>): void {
-    if(this.interactions){const projected=uiEvent(frame);if(projected)this.sendOmp({type:'ui_event',event:projected});}
+    if(this.interactions){const projected=uiEvent(frame);if(projected){this.flushAnswer();this.lease?.appendEvent(projected);this.sendOmp({type:'ui_event',event:projected});}}
     if(frame['type']==='extension_ui_request'&&this.interactions) {
       try{if(!this.id&&['select','confirm','input','editor'].includes(String(frame['method']))) {
         void this.omp?.uiResponse(String(frame['id']),{cancelled:true}).catch(()=>{});
@@ -310,7 +438,7 @@ export class ChatSession {
     const designing=this.designer.enabled&&designerTools.some(tool=>tool.name===name);
     const proposing = (name === 'workspace_propose_edit'||(name==='workspace_propose_changes'&&this.batchEnabled)) && !!this.approvals;
     const timeout = setTimeout(() => controller.abort('deadline'), proposing||designing ? 370_000 : 10_000);
-    this.emit('tool_started', name === 'workspace_read_file' ? 'workspace_read_file' : name === 'workspace_search' ? 'workspace_search' : proposing||designing ? String(name) : 'unknown');
+    this.emit('tool_started', name === 'workspace_read_file' ? 'workspace_read_file' : name === 'workspace_search' ? 'workspace_search' : proposing||designing ? String(name) : 'unknown',undefined,id);
     let ownsWrite=false;
     try {
       let text: string, isError = false;
@@ -328,7 +456,7 @@ export class ChatSession {
       }
       if ((controller.signal.aborted && controller.signal.reason !== 'deadline') || this.omp !== omp || this.turn !== turn || this.cancelling) return;
       await omp.hostToolResult(id, text, isError);
-      if (this.turn === turn) this.emit('tool_completed', isError ? 'Workspace request rejected' : String(name));
+      if (this.turn === turn) this.emit('tool_completed', isError ? 'Workspace request rejected' : String(name),undefined,id);
     } catch { if (this.turn === turn) { this.finish('error', 'Workspace tool transport failed'); void this.closeSession(); } }
     finally { if(ownsWrite)this.writeToolActive=false;clearTimeout(timeout); controller.signal.removeEventListener('abort', onAbort); if (this.tools.get(id) === controller) this.tools.delete(id); }
   }
@@ -337,30 +465,59 @@ export class ChatSession {
     if(!this.id||this.disposed)return;
     this.send({sessionId:this.id,turnId:this.turn??null,sequence:++this.sequence,kind:'omp_event',frame});
   }
-  private emit(kind: ChatEvent['kind'], text?: string, approval?: Record<string, unknown>): void {
+  private flushAnswer():void {const text=this.answer.slice(this.flushedAnswer);if(text)this.lease?.append('assistant',text);this.flushedAnswer=this.answer.length;}
+  private emit(kind: ChatEvent['kind'], text?: string, approval?: Record<string, unknown>,toolId?:string): void {
     if (!this.id || this.disposed) return;
     if(kind==='delta'&&text&&this.answer.length<2_000_000)this.answer+=text.slice(0,2_000_000-this.answer.length);
+    if(kind==='tool_started'||kind==='tool_completed'){this.flushAnswer();this.lease?.appendEvent(kind==='tool_started'?{t:'toolStart',id:toolId,name:text}:{t:'toolEnd',id:toolId,ok:text!=='Workspace request rejected',result:text});}
     this.send({ sessionId: this.id, turnId: this.turn ?? null, sequence: ++this.sequence, kind,
-      ...(text === undefined ? {} : { text }), ...(approval ? {approval} : {}) });
+      ...(text === undefined ? {} : { text }), ...(approval ? {approval} : {}),...(toolId?{toolId}:{}) });
   }
   private finish(kind: 'completed' | 'cancelled' | 'error', text?: string): void {
     if (!this.turn) return;
+    if(this.turnSnapshot&&this.changes&&!this.finishing) {
+      const snapshot=this.turnSnapshot;this.turnSnapshot=undefined;this.finishing=true;
+      this.planSaving=this.changes.observeTurn(snapshot).then(result=>{if(result['recorded'])this.emit('warning','이 응답 중 바뀐 Git 추적 UTF-8 파일을 변경 기록에 저장했습니다. 새 파일·삭제·바이너리·범위 밖 파일은 포함되지 않습니다. 복원 전 diff를 확인해 주세요.');}).catch(error=>this.emit('warning',error instanceof Error?error.message:'Turn checkpoint could not be recorded')).finally(()=>{this.finishing=false;this.planSaving=undefined;this.finish(kind,text);});return;
+    }
+    if(this.timeline&&this.timelinePending){this.timelinePending=false;this.finishing=true;this.planSaving=(async()=>{await this.timeline!.settled(this.changes?await this.changes.beginTurn():undefined);})().catch(error=>this.emit('warning',error instanceof Error?error.message:'Message baseline save failed')).finally(()=>{this.finishing=false;this.planSaving=undefined;this.finish(kind,text);});return;}
+    if(this.approvalMode==='plan'&&kind==='completed'&&this.answer.trim()&&this.workspace&&!this.finishing) {
+      this.finishing=true;
+      this.planSaving=new Plans(this.workspace.root).create(this.answer).then(plan=>{this.plan=plan;if(this.lease)this.lease.record.plan=plan;const event={t:'plan',path:plan.path,title:this.lease?.record.title??'Plan',steps:[]};this.flushAnswer();this.lease?.appendEvent(event);this.sendOmp({type:'ui_event',event});}).catch(error=>this.emit('warning',error instanceof Error?error.message:'Plan save failed')).finally(()=>{this.finishing=false;this.planSaving=undefined;this.complete(kind,text);});return;
+    }
+    if(this.finishing)return;
+    this.complete(kind,text);
+  }
+  private complete(kind:'completed'|'cancelled'|'error',text?:string):void {
+    if(!this.turn)return;
     this.cancelTools();
-    this.lease?.append('assistant',this.answer);this.answer='';this.lease?.append('status',kind+(text?': '+text:''));
+    this.flushAnswer();this.answer='';this.flushedAnswer=0;this.lease?.append('status',kind+(text?': '+text:''),{started:this.turnStarted,ended:Date.now(),stopped:kind!=='completed'});
     if(this.lease)void this.lease.save().catch(()=>this.emit('warning','Session persistence failed; current OMP remains active'));
     clearTimeout(this.timer); this.emit(kind, text); this.turn = undefined; this.cancelling = false;
   }
-  private closeSession(): Promise<void> {
-    if (this.retiring) return this.retiring;
-    this.finish('cancelled');
-    const omp = this.omp; this.omp = undefined;
-    this.interactions?.clear();this.interactions=undefined;
-    this.designer.close();
-    this.emit('closed'); this.id = undefined;
-    const lease=this.lease;this.lease=undefined;
-    const done = (async()=>{await omp?.stop();await lease?.release();})(); this.retiring = done;
-    void done.finally(() => { if (this.retiring === done) this.retiring = undefined; }).catch(() => {});
-    return done;
+  private closeSession(requestAbort = true): Promise<void> {
+    if(this.retiring)return this.retiring;
+    const done=(async()=>{
+      if(this.promptSetup)await this.promptSetup;
+      if(this.planSaving)await this.planSaving;
+      const omp=this.omp;
+      if(this.turn&&omp?.state==='ready'){
+        this.cancelling=true;this.cancelTools();
+        if(requestAbort){
+          let deadline: ReturnType<typeof setTimeout> | undefined;
+          try{await Promise.race([omp.request('abort'),new Promise<void>(resolve=>{deadline=setTimeout(resolve,5_000);})]);}
+          catch{/* Stop below retires an unresponsive child. */}
+          finally{clearTimeout(deadline);}
+        }
+      }
+      this.finish('cancelled');if(this.planSaving)await this.planSaving;
+      this.omp=undefined;const btw=this.btw;this.btw=undefined;
+      this.interactions?.clear();this.interactions=undefined;this.designer.close();
+      this.emit('closed');this.id=undefined;const lease=this.lease;this.lease=undefined;
+      await Promise.all([omp?.stop(),btw?.close()]);
+      for(const path of this.snapshots.splice(0))await unlink(path).catch(()=>{});this.contextSnapshot=undefined;
+      await lease?.release();
+    })();this.retiring=done;
+    void done.finally(()=>{if(this.retiring===done)this.retiring=undefined;}).catch(()=>{});return done;
   }
   async dispose(): Promise<void> { this.disposed = true; await this.closeSession(); }
 }

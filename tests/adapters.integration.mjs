@@ -37,14 +37,14 @@ test('C# credential location uses shared USERPROFILE outside AppData and honors 
  assert.equal(await probe(env),join(local,'.piagent','security','credential-test','token'));
  const explicit=join(tmpdir(),'piagent-explicit-token');assert.equal(await probe({...env,PIAGENT_AUTH_FILE:explicit}),explicit);
 });
-for(const platform of ['Win32','Win64']) test(`Delphi ${platform} chat worker approves/restores a batch and resumes a saved session`,{...windows,timeout:30000},async()=>{
+for(const platform of (process.env.PIAGENT_RAD_TEST_PLATFORMS??'Win64').split(',')) test(`Delphi ${platform} chat worker approves/restores a batch and resumes a saved session`,{...windows,timeout:30000},async()=>{
  const root=await mkdtemp(join(tmpdir(),'piagent-rad-chat-'));let daemon;
  try{
   const git=async(...args)=>execute('git',['-c','user.name=PiAgent Test','-c','user.email=test@localhost',...args],{cwd:root,windowsHide:true});
   await git('init');await writeFile(join(root,'Example.cs'),'first\r\n');await writeFile(join(root,'Second.cs'),'second\n');await git('add','.');await git('commit','-m','Fixture');
   const name='piagent-rad-chat-'+randomUUID(),authFile=join(root,'private','token');
   daemon=await startDaemon({pipeName:name,secure:{authFile},workspaceRoot:root,allowWrites:true,omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
-  const result=await execute(file(`adapters/radstudio/bin/${platform}/${releaseVersion}/ChatSmoke.exe`),[],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_PIPE_NAME:name,PIAGENT_AUTH_FILE:authFile}});
+  const result=await execute(file(`adapters/radstudio/bin/${platform}/${releaseVersion}/ChatSmoke.exe`),[],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_PIPE_NAME:name,PIAGENT_AUTH_FILE:authFile,PIAGENT_WORKSPACE_URI:pathToFileURL(root).href}});
   assert.deepEqual(JSON.parse(result.stdout.trim()),{applied:true,restored:true,resumed:true,usage:true});assert.equal((await git('diff')).stdout.trim(),'');
  }finally{await daemon?.close();await rm(root,{recursive:true,force:true});}
 });
@@ -180,3 +180,10 @@ for (const mode of ['cancel', 'badframe']) {
     } finally { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)); }
   });
 }
+
+test('C# 2026 new UI services cross authenticated Named Pipe and preserve private contracts',{...windows,timeout:30000},async()=>{
+ const root=await mkdtemp(join(tmpdir(),'piagent-ui-adapter-'));let daemon;
+ try{await writeFile(join(root,'Example.cs'),'fixture');const name='piagent-ui-adapter-'+randomUUID(),authFile=join(root,'private','token');daemon=await startDaemon({pipeName:name,secure:{authFile},workspaceRoot:root,sessionRoot:join(root,'sessions'),omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
+ const result=await execute('dotnet',[csharp,name,'2026','ui-services',pathToFileURL(root).href],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_AUTH_FILE:authFile}});assert.deepEqual(JSON.parse(result.stdout),{preferences:true,files:true,export:true,btw:true,commands:true});
+ }finally{await daemon?.close();await rm(root,{recursive:true,force:true});}
+});

@@ -117,7 +117,7 @@
     }
   }
 
-  function userTurn(text, ts) {
+  function userTurn(text, ts, attachments) {
     const turn = document.createElement('div');
     turn.className = 'turn turn-user';
     const bubble = document.createElement('div');
@@ -125,6 +125,7 @@
     const body = document.createElement('div');
     body.className = 'user-text';
     body.textContent = text || '';
+    if (Array.isArray(attachments) && attachments.length) {const refs = document.createElement('div');refs.className = 'attachment-info';refs.textContent = attachments.join(' · ');body.appendChild(refs);}
     bubble.appendChild(body);
     turn.appendChild(bubble); global.ChatTurnTime.stamp(turn, ts);
     return turn;
@@ -135,7 +136,7 @@
     const wasNear = isNearBottom();
     closeAssistantBlock();
     currentTurn = null;
-    const turn = userTurn(msg.text, msg.ts);
+    const turn = userTurn(msg.text, msg.ts, msg.attachments);
     if (msg.queue) global.ChatQueue.mark(turn.firstChild, msg.queue, msg.sent);
     // Above the working line: the turn goes on below the message.
     const working = document.getElementById('working');
@@ -278,12 +279,16 @@
 
     for (const item of items) {
       if (!item) continue;
+      if (item.role === 'event') {
+        if (['thinkingDelta','thinkingEnd','toolStart','toolInputDelta','toolUpdate','toolEnd','todos','subagent','notice','model','plan'].includes(item.event?.t)) handle(item.event);
+        continue;
+      }
       if (item.role === 'user') {
-        const turn = userTurn(item.text, item.ts);
+        const turn = userTurn(item.text, item.ts, item.attachments);
         logEl.appendChild(turn);
         if (item.seq) global.ChatCheckpoints.attach(turn, item.seq);
         global.ChatTurnTime.append(logEl, item);
-      } else if (!item.text) { global.ChatTurnTime.append(logEl, item); } else {
+      } else if (item.role === 'status') { global.ChatTurnTime.append(logEl, item); } else if (!item.text) { global.ChatTurnTime.append(logEl, item); } else {
         if (item.model && item.model !== lastModel) logEl.appendChild(modelTag(item.model));
         const turn = document.createElement('div');
         turn.className = 'turn turn-assistant';
@@ -317,15 +322,17 @@
       case 'catalog': global.ChatComposer.setCatalog(msg); break;
       case 'context': global.ChatComposer.context(msg); break;
       case 'commands': global.ChatComposer.commands(msg.items); break;
-      case 'submitted': global.ChatComposer.submitted(msg.id, msg.ok); break;
+      case 'submitted': global.ChatComposer.submitted(msg.id, msg.ok); global.ChatBtw.submitted(msg.id, msg.ok); break;
       case 'setInput': global.ChatComposer.setInput(msg.text); break;
       case 'insertText': global.ChatComposer.insertText(msg.text); break;
       case 'attachments': global.ChatComposer.addAttachments(msg.items); break;
       case 'extensions': global.ChatPlusMenu.setData(msg); break;
-      case 'files': global.ChatComposer.files(msg.items); break;
+      case 'copyResult': global.ChatClipboard?.done(msg); break;
+      case 'files': global.ChatComposer.files(msg.items, msg.error); break;
       case 'approval': global.ChatCards.approval(msg); break;
       case 'approvalResult': global.ChatCards.approvalResult(msg); break;
       case 'plan': global.ChatCards.plan(msg); break;
+      case 'planResult': global.ChatCards.planResult(msg); break;
       case 'btw': global.ChatBtw.update(msg); break;
       case 'checkpoint': global.ChatCheckpoints.one(msg); break;
       case 'btwList': global.ChatBtw.setList(msg); break;

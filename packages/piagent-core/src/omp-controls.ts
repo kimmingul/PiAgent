@@ -11,6 +11,7 @@ export async function control(omp:OmpProcess, command:unknown, fields:unknown, b
     get_subagents:[],cancel_subagent:['subagentId'],steer_subagent:['subagentId','message'],
     get_subagent_messages:['subagentId','fromByte'],abort_retry:[],
     remove_queued_message:['message','queue'],promote_queued_message:['message'],
+    steer:['message'],follow_up:['message'],
     set_fast_mode:['enabled'],set_auto_compaction:['enabled'],set_auto_retry:['enabled'],
     set_cache_warming:['mode'],set_session_name:['name'],get_login_providers:[],
   };
@@ -31,6 +32,7 @@ export async function control(omp:OmpProcess, command:unknown, fields:unknown, b
     const data=isObject(response['data'])?response['data']:{};
     return {models:(Array.isArray(data['models'])?data['models']:[]).filter(isObject).slice(0,500).map(model=>({provider:String(model['provider']).slice(0,128),id:String(model['id']).slice(0,256),name:String(model['name']??model['id']).slice(0,256)}))};
   }
+  if(command==='get_available_commands'){const data=isObject(response['data'])?response['data']:{};return {commands:(Array.isArray(data['commands'])?data['commands']:[]).filter(isObject).slice(0,500).map(item=>({name:String(item['name']??'').slice(0,128),description:String(item['description']??'').slice(0,256)}))};}
   // Raw get_state includes private session paths/system prompt. Return UI state only.
   if(command==='get_state') {
     const state=isObject(response['data'])?response['data']:{};
@@ -41,6 +43,7 @@ export async function control(omp:OmpProcess, command:unknown, fields:unknown, b
     return result;
   }
   const result=isObject(response['data'])?response['data']:{value:response['data']??null};
+  if(command==='get_subagent_messages')delete result['sessionFile'];
   if(Buffer.byteLength(JSON.stringify(result))>512*1024)throw new Error('OMP control result exceeds adapter limit');
   return result;
 }
