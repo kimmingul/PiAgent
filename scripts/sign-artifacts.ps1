@@ -2,11 +2,11 @@
 param(
     [Parameter(Mandatory)][string]$Directory,
     [switch]$AssembliesOnly,
+    [switch]$Interactive,
     [string]$Thumbprint = '3CE49DE1124F325082FA90BDE4944756D1626251',
     [string]$TimestampUrl = 'http://timestamp.globalsign.com/tsa/r6advanced1'
 )
 $ErrorActionPreference = 'Stop'
-& "$PSScriptRoot/unlock-signing-token.ps1" -Thumbprint $Thumbprint
 $certificate = Get-Item "Cert:\CurrentUser\My\$Thumbprint"
 if (!$certificate.HasPrivateKey -or $certificate.NotAfter -le (Get-Date)) { throw 'Valid USB signing certificate required.' }
 $hostArchitecture = [Environment]::GetEnvironmentVariable('PROCESSOR_ARCHITECTURE','Machine')
@@ -25,8 +25,7 @@ foreach ($file in $files) {
     $existing = Get-AuthenticodeSignature -LiteralPath $file.FullName
     if ($existing.Status -ne 'Valid' -or !$existing.TimeStamperCertificate -or
         $existing.SignerCertificate.Thumbprint -ne $Thumbprint) {
-        & $signTool sign /q /s My /sha1 $Thumbprint /fd SHA256 /tr $TimestampUrl /td SHA256 $file.FullName
-        if ($LASTEXITCODE -ne 0) { throw "Signing failed: $($file.Name). Unlock the USB token; no automatic PIN retries are performed." }
+        & "$PSScriptRoot/invoke-sign-cli.ps1" -Path $file.FullName -Thumbprint $Thumbprint -TimestampUrl $TimestampUrl -Interactive:$Interactive
     }
     & $signTool verify /q /pa /tw $file.FullName
     if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $($file.Name)" }

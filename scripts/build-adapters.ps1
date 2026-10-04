@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([string]$MsBuildPath, [string]$BdsRoot, [ValidateSet('Win32','Win64')][string[]]$RadPlatforms = @('Win64'), [switch]$SkipCodeSign)
 $ErrorActionPreference = 'Stop'
+if (!$SkipCodeSign) { & "$PSScriptRoot/assert-signing-credential.ps1" }
 $workspacePath = Split-Path $PSScriptRoot -Parent
 if (-not $MsBuildPath) {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'

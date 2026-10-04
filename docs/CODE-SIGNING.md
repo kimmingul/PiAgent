@@ -1,66 +1,105 @@
 # Windows code signing
 
-`scripts/build-adapters.ps1` signs by default, using the Nanum Space certificate in
-CurrentUser/My (thumbprint `3CE49DE1124F325082FA90BDE4944756D1626251`). Connect the SafeNet
-USB token and unlock it in the provider's Token Logon dialog. PINs and private keys are
-never stored in this repository or passed on command lines. Failed signing stops the build;
-it does not retry token authentication or silently produce a successful unsigned release.
+Release builds sign first-party PE binaries, Delphi BPLs and the VSIX with the
+Nanum Space certificate in CurrentUser/My, thumbprint
+`3CE49DE1124F325082FA90BDE4944756D1626251`. Connect the SafeNet USB token.
+Signing failures stop the build; an unsigned release is never reported as successful.
 
-Windows SDK SignTool signs first-party PE binaries with SHA-256 and GlobalSign's RFC 3161
-timestamp. Every signed PE is checked with `verify /pa /tw`, expected signer, and timestamp.
-On this ARM64 PC, SDK x86 SignTool is used because the SafeNet token provider exposes its
-private key to x86 processes. Third-party binaries retain their original signatures.
+## Register the USB PIN once
 
-The first-party assemblies inside the completed VSSDK archive are signed before the outer
-VSIX signature. This also covers project-reference DLLs that VSSDK takes from `obj` instead
-of the signed `bin` copy. Microsoft's Sign CLI signs the completed VSIX;
-`verify-vsix.ps1` verifies the OPC signature, content, expected signer, certificate chain,
-and embedded first-party assembly signatures/timestamps. This is separate from strong naming.
-
-Install the pinned Sign CLI once from the repository root:
+Run in your own PowerShell session:
 
 ```powershell
-dotnet tool install sign --tool-path .tools/sign --version 0.9.1-beta.26475.3
+& D:\source\PiAgent\scripts\set-signing-pin.ps1
 ```
 
-This official tool release uses x64 dependencies. For this ARM64 PC's x86 token middleware,
-`scripts/prepare-sign-cli.ps1` builds the official MIT-licensed `dotnet/sign` source at
-commit `8e61df9fb776e0c2499dbed0b8037fe450da917b` for x86. A scoped compatibility patch
-permits x86 only when the final argument is a VSIX. Container recursion is disabled:
-first-party PE files are already signed separately with SDK SignTool. The container signing
-algorithm is unchanged. This compatibility build requires the x86 .NET 8 runtime under
-`C:\Program Files (x86)\dotnet`; it is not an official x86 Sign CLI release. Microsoft's
-VSIXSignTool independently verified the signed output. These are build prerequisites and
-are not shipped as PiAgent runtime dependencies. Core remains native ARM64.
+Enter the PIN only into the local masked prompt. The script stores a Windows DPAPI
+encrypted SecureString in `%USERPROFILE%\.piagent\signing\<thumbprint>.clixml`.
+The directory ACL permits only the current user; directory/file links are rejected.
+DPAPI binds decryption to the Windows user and machine. No PIN belongs in Git,
+`.env`, command-line arguments, environment variables, logs or chat.
+
+SafeNet's Token Logon dialog does **not** register this PiAgent credential. With no
+saved credential, signed builds now fail before building rather than opening
+repeated authentication dialogs. Run the registration script again to replace or
+correct the saved PIN.
+
+## PIN delivery inside the signing process
+
+`sign-artifacts.ps1` and `sign-vsix.ps1` call `invoke-sign-cli.ps1`. Its certificate
+provider decrypts the credential **inside the process that signs the files** and
+opens the actual CSP RSA key with `CspParameters.KeyPassword`, `UseExistingKey`
+and `NoPrompt`. A preflight RSA signature validates the key once; the file signer
+uses that same key context. Separate signing processes each receive the saved PIN;
+they do not depend on provider login caching across processes.
+
+`unlock-signing-token.ps1` is now only a compatibility registration check. The old
+separate pre-authentication worker could not guarantee that later SignTool/VSIX
+processes reused its login; an environment marker was not proof of an unlocked key.
+
+Automatic signing never falls back to an interactive PIN dialog. Key/PIN validation
+failure quarantines the encrypted file with a `.rejected-<id>` suffix and stops
+without automatic retries. It reports the provider error code, never the PIN.
+CNG-only tokens are currently unsupported by this saved-PIN implementation.
+Explicit `-Interactive` on the individual signing scripts retains manual signing
+for diagnosis and temporary software-certificate tests; release builds use the
+saved-PIN path by default. This switch contains no credential.
+
+## Tooling and verification
+
+`prepare-sign-cli.ps1` builds MIT-licensed Microsoft's `dotnet/sign` at commit
+`8e61df9fb776e0c2499dbed0b8037fe450da917b`. The scoped patch supplies the DPAPI PIN
+to the certificate-store RSA provider, disables automatic signing retries, enables
+the PE/BPL/VSIX paths on x86, and selects matching Windows SDK signing components.
+The generated tool stays under ignored `.tools/sign-x86` or `.tools/sign-x64`;
+source/patch hashes trigger rebuilding when the implementation changes.
+
+On this ARM64 PC, the SafeNet CSP exposes its key to x86 processes. The helper uses
+the x86 .NET 8 runtime under `C:\Program Files (x86)\dotnet` and x86 SDK components.
+On x64, it builds/runs x64. These are build prerequisites, not PiAgent runtime
+dependencies; Core remains native ARM64. This is not an official x86 Sign CLI release.
+
+PE signing uses SHA-256 and GlobalSign's RFC 3161 timestamp. SDK SignTool performs
+verification only (`verify /pa /tw`), followed by expected signer/timestamp checks;
+it never needs private-key authentication. Third-party binaries retain their
+original signatures. The exact first-party DLLs inside the completed VSSDK archive
+are signed before the outer OPC signature. `verify-vsix.ps1` checks the content
+signature, expected signer, trusted chain and embedded DLL signatures/timestamps.
+This is separate from strong naming.
 
 ```powershell
 & .\scripts\build-adapters.ps1
+& .\scripts\build-installer.ps1
 ```
 
-For explicit local development without signing, use `-SkipCodeSign`. Generate release
-manifests/archives only after a successful signed build: signing changes file hashes.
-Plain JavaScript, JSON, HTML and ZIP files do not receive PE Authenticode signatures.
+For unsigned local development, explicitly use `-SkipCodeSign` on the adapter
+build or `-NoSign` on the installer build. Generate release manifests/archives
+after successful signing because signatures change file hashes. JavaScript,
+JSON, HTML and ZIP files do not receive PE Authenticode signatures.
 
-References: [SignTool](https://learn.microsoft.com/windows/win32/seccrypto/signtool),
+## Tests and actual-token validation
+
+```powershell
+& .\scripts\test-signing.ps1
+# Optionally exercise existing BPL/VSIX copies:
+& .\scripts\test-signing.ps1 -BplPath .\adapters\radstudio\bin\Win64\PiAgent370.bpl `
+    -VsixPath .\adapters\visualstudio\PiAgent.Vsix\bin\Release\net472\PiAgent.Vsix.vsix
+# After registering the actual USB PIN:
+& .\scripts\test-signing-token.ps1
+```
+
+Regression tests use a temporary software CSP certificate in CurrentUser/My;
+they never trust its root or access the USB certificate. They check DPAPI decoding,
+invalid/duplicate SecureStrings, DTD rejection, missing-credential failure before
+file mutation, PE CMS signatures/timestamps, tamper rejection and VSIX content
+signatures. Temporary certificates, keys and fake credentials are removed.
+
+The actual-token test signs copies in `artifacts` in fresh processes and verifies
+them, leaving release artifacts and installed IDEs untouched. Software tests alone
+do not prove that this SafeNet middleware accepts a saved PIN without UI. At the
+time this fix was prepared, the actual PIN had not been registered; live USB
+validation remains pending until the owner registers it.
+
+References: [CspParameters.KeyPassword](https://learn.microsoft.com/dotnet/api/system.security.cryptography.cspparameters.keypassword),
+[SignTool](https://learn.microsoft.com/windows/win32/seccrypto/signtool),
 [Signing VSIX packages](https://learn.microsoft.com/visualstudio/extensibility/signing-vsix-packages).
-
-### Windows-encrypted USB PIN
-
-Run `scripts/set-signing-pin.ps1` once in your own PowerShell session. It prompts
-with Read-Host -AsSecureString and stores only a Windows DPAPI encrypted SecureString
-in `%USERPROFILE%/.piagent/signing/<certificate-thumbprint>.clixml`. The directory
-ACL permits only the current user. No PIN belongs in this repository or a `.env` file.
-DPAPI ties the saved value to this Windows user/machine.
-
-Both signing scripts call `unlock-signing-token.ps1` automatically. It decrypts in
-an x86 Windows PowerShell worker for this ARM64 PC's SafeNet middleware, submits the
-PIN directly to the certificate's CSP using CryptSetProvParam and zeros the unmanaged
-buffer. The PIN never appears in command-line arguments, environment variables or
-logs. A rejected/unsupported stored PIN is quarantined after a single attempt;
-subsequent builds do not retry it. CNG-only tokens are reported as unsupported by
-this CSP helper. Provider-specific PIN caching controls whether separate SignTool
-and VSIX signing processes reuse that login; repeated prompts cannot be guaranteed
-absent until the actual saved PIN and USB middleware have been tested. With no
-saved PIN, an already-unlocked token continues to work as before.
-
-API: [CryptSetProvParam](https://learn.microsoft.com/windows/win32/api/wincrypt/nf-wincrypt-cryptsetprovparam).

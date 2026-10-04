@@ -2,9 +2,10 @@
 param([string]$Thumbprint='3CE49DE1124F325082FA90BDE4944756D1626251')
 $ErrorActionPreference='Stop'
 if($Thumbprint -notmatch '\A[0-9A-Fa-f]{40}\z'){throw 'Invalid certificate thumbprint.'}
-$directory=Join-Path $env:USERPROFILE '.piagent/signing'
+$directory=Join-Path ([Environment]::GetFolderPath('UserProfile')) '.piagent/signing'
+$current=[IO.Path]::GetFullPath($directory)
+while($current){if((Test-Path -LiteralPath $current) -and ((Get-Item -LiteralPath $current).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Signing directory links are forbidden.'};$current=[IO.Path]::GetDirectoryName($current)}
 New-Item -ItemType Directory -Force -Path $directory | Out-Null
-if((Get-Item -LiteralPath $directory).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Signing directory links are forbidden.'}
 $identity=[Security.Principal.WindowsIdentity]::GetCurrent().User
 $acl=New-Object Security.AccessControl.DirectorySecurity
 $acl.SetOwner($identity);$acl.SetAccessRuleProtection($true,$false)
@@ -13,8 +14,10 @@ Set-Acl -LiteralPath $directory -AclObject $acl
 $path=Join-Path $directory ($Thumbprint.ToUpperInvariant()+'.clixml')
 if((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Signing credential links are forbidden.'}
 $pin=Read-Host 'USB certificate PIN (encrypted for this Windows user)' -AsSecureString
+$temporary=Join-Path $directory ([guid]::NewGuid().ToString('N')+'.tmp')
 try {
     if($pin.Length -eq 0){throw 'Empty PIN is not accepted.'}
-    $pin | Export-Clixml -LiteralPath $path -Force
+    $pin | Export-Clixml -LiteralPath $temporary
+    Move-Item -LiteralPath $temporary -Destination $path -Force
     Write-Host 'Saved using Windows DPAPI. No plaintext PIN is stored.'
-} finally {$pin.Dispose()}
+} finally {$pin.Dispose();Remove-Item -LiteralPath $temporary -ErrorAction SilentlyContinue}

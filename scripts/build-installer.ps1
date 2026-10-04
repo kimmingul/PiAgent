@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param([switch]$NoSign, [switch]$SkipAdapterBuild)
 $ErrorActionPreference = 'Stop'
+if (!$NoSign) { & "$PSScriptRoot/assert-signing-credential.ps1" }
 $workspacePath = Split-Path $PSScriptRoot -Parent
 Push-Location $workspacePath
 try {
