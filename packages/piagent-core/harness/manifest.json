@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.0",
+  "frameworks": [
+    {
+      "ids": [
+        "winforms-framework",
+        "winforms"
+      ],
+      "skill": "skills/winforms-gui/SKILL.md",
+      "catalog": "catalogs/winforms.json"
+    },
+    {
+      "ids": [
+        "wpf-xaml"
+      ],
+      "skill": "skills/wpf-gui/SKILL.md",
+      "catalog": "catalogs/wpf.json"
+    },
+    {
+      "ids": [
+        "winui3-xaml"
+      ],
+      "skill": "skills/winui3-gui/SKILL.md",
+      "catalog": "catalogs/winui3.json"
+    },
+    {
+      "ids": [
+        "vcl"
+      ],
+      "skill": "skills/vcl-gui/SKILL.md",
+      "catalog": "catalogs/vcl.json"
+    },
+    {
+      "ids": [
+        "fmx"
+      ],
+      "skill": "skills/fmx-gui/SKILL.md",
+      "catalog": "catalogs/fmx.json"
+    }
+  ]
+}
+

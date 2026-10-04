@@ -1,6 +1,6 @@
 # RAD Studio adapter
 
-0.7.0 Delphi design-time BPL은 Help → Help Wizards → **PiAgent: Open Chat**에서 Vcl.Edge
+Delphi design-time BPL은 **View → PiAgent** 또는 **Tools → PiAgent**에서 Vcl.Edge
 WebView2 채팅 창을 연다. VS와 같은 TypeScript UI로 채팅, 승인·복원, 저장 대화 재개 및 사용량을 표시한다.
 hello 전에 Core/adapter 상호 HMAC 인증을 수행하며 credential은 WebView에 전달하지 않는다.
 [보안 설정](../../docs/SECURITY.md) · [승인 변경](../../docs/APPROVED-CHANGES.md).
@@ -8,7 +8,9 @@ hello 전에 Core/adapter 상호 HMAC 인증을 수행하며 credential은 WebVi
 PiAgent.ChatWorker의 전용 worker가 pipe와 runtime session을 단독 소유한다. bounded queue와
 메인 스레드 timer polling으로 UI를 연결하며 ToolsAPI/WebView 호출은 메인 스레드에서만 실행한다.
 모든 대상 파일의 미저장 editor를 검사한 뒤 승인·복원을 요청한다. 패키지 unload에서 timer와
-worker를 cancel/join한다. queued callback/notifier를 남기지 않는다. IDE가 wizard 메뉴 수명을 관리한다.
+worker를 cancel/join한다. queued callback/notifier를 남기지 않는다. adapter가 두 메뉴 항목을 소유하고
+패키지 unload 시 제거한다. IDE 메뉴 초기화가 늦으면 메인 스레드 timer로 등록을 재시도한다.
+Tools 메뉴가 열릴 때 기존 IDE handler를 먼저 실행한 뒤 PiAgent 항목을 유지한다.
 
 PiAgent.PipeClient는 ToolsAPI에 의존하지 않는다. strict UTF-8, 1 MiB length-prefix framing,
 request ID 검증과 overlapped cancellable I/O를 사용한다. 일반 RPC는 5초, chat.open과
@@ -30,7 +32,7 @@ IDE와 같은 bitness의 BPL만 Component → Install Packages에서 설치한�
 기존 BPL을 unload하거나 IDE를 종료한 뒤 교체한다. 빌드 스크립트는 버전별 출력 디렉터리를 사용한다.
 
 1. secure Core를 `--omp <omp.exe> --workspace <Git-root> --allow-writes`로 실행한다.
-2. IDE를 실행하고 Help → Help Wizards → PiAgent: Open Chat → 연결을 선택한다.
+2. IDE를 실행하고 View → PiAgent 또는 Tools → PiAgent를 선택한다. 두 메뉴는 같은 채팅 창을 연다.
 3. 파일 diff를 확인해 승인한다. 변경 기록에서 역방향 diff를 확인한 뒤 복원 적용한다.
 4. 저장된 대화에서 재개하고 사용량·비용을 펼쳐 확인한다.
 

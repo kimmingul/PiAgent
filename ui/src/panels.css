@@ -1,0 +1,38 @@
+/* Sheet over the chat (panels.js): subagent transcripts, shortcut and subagent lists */
+#sheet { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+  background: var(--bg); }
+#sheet[hidden] { display: none; }
+.sheet-head { display: flex; align-items: center; padding: 8px 12px 4px 12px;
+  border-bottom: 1px solid var(--border); }
+.sheet-title { font-weight: 600; }
+#sheet-body { flex: 1 1 auto; overflow: auto; padding: 10px 20px; }
+
+/* Usage panel of the context ring */
+#ctx-ring { cursor: pointer; }
+#usage-pop { right: 0; width: 360px; max-width: 100%; padding: 10px 12px; font-size: 12px; }
+.usage-row { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; }
+.usage-label { color: var(--fg); font-weight: 600; white-space: nowrap; }
+.usage-detail { color: var(--muted); flex: 1 1 auto; text-align: right; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.usage-value { color: var(--muted); min-width: 32px; text-align: right; }
+.usage-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 4px; overflow: hidden; }
+.usage-fill { height: 100%; background: var(--accent); }
+.usage-fill.high { background: var(--warn); }
+.usage-note { color: var(--muted); margin-top: 4px; }
+.usage-head { display: flex; justify-content: space-between; color: var(--muted); cursor: pointer;
+  margin-top: 4px; }
+.usage-head:hover { color: var(--fg); }
+
+/* Messages sent while omp worked (queue.js), and the retry stop */
+.queue-tag { font-size: 10px; color: var(--muted); margin-top: 2px; text-align: right; }
+.queue-waiting .queue-tag { font-style: italic; }
+.queue-cancel { font-style: normal; }
+.queue-cancelled .user-text { text-decoration: line-through; opacity: 0.6; }
+.queue-lost .queue-tag { color: var(--warn, var(--muted)); }
+.notice-btn { margin-left: 8px; font: inherit; font-size: 11px; color: var(--fg); cursor: pointer;
+  background: transparent; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; }
+.subagent-row { cursor: pointer; }
+
+/* When a turn ended and how long it took (turntime.js) */
+.turn-time { font-size: 11px; color: var(--muted); margin: 2px 0 12px; }
+.turn-time.stopped { color: var(--warn, var(--muted)); }

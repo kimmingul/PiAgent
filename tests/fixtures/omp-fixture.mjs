@@ -20,6 +20,11 @@ if (scenario === 'stubborn') setInterval(() => {}, 1_000);
 const lines = readline.createInterface({ input: process.stdin });
 lines.on('line', line => {
   const command = JSON.parse(line);
+  if(scenario==='v2-coalesced'&&command.type==='negotiate_protocol') {
+    const payload=Buffer.from(JSON.stringify({type:'session_event',text:'v2 한글'}));
+    process.stdout.write(JSON.stringify({type:'response',id:command.id,command:command.type,success:true,data:{protocolVersion:2}})+'\n'+JSON.stringify({type:'rpc_chunk',chunkId:'same-read',index:0,count:1,byteLength:payload.length,data:payload.toString('base64')})+'\n');
+    return;
+  }
   if (command.exit) process.exit(9);
   if (command.hang) return;
   setTimeout(() => emit({ type: 'response', id: command.id,

@@ -1,7 +1,7 @@
 # PiAgent local connection security
 
 0.7.0: 저장 대화 metadata와 OMP JSONL은 검증된 credential의 private parent 아래에 보관한다.
-Windows의 LocalAppData 리디렉션을 canonical 경로로 확인한 후 workspace별 namespace를 만든다.
+credential의 실제 private 경로를 확인한 후 workspace별 namespace를 만든다.
 savedSessionId만 wire에 노출하고 임의 파일 경로로 재개하지 않는다. 세션 디렉터리와 파일의
 reparse point/hard link를 거부한다. 원문 코드·대화가 저장되므로 삭제·보존 정책은
 [SESSIONS-USAGE.md](SESSIONS-USAGE.md)를 따른다. 설치 제거는 이 데이터를 자동 삭제하지 않는다.
@@ -18,7 +18,8 @@ npm start -- --omp C:\Users\kimmi\AppData\Local\omp\omp.exe --cwd D:\source\PiAg
 - Pipe DACL은 현재 사용자 SID만 허용하고 network logon을 거부한다. PIPE_REJECT_REMOTE_CLIENTS를 생성 시 적용한다.
 - 첫 pipe에는 FILE_FLAG_FIRST_PIPE_INSTANCE를 적용한다. 기존 listener가 있으면 startup은 실패하며 insecure fallback을 하지 않는다.
   accept 중 항상 적어도 하나의 handle을 유지한다. 동시에 16개 연결만 허용한다.
-- 256-bit key는 `%LOCALAPPDATA%\PiAgent\security\<pipe-name>\token`에 보관한다.
+- 256-bit key는 `%USERPROFILE%\.piagent\security\<pipe-name>\token`에 보관한다.
+  AppData는 패키지 실행 환경의 LocalCache로 리디렉션될 수 있으므로 공유 인증에 사용하지 않는다.
   디렉터리/파일은 현재 사용자만 허용하는 ACL로 생성한다. 기존 파일의 owner/ACL/형식, reparse point, hard link를 검사한다.
   key는 command line, 진단 로그, WebView, Git, release ZIP에 포함하지 않는다.
 - VS와 Delphi adapter 및 probe는 pipe별 기본 credential을 자동 발견한다. 다른 위치는 daemon `--auth-file` 및

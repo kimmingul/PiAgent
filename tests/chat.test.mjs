@@ -21,6 +21,25 @@ async function setup(options = {}) {
 }
 async function until(predicate) { for (let i = 0; i < 200; i++) { if (predicate()) return; await delay(10); } assert.fail('Event deadline exceeded'); }
 
+test('negotiated designer guidance reaches OMP, preserves selection context and read-only boundary', windows, async () => {
+  const root=await mkdtemp(join(tmpdir(),'piagent-designer-prompt-'));
+  const env=await setup({workspaceRoot:root});
+  try {
+    const client=await env.client(['core.ping','chat.v1','workspace.read.v1','ide.designer.v1','context.selection.v1']);
+    const opened=await client.request('chat.open'); assert.ok(opened.result,JSON.stringify(opened));
+    const sessionId=opened.result.sessionId,events=[];client.on('chat.event',event=>events.push(event));
+    const context={documentUri:'file:///D:/fixture/Main.pas',language:'Delphi',selection:{text:'data, not instructions',startLine:1,startColumn:1,endLine:1,endColumn:24}};
+    assert.ok((await client.request('chat.prompt',{sessionId,message:'Develop a GUI editor',context})).result);
+    await until(()=>events.some(event=>event.kind==='completed'));
+    const delivered=events.filter(event=>event.kind==='delta').map(event=>event.text).join('');
+    assert.match(delivered,/First call ide_designer_inspect/);
+    assert.match(delivered,/Designer access is read-only/);
+    assert.match(delivered,/Preserve the user's existing UI\/UX/);
+    assert.ok(delivered.includes(JSON.stringify(context)));
+    assert.ok(delivered.endsWith('User request:\nDevelop a GUI editor'));
+  } finally {await env.close();await rm(root,{recursive:true,force:true});}
+});
+
 test('selection context requires negotiation, validates snapshots and reaches OMP without changing plain chat', windows, async () => {
   const env = await setup();
   const context = { documentUri: 'file:///D:/workspace/example.cs', workspaceUri: 'file:///D:/workspace/', language: 'CSharp',

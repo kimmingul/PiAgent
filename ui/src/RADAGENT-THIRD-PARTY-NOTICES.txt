@@ -1,0 +1,86 @@
+﻿RAD Agent - Third-party notices
+Copyright (C) 2026 Nanum Space Co., Ltd.
+
+RAD Agent is free and open source under the MIT License (LICENSE.txt). It includes the
+components below; their licenses follow.
+
+1. Provider and model icons (chat\brands, and the icon sprites inside the RAD Agent BPL)
+   From lobe-icons, https://github.com/lobehub/lobe-icons
+   Provider and model logos are trademarks of their respective owners.
+
+MIT License
+
+Copyright (c) 2023 LobeHub
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+2. WebView2Loader.dll
+   From the Microsoft.Web.WebView2 SDK 1.0.4191.47, https://www.nuget.org/packages/Microsoft.Web.WebView2
+
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * The name of Microsoft Corporation, or the names of its contributors 
+may not be used to endorse or promote products derived from this
+software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+3. Design presets (DESIGN.md presets inside the RAD Agent BPL, src\design\presets)
+   Token values (sizes, spacing, radii, colors) are taken from public platform guidance, with
+   each value's source listed in the preset. The prose is RAD Agent's own.
+   - Material 3 token values from material-components/material-web,
+     https://github.com/material-components/material-web, Apache License 2.0,
+     Copyright Google LLC. "Material Design" is a trademark of Google LLC.
+   - Windows 11 values from Microsoft Learn and microsoft/microsoft-ui-xaml
+     (https://github.com/microsoft/microsoft-ui-xaml, MIT License, Copyright (c) Microsoft
+     Corporation). "Windows" and "Fluent" are trademarks of Microsoft Corporation.
+   - macOS values from Apple's Human Interface Guidelines. "macOS" and "Apple" are trademarks of
+     Apple Inc. No Apple fonts are included.
+
+4. Not included, used when installed by the user
+   - oh-my-pi (omp), MIT License, https://github.com/can1357/oh-my-pi
+     RAD Agent does not ship omp. When omp is missing, the setup offers to download the latest
+     official release for the PC's processor (x64 or ARM64) from GitHub, checked against its
+     published SHA-256, to %LOCALAPPDATA%\omp.
+   - clangd, part of the LLVM project, Apache License 2.0 with LLVM Exceptions,
+     https://github.com/clangd/clangd - downloaded only when the user asks for it in Settings.
+   - Microsoft Edge WebView2 Runtime, provided by Windows.
+
+Delphi and RAD Studio are registered trademarks of Embarcadero Technologies, Inc. RAD Agent is an
+independent product, not affiliated with or endorsed by Embarcadero.

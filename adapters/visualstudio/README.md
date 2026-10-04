@@ -1,13 +1,13 @@
 # Visual Studio adapter
 
-0.7.0 C# VSIX는 Tools → **PiAgent: Open Chat**의 WPF/WebView2 창에서 채팅 스트리밍·취소,
+0.7.3 C# VSIX는 Tools → **PiAgent: Open Chat**의 WPF/WebView2 창에서 채팅 스트리밍·취소,
 다중 파일 승인·복원, 저장 대화 재개와 세션 사용량·비용·계정 한도를 제공한다.
 Tools → PiAgent: Check Core Connection은 별도의 일회성 hello/ping 검사다.
 hello 전에 current-user credential로 상호 HMAC 인증하며 credential/revision은 WebView에 전달하지 않는다.
 [보안](../../docs/SECURITY.md) · [승인 변경](../../docs/APPROVED-CHANGES.md) · [세션/사용량](../../docs/SESSIONS-USAGE.md).
 
 선택 코드 가져오기는 저장된 활성 텍스트 파일의 URI·언어·범위·코드를 UI thread에서 캡처한다.
-미리 확인한 스냅샷만 다음 질문에 첨부한다. 전체 파일 변경은 Core의 제한된 workspace 도구로 수행하며
+`/selection`으로 가져온 뒤 입력창의 선택 영역 칩을 눌러 다음 질문에 첨부한다. 전체 파일 변경은 Core의 제한된 workspace 도구로 수행하며
 승인·복원 전에 모든 대상 파일의 미저장 editor를 VS SDK로 검사한다.
 
 PiAgent.Transport는 VS SDK와 독립된 netstandard2.0 library다. strict UTF-8,
@@ -26,13 +26,24 @@ WebView2 Runtime은 PC의 설치본을 사용한다.
 
 1. secure Core를 `--omp <omp.exe> --workspace <Git-root> --allow-writes`로 실행한다.
 2. VSIX를 원하는 Visual Studio instance에 설치하고 IDE를 다시 시작한다.
-3. Tools → PiAgent: Open Chat → 연결에서 질문을 보낸다.
+3. Tools → PiAgent: Open Chat을 열면 자동 연결된다. 입력창에서 질문을 보낸다.
 4. 모든 diff를 검토한 뒤 승인한다. 변경 기록에서는 역방향 diff를 확인해 복원 적용한다.
 
 다른 endpoint는 IDE 실행 전 PIAGENT_PIPE_NAME으로 지정한다(기본 piagent-dev).
 Core 자동 실행과 VSIX 자동 설치는 하지 않는다. [설치 안내](../../docs/INSTALLATION.md).
 WebView는 local-origin만 허용하며 모델 출력을 HTML로 실행하지 않는다.
 창 숨김/재표시는 연결을 유지하고 IDE/tool window disposal에서 연결을 정리한다.
+0.7.1은 Core 0.7.0과 호환되는 VSIX 전용 수정이다. SDK WPF wrapper는 초기 부모 Window의
+Closed 이벤트에서 controller를 해제한다. 도킹 후 이전 부동 창이 닫힐 때도 이 이벤트가 남아
+빈 화면이 발생한다. ChatWebView는 controller 수명을 tool window에 두고, WPF HwndHost의
+조상 창 전환을 controller의 ParentWindow에 명시적으로 반영한다.
+같은 controller/문서를 유지하므로 채팅 연결·승인 화면·입력 초안을 재생성하지 않는다.
+
+도킹 회귀 검사: VS MSBuild로 PiAgent.WebView.Smoke/PiAgent.WebView.Smoke.csproj을
+`/restore /p:Configuration=Release` 빌드한 뒤 bin/Release/net472/PiAgent.WebView.Smoke.exe를 실행한다.
+실제 WebView2에서 부모 창 이동/종료, 탭 전환, 숨김/재표시 후 브라우저 PID·DOM·한글 초안을 검사한다.
+`--baseline`은 기존 WPF WebView2로 동일 시나리오를 실행하며 최초 부모 창 종료 후 실패한다.
+테스트 harness는 x64(.NET Framework)이고 ARM64 Windows에서는 x64 호환 실행을 사용한다.
 
 기존 설정과 분리하는 테스트 설치는 VSIXInstaller `/rootSuffix:PiAgentTest /instanceIds:<id>`와
 같은 devenv.exe의 `/RootSuffix PiAgentTest /Log <activity.xml>`를 사용한다.
@@ -52,3 +63,6 @@ VS 2026 18.10.3 (18.10.12224.181, instance 4dee894c)의 별도 PiAgentTest 프�
 
 VS 2022 Newtonsoft.Json binding 호환성을 위해 converter array를 명시하는 overload를 사용한다.
 진단 로그는 .tools/ide-validation 및 Windows TEMP의 dd_VSIXInstaller 로그에 있다.
+
+
+0.7.3는 RADAgent 원본 WebView UI를 재사용한다. 세션은 제목, 사용량은 하단 원형 표시, 승인은 대화 내 카드에서 처리한다. 원본과의 연결 범위는 [UI 안내](../../ui/README.md)를 따른다.

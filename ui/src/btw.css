@@ -1,0 +1,89 @@
+/* /btw side questions: folded cards in the chat and the notes panel (btw.js). */
+
+#btw-count:not(:empty) {
+  margin-left: 4px;
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--border);
+  color: var(--fg);
+}
+#btw-btn { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
+
+/* Chat card: one line until opened */
+.btw-card {
+  align-self: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.btw-card > summary {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+}
+.btw-card > summary::-webkit-details-marker { display: none; }
+.btw-card > summary::before { content: "›"; transition: transform 0.15s; }
+.btw-card[open] > summary::before { transform: rotate(90deg); }
+.btw-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.btw-q { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.btw-state { flex: none; font-size: 11px; }
+.btw-card.running .btw-state { color: var(--accent); }
+.btw-card.failed .btw-state { color: var(--error); }
+.btw-card > .card-actions, .btw-card > .btw-follow { display: none; }
+.btw-card[open] > .card-actions { display: flex; margin-top: 6px; }
+.btw-card[open] > .btw-follow:not([hidden]) { display: flex; }
+.btw-body { margin-top: 6px; font-size: 13px; }
+.btw-wait { color: var(--muted); font-style: italic; }
+.btw-error { color: var(--error); font-size: 12px; }
+
+/* Follow-up input */
+.btw-follow { display: flex; gap: 6px; align-items: flex-end; margin-top: 6px; }
+.btw-follow textarea, #btw-new-input, #btw-search {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--codeBg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  resize: vertical;
+}
+
+/* Notes panel: replaces the transcript and the composer while open */
+body.btw-open #log, body.btw-open #composer, body.btw-open #scroll-bottom-btn { display: none !important; }
+#btw-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#btw-panel[hidden] { display: none; }
+.btw-head { display: flex; align-items: center; padding: 8px 12px 4px 12px; }
+.btw-title { font-weight: 600; }
+.btw-tools { display: flex; gap: 10px; align-items: center; padding: 4px 12px 8px 12px; font-size: 12px; color: var(--muted); }
+.btw-tools label { white-space: nowrap; cursor: pointer; }
+#btw-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.btw-empty { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; }
+.btw-topic { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.btw-topic.here { border-left: 3px solid var(--accent); }
+.btw-topic > summary { cursor: pointer; list-style: none; }
+.btw-topic > summary::-webkit-details-marker { display: none; }
+.btw-topic-head { display: flex; gap: 8px; align-items: center; }
+.btw-topic .btw-q { flex: 1 1 auto; font-weight: 600; white-space: normal; }
+.card-btn.btw-stop { flex: none; padding: 1px 10px; font-size: 11px; color: var(--error); border-color: var(--error); }
+.btw-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.btw-thread { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.btw-turn-q { font-weight: 600; font-size: 12px; }
+.btw-turn-q::before { content: "Q  "; color: var(--accent); }
+.btw-turn-meta { color: var(--muted); font-size: 11px; }
+.btw-topic > .card-actions { margin-top: 6px; }
+.btw-new { padding: 8px 12px 10px 12px; border-top: 1px solid var(--border); display: flex; }

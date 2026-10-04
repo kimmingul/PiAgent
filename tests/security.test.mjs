@@ -9,10 +9,16 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Authentication, Session, authProof } from '@piagent/core';
 import { startDaemon, PipeClient, pipePath } from '@piagent/daemon';
+import { credentialPath } from '@piagent/daemon';
 const execute = promisify(execFile);
 const windows = { skip: process.platform !== 'win32', timeout: 25_000 };
 const hello = { protocolVersions: [1], capabilities: ['core.ping'], adapter: { kind: 'test-ide', version: 'test', ideVersion: 'test', instanceId: 'test' } };
 const request = (session, method, params, id = 'test') => session.handle(Buffer.from(JSON.stringify({ jsonrpc: '2.0', id, method, params })));
+test('default credentials live outside virtualized AppData and validate pipe names',()=>{
+ const old=process.env.USERPROFILE;process.env.USERPROFILE=join(tmpdir(),'piagent-profile-fixture');
+ try{assert.equal(credentialPath('scope'),join(process.env.USERPROFILE,'.piagent','security','scope','token'));assert.throws(()=>credentialPath('../other'));}
+ finally{if(old===undefined)delete process.env.USERPROFILE;else process.env.USERPROFILE=old;}
+});
 
 test('authentication gates all methods, verifies mutual/domain proofs and rejects replay', () => {
   const token = randomBytes(32).toString('hex'), nonce = randomBytes(32).toString('hex');

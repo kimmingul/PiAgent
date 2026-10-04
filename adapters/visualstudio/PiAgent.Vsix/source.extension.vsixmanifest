@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
-  <Metadata><Identity Id="PiAgent.Vsix.38557171-e01d-4d7b-9842-3b435c5eed83" Version="0.7.0" Language="en-US" Publisher="PiAgent" /><DisplayName>PiAgent</DisplayName><Description xml:space="preserve">PiAgent chat, saved sessions, usage and reviewed workspace changes.</Description></Metadata>
+  <Metadata><Identity Id="PiAgent.Vsix.38557171-e01d-4d7b-9842-3b435c5eed83" Version="0.9.4" Language="en-US" Publisher="PiAgent" /><DisplayName>PiAgent</DisplayName><Description xml:space="preserve">PiAgent chat, saved sessions, usage and reviewed workspace changes.</Description><Icon>Resources\PiAgent.png</Icon></Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,19.0)"><ProductArchitecture>amd64</ProductArchitecture></InstallationTarget>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,19.0)"><ProductArchitecture>arm64</ProductArchitecture></InstallationTarget>

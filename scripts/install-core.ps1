@@ -4,7 +4,8 @@ param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'PiAgent\runtime'),
     [string]$NodeExecutable = 'node',
     [string]$PipeName = 'piagent-dev',
-    [string]$Omp, [string]$Workspace, [switch]$AllowWrites
+    [string]$Omp, [string]$Workspace, [switch]$AllowWrites,
+    [ValidateSet("restricted","native")][string]$OmpProfile = "restricted"
 )
 $ErrorActionPreference = 'Stop'
 if (-not $Source) { $Source = Split-Path $PSScriptRoot -Parent }
@@ -29,6 +30,7 @@ $runtimes = & dotnet --list-runtimes
 if ($LASTEXITCODE -ne 0 -or -not ($runtimes -match '^Microsoft.NETCore.App (8|9|1[0-9])\.')) { throw '.NET 8+ runtime is required' }
 if ($Omp) { $Omp = (Resolve-Path -LiteralPath $Omp).Path }
 if ($Workspace) { $Workspace = (Resolve-Path -LiteralPath $Workspace).Path }
+if ($OmpProfile -eq 'native' -and (-not $AllowWrites -or -not $Omp -or -not $Workspace)) { throw 'Native OMP requires -Omp, -Workspace and -AllowWrites' }
 if ($AllowWrites) {
     if (-not $Workspace) { throw '-AllowWrites requires -Workspace' }
     & git --version | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Git is required for writes' }
@@ -57,7 +59,7 @@ New-Item -ItemType Directory -Path $target -Force | Out-Null
 try {
     Get-ChildItem -LiteralPath $sourcePath -Force | Copy-Item -Destination $target -Recurse
     $encoding = New-Object Text.UTF8Encoding($false)
-    $settingsJson = @{node=$NodeExecutable;pipe=$PipeName;omp=$Omp;workspace=$Workspace;allowWrites=[bool]$AllowWrites} | ConvertTo-Json
+    $settingsJson = @{node=$NodeExecutable;pipe=$PipeName;omp=$Omp;workspace=$Workspace;allowWrites=[bool]$AllowWrites;ompProfile=$OmpProfile} | ConvertTo-Json
     [IO.File]::WriteAllText((Join-Path $target 'settings.json'),$settingsJson,$encoding)
     $receiptJson = @{product='PiAgent';version=$manifest.version;path=$target;installedAt=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json
     [IO.File]::WriteAllText((Join-Path $target 'install-receipt.json'),$receiptJson,$encoding)

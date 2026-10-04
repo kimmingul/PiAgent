@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { dirname,join } from 'node:path';
-import { realpath } from 'node:fs/promises';
+import { realpath,lstat } from 'node:fs/promises';
 import { SessionStore,UsageService } from '@piagent/core';
 import { createServer } from 'node:net';
 import type { Duplex } from 'node:stream';
@@ -32,9 +33,26 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
 }> {
   if (process.platform !== 'win32') throw new Error('PiAgent daemon requires Windows Named Pipes');
   if (options.workspaceRoot && !options.omp) throw new Error('Workspace tools require OMP');
+  if(options.omp?.profile==='native'&&(!options.secure||!options.workspaceRoot||!options.allowWrites))throw new Error('Native OMP requires authenticated transport, an explicit workspace and --allow-writes');
   const workspace = options.workspaceRoot ? await WorkspaceReader.create(options.workspaceRoot) : undefined;
   if (options.allowWrites && (!options.secure || !workspace)) throw new Error('Writes require secure transport and an explicit workspace');
   const changes = options.allowWrites ? await WorkspaceChanges.create(workspace!) : undefined;
+  const changesByRoot=new Map<string,WorkspaceChanges>();
+  if(changes&&workspace)changesByRoot.set(workspace.root.toLowerCase(),changes);
+  let sessionBase:string|undefined;
+  const bindWorkspace=options.secure&&options.omp?async(uri:unknown)=>{
+    if(typeof uri!=='string'||uri.length>8192)throw new Error('Expected workspace file URI');
+    const parsed=new URL(uri);if(parsed.protocol!=='file:'||parsed.host||parsed.search||parsed.hash)throw new Error('Expected local workspace file URI');
+    const bound=await WorkspaceReader.create(fileURLToPath(parsed));
+    let edits=changesByRoot.get(bound.root.toLowerCase());
+    if(options.allowWrites&&!edits){
+      const git=await lstat(join(bound.root,'.git')).catch(error=>{if(error.code==='ENOENT')return undefined;throw error;});
+      if(git?.isDirectory()&&!git.isSymbolicLink()){edits=await WorkspaceChanges.create(bound);changesByRoot.set(bound.root.toLowerCase(),edits);}
+    }
+    if(!sessionBase)throw new Error('Private session storage unavailable');
+    const saved=new SessionStore(join(sessionBase,createHash('sha256').update(bound.root.toLowerCase()).digest('hex')));await saved.initialize();
+    return {workspace:bound,...(edits?{changes:edits}:{}),sessions:saved};
+  }:undefined;
   const path = pipePath(options.pipeName ?? 'piagent-dev');
   const deadline = options.ioTimeoutMs ?? 30_000;
   const maxConnections = options.maxConnections ?? 16;
@@ -75,7 +93,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
         });
       } catch (error) { close(error instanceof Error ? error : new Error(String(error))); }
     };
-    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace, changes, services) : undefined;
+    const chat = options.omp ? new ChatSession(options.omp, event => send({ jsonrpc: '2.0', method: 'chat.event', params: event }), workspace, changes, services,bindWorkspace) : undefined;
     if (chat) chats.set(socket, chat);
     const session = new Session(chat, token ? new Authentication(token, options.pipeName ?? 'piagent-dev') : undefined);
     const authTimer = token ? setTimeout(() => { if (!session.ready) close(new Error('Authentication/handshake deadline exceeded')); }, 10_000) : undefined;
@@ -122,7 +140,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
       const namespace=createHash('sha256').update(scope.toLowerCase()).digest('hex');
       const authPath=options.secure.authFile??credentialPath(options.pipeName??'piagent-dev');
       // Resolve the broker-validated private parent once (Windows packaged apps may virtualize LocalAppData).
-      services.sessions=new SessionStore(join(await realpath(dirname(authPath)),'sessions',namespace));
+      sessionBase=join(await realpath(dirname(authPath)),'sessions');
+      services.sessions=new SessionStore(join(sessionBase,namespace));
       await services.sessions.initialize();
     }}catch(error){await host.close();throw error;}
   } else {
@@ -145,7 +164,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
         for (const socket of sockets) { retire(socket); socket.destroy(); }
         await closeTransport();
         await Promise.all([...cleanup]);
-        await changes?.drain();
+        await Promise.all([...changesByRoot.values()].map(service=>service.drain()));
         await services.usage?.drain();
       })();
       return closing;

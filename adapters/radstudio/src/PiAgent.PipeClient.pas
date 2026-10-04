@@ -74,7 +74,7 @@ begin
   FileName := GetEnvironmentVariable('PIAGENT_AUTH_FILE');
   if FileName = '' then
   begin
-    FileName := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'PiAgent\security\' + FName + '\token');
+    FileName := TPath.Combine(GetEnvironmentVariable('USERPROFILE'), '.piagent\security\' + FName + '\token');
     if not TFile.Exists(FileName) and (GetEnvironmentVariable('PIAGENT_DEV_PIPE') = '1') then Exit;
   end;
   try Token := TFile.ReadAllText(FileName, TEncoding.UTF8);
@@ -153,7 +153,7 @@ var Request, Reply: TJSONObject; Bytes: TBytes; Header: array[0..3] of Byte;
   Id: string; Length: Cardinal;
 begin
   FDeadline := GetTickCount64 + 5000;
-  if MatchText(Method,['chat.open','changes.decide','changes.restore','chat.usage','sessions.list']) then FDeadline := GetTickCount64 + 60000;
+  if MatchText(Method,['chat.open','changes.decide','changes.restore','chat.usage','sessions.list','omp.control']) then FDeadline := GetTickCount64 + 60000;
   Inc(FSequence);
   Id := 'delphi-' + IntToStr(FSequence);
   Request := TJSONObject.Create;
@@ -218,7 +218,7 @@ function TPiPipeClient.Request(const Method: string; Params: TJSONObject): TJSON
 begin
   if not FReady then begin Params.Free; raise Exception.Create('Handshake required'); end;
   if not MatchText(Method,['chat.open','chat.prompt','chat.cancel','chat.close','changes.decide','changes.list',
-    'changes.previewRestore','changes.restore','sessions.list','chat.usage']) then
+    'changes.previewRestore','changes.restore','sessions.list','chat.usage','designer.reply','designer.decide','omp.respond','omp.control']) then
     begin Params.Free; raise Exception.Create('Method unavailable'); end;
   Result := Call(Method,Params);
 end;
@@ -231,12 +231,12 @@ begin
   Params := TJSONObject.Create;
   Params.AddPair('protocolVersions', TJSONArray.Create.Add(1));
   Caps := TJSONArray.Create.Add('core.ping');
-  if Chat then begin Caps.Add('chat.v1'); Caps.Add('workspace.read.v1'); Caps.Add('workspace.edit.v1'); Caps.Add('workspace.edit.batch.v1'); Caps.Add('chat.sessions.v1'); Caps.Add('chat.usage.v1'); end;
+  if Chat then begin Caps.Add('chat.v1'); Caps.Add('omp.controls.v1').Add('chat.approval.v1'); Caps.Add('ide.designer.v1'); Caps.Add('workspace.read.v1'); Caps.Add('workspace.edit.v1'); Caps.Add('workspace.edit.batch.v1'); Caps.Add('chat.sessions.v1'); Caps.Add('chat.usage.v1'); end;
   Params.AddPair('capabilities', Caps);
   Required := TJSONArray.Create.Add('core.ping'); if Chat then Required.Add('chat.v1');
   Params.AddPair('requiredCapabilities', Required);
   Adapter := TJSONObject.Create;
-  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.7.0');
+  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.9.0');
   Adapter.AddPair('ideVersion', IdeVersion); Adapter.AddPair('instanceId', InstanceId);
   Adapter.AddPair('capabilities', TJSONArray.Create);
   Params.AddPair('adapter', Adapter);

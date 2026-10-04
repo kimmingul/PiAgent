@@ -1,0 +1,99 @@
+object EditorForm: TEditorForm
+  Caption = 'PiAgent Native FMX Editor'
+  ClientHeight = 480
+  ClientWidth = 800
+  object MainMenu: TMainMenu
+    object FileMenu: TMenuItem
+      Text = 'File'
+      object NewMenu: TMenuItem
+        Action = NewAction
+      end
+      object OpenMenu: TMenuItem
+        Action = OpenAction
+      end
+      object SaveMenu: TMenuItem
+        Action = SaveAction
+      end
+    end
+  end
+  object Toolbar: TToolBar
+    Align = Top
+    Size.Width = 800
+    Size.Height = 44
+    Size.PlatformDefault = False
+    Padding.Left = 8
+    Padding.Top = 6
+    Padding.Right = 8
+    Padding.Bottom = 6
+    object NewButton: TButton
+      Align = Left
+      Size.Width = 80
+      Size.Height = 32
+      Size.PlatformDefault = False
+      Margins.Right = 8
+      Action = NewAction
+      TabOrder = 0
+    end
+    object OpenButton: TButton
+      Align = Left
+      Position.X = 96
+      Size.Width = 80
+      Size.Height = 32
+      Size.PlatformDefault = False
+      Margins.Right = 8
+      Action = OpenAction
+      TabOrder = 1
+    end
+    object SaveButton: TButton
+      Align = Left
+      Position.X = 184
+      Size.Width = 80
+      Size.Height = 32
+      Size.PlatformDefault = False
+      Action = SaveAction
+      TabOrder = 2
+    end
+  end
+  object StatusBar: TStatusBar
+    Align = Bottom
+    Size.Width = 800
+    Size.Height = 28
+    Size.PlatformDefault = False
+    object StatusLabel: TLabel
+      Align = Client
+      Margins.Left = 8
+      Text = 'Ready'
+    end
+  end
+  object Editor: TMemo
+    Align = Client
+    TabOrder = 1
+    Size.Width = 800
+    Size.Height = 408
+    Size.PlatformDefault = False
+  end
+  object Actions: TActionList
+    object NewAction: TAction
+      Text = 'New'
+      ShortCut = 16462
+      OnExecute = NewExecute
+    end
+    object OpenAction: TAction
+      Text = 'Open...'
+      ShortCut = 16463
+      OnExecute = OpenExecute
+    end
+    object SaveAction: TAction
+      Text = 'Save...'
+      ShortCut = 16467
+      OnExecute = SaveExecute
+    end
+  end
+  object OpenDialog: TOpenDialog
+    Filter = 'Text documents|*.txt|All files|*.*'
+  end
+  object SaveDialog: TSaveDialog
+    DefaultExt = 'txt'
+    Filter = 'Text documents|*.txt|All files|*.*'
+  end
+end

@@ -1,0 +1,413 @@
+{
+ "brands": {
+  "claude": {
+   "mono": false,
+   "spin": true
+  },
+  "anthropic": {
+   "mono": true
+  },
+  "openai": {
+   "mono": true,
+   "spin": true
+  },
+  "gemini": {
+   "mono": false
+  },
+  "gemma": {
+   "mono": false
+  },
+  "google": {
+   "mono": false
+  },
+  "antigravity": {
+   "mono": false
+  },
+  "geminicli": {
+   "mono": false
+  },
+  "ollama": {
+   "mono": true
+  },
+  "nvidia": {
+   "mono": false
+  },
+  "qwen": {
+   "mono": false
+  },
+  "alibaba": {
+   "mono": false
+  },
+  "kimi": {
+   "mono": false
+  },
+  "moonshot": {
+   "mono": true
+  },
+  "zhipu": {
+   "mono": false
+  },
+  "zai": {
+   "mono": true
+  },
+  "deepseek": {
+   "mono": false
+  },
+  "grok": {
+   "mono": true
+  },
+  "xai": {
+   "mono": true
+  },
+  "meta": {
+   "mono": false
+  },
+  "mistral": {
+   "mono": false
+  },
+  "openrouter": {
+   "mono": false
+  },
+  "githubcopilot": {
+   "mono": true
+  },
+  "cursor": {
+   "mono": true
+  },
+  "devin": {
+   "mono": false
+  },
+  "perplexity": {
+   "mono": false
+  },
+  "cerebras": {
+   "mono": false
+  },
+  "fireworks": {
+   "mono": false
+  },
+  "together": {
+   "mono": false
+  },
+  "groq": {
+   "mono": true
+  },
+  "huggingface": {
+   "mono": false
+  },
+  "minimax": {
+   "mono": false
+  },
+  "xiaomimimo": {
+   "mono": true
+  },
+  "stepfun": {
+   "mono": false
+  },
+  "cline": {
+   "mono": true
+  },
+  "deepinfra": {
+   "mono": false
+  },
+  "novita": {
+   "mono": false
+  },
+  "siliconcloud": {
+   "mono": false
+  },
+  "baseten": {
+   "mono": true
+  },
+  "venice": {
+   "mono": false
+  },
+  "sakana": {
+   "mono": false
+  },
+  "cohere": {
+   "mono": false
+  },
+  "microsoft": {
+   "mono": false
+  },
+  "ibm": {
+   "mono": true
+  },
+  "nova": {
+   "mono": false
+  },
+  "ai21": {
+   "mono": true
+  },
+  "wenxin": {
+   "mono": false
+  },
+  "hunyuan": {
+   "mono": false
+  },
+  "doubao": {
+   "mono": false
+  },
+  "lmstudio": {
+   "mono": true
+  },
+  "vercel": {
+   "mono": true
+  },
+  "cloudflare": {
+   "mono": false
+  },
+  "kilocode": {
+   "mono": true
+  },
+  "opencode": {
+   "mono": true
+  },
+  "zenmux": {
+   "mono": true
+  },
+  "commandcode": {
+   "mono": true
+  },
+  "tavily": {
+   "mono": false
+  },
+  "exa": {
+   "mono": false
+  },
+  "kagi": {
+   "mono": true
+  },
+  "github": {
+   "mono": true
+  },
+  "baidu": {
+   "mono": false
+  }
+ },
+ "providers": {
+  "anthropic": "anthropic",
+  "openai": "openai",
+  "openai-codex": "openai",
+  "openai-codex-device": "openai",
+  "google": "google",
+  "google-antigravity": "antigravity",
+  "google-gemini-cli": "geminicli",
+  "google-vertex": "google",
+  "zai": "zai",
+  "zai-coding-plan": "zai",
+  "zhipu-coding-plan": "zhipu",
+  "kimi-code": "kimi",
+  "moonshot": "moonshot",
+  "openrouter": "openrouter",
+  "github-copilot": "githubcopilot",
+  "cursor": "cursor",
+  "devin": "devin",
+  "xai": "xai",
+  "xai-oauth": "xai",
+  "gitlab-duo": "github",
+  "alibaba-coding-plan": "alibaba",
+  "alibaba-token-plan": "alibaba",
+  "qwen-portal": "qwen",
+  "sakana": "sakana",
+  "minimax-code": "minimax",
+  "minimax-code-cn": "minimax",
+  "xiaomi": "xiaomimimo",
+  "cline-pass": "cline",
+  "commandcode": "commandcode",
+  "deepseek": "deepseek",
+  "stepfun": "stepfun",
+  "meta": "meta",
+  "cerebras": "cerebras",
+  "baseten": "baseten",
+  "fireworks": "fireworks",
+  "together": "together",
+  "nvidia": "nvidia",
+  "novita": "novita",
+  "deepinfra": "deepinfra",
+  "huggingface": "huggingface",
+  "perplexity": "perplexity",
+  "qianfan": "baidu",
+  "venice": "venice",
+  "siliconflow": "siliconcloud",
+  "siliconflow-cn": "siliconcloud",
+  "vercel-ai-gateway": "vercel",
+  "cloudflare-ai-gateway": "cloudflare",
+  "kilo": "kilocode",
+  "zenmux": "zenmux",
+  "opencode-zen": "opencode",
+  "opencode-go": "opencode",
+  "tavily": "tavily",
+  "kagi": "kagi",
+  "exa": "exa",
+  "ollama": "ollama",
+  "ollama-cloud": "ollama",
+  "lm-studio": "lmstudio",
+  "groq": "groq",
+  "mistral": "mistral",
+  "cohere": "cohere",
+  "azure": "microsoft"
+ },
+ "models": [
+  [
+   "^claude|opus|sonnet|haiku",
+   "claude"
+  ],
+  [
+   "^(gpt|chatgpt|o[1-9]|codex|gpt-oss)",
+   "openai"
+  ],
+  [
+   "^gemini",
+   "gemini"
+  ],
+  [
+   "^gemma",
+   "gemma"
+  ],
+  [
+   "nemotron",
+   "nvidia"
+  ],
+  [
+   "^(qwen|qwq)",
+   "qwen"
+  ],
+  [
+   "^kimi",
+   "kimi"
+  ],
+  [
+   "^(glm|chatglm)",
+   "zhipu"
+  ],
+  [
+   "^deepseek",
+   "deepseek"
+  ],
+  [
+   "^grok",
+   "grok"
+  ],
+  [
+   "^(llama|meta-llama)",
+   "meta"
+  ],
+  [
+   "^(mistral|mixtral|codestral|devstral|magistral|ministral)",
+   "mistral"
+  ],
+  [
+   "^minimax",
+   "minimax"
+  ],
+  [
+   "^mimo",
+   "xiaomimimo"
+  ],
+  [
+   "^step",
+   "stepfun"
+  ],
+  [
+   "^(command|aya)",
+   "cohere"
+  ],
+  [
+   "^phi",
+   "microsoft"
+  ],
+  [
+   "^ernie",
+   "wenxin"
+  ],
+  [
+   "^hunyuan",
+   "hunyuan"
+  ],
+  [
+   "^(doubao|seed)",
+   "doubao"
+  ],
+  [
+   "^granite",
+   "ibm"
+  ],
+  [
+   "^nova",
+   "nova"
+  ],
+  [
+   "^jamba",
+   "ai21"
+  ],
+  [
+   "^sonar",
+   "perplexity"
+  ]
+ ],
+ "order": [
+  "claude",
+  "anthropic",
+  "openai",
+  "gemini",
+  "gemma",
+  "google",
+  "antigravity",
+  "geminicli",
+  "ollama",
+  "nvidia",
+  "qwen",
+  "alibaba",
+  "kimi",
+  "moonshot",
+  "zhipu",
+  "zai",
+  "deepseek",
+  "grok",
+  "xai",
+  "meta",
+  "mistral",
+  "openrouter",
+  "githubcopilot",
+  "cursor",
+  "devin",
+  "perplexity",
+  "cerebras",
+  "fireworks",
+  "together",
+  "groq",
+  "huggingface",
+  "minimax",
+  "xiaomimimo",
+  "stepfun",
+  "cline",
+  "deepinfra",
+  "novita",
+  "siliconcloud",
+  "baseten",
+  "venice",
+  "sakana",
+  "cohere",
+  "microsoft",
+  "ibm",
+  "nova",
+  "ai21",
+  "wenxin",
+  "hunyuan",
+  "doubao",
+  "lmstudio",
+  "vercel",
+  "cloudflare",
+  "kilocode",
+  "opencode",
+  "zenmux",
+  "commandcode",
+  "tavily",
+  "exa",
+  "kagi",
+  "github",
+  "baidu"
+ ]
+}

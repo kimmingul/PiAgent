@@ -10,18 +10,20 @@ async function main(): Promise<void> {
   let development = false;
   let allowWrites = false;
   let authFile: string | undefined;
+  let profile:'restricted'|'native'='restricted';
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
     if (flag === '--help') {
-      console.log('PiAgent: --pipe <name> [--omp <omp.exe> --cwd <workspace> --workspace <root> --allow-writes] [--auth-file <private-file>] [--dev-pipe]');
+      console.log('PiAgent: --pipe <name> [--omp <omp.exe> --cwd <workspace> --workspace <root> --allow-writes] [--omp-profile restricted|native] [--auth-file <private-file>] [--dev-pipe]');
       return;
     }
     if (flag === '--dev-pipe') { development = true; continue; }
     if (flag === '--allow-writes') { allowWrites = true; continue; }
-    if (!['--pipe', '--omp', '--cwd', '--workspace', '--auth-file'].includes(flag ?? '')) throw new Error(`Unknown argument: ${flag}`);
+    if (!['--pipe', '--omp', '--cwd', '--workspace', '--auth-file','--omp-profile'].includes(flag ?? '')) throw new Error(`Unknown argument: ${flag}`);
     const value = args[++index];
     if (!value || value.startsWith('--')) throw new Error(`Missing value: ${flag}`);
-    if (flag === '--pipe') pipeName = value;
+    if(flag==='--omp-profile'){if(value!=='restricted'&&value!=='native')throw new Error('Unknown OMP profile');profile=value;}
+    else if (flag === '--pipe') pipeName = value;
     else if (flag === '--omp') executable = value;
     else if (flag === '--workspace') workspaceRoot = resolve(value);
     else if (flag === '--auth-file') authFile = resolve(value);
@@ -31,7 +33,7 @@ async function main(): Promise<void> {
   const daemon = await startDaemon({ pipeName, onDiagnostic: error => console.error(error.message),
     allowWrites,
     ...(!development ? { secure: { ...(authFile ? { authFile } : {}) } } : {}),
-    ...(executable ? { omp: { executable, cwd } } : {}), ...(workspaceRoot ? { workspaceRoot } : {}) });
+    ...(executable ? { omp: { executable, cwd, profile } } : {}), ...(workspaceRoot ? { workspaceRoot } : {}) });
   let shutdown: Promise<void> | undefined;
   const close = (): Promise<void> => {
     shutdown ??= daemon.close();

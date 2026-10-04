@@ -1,5 +1,37 @@
 # PiAgent pipe protocol v1
 
+### IDE workspace and access modes (VSIX 0.9.4)
+
+`workspace.bind.v1` is available only on an authenticated Core with OMP configured.
+After negotiation, `chat.open` accepts `workspaceUri`, an existing local directory's
+file URI selected by the adapter from its IDE solution. Binding occurs only while
+opening a closed session. OMP cwd, workspace tools and the private session namespace
+all use its canonical directory. Each connection binds independently; another IDE
+never inherits this workspace. No URI is accepted through model tools. Omitting the
+field preserves legacy daemon workspace behavior. VSIX supplies it and never falls
+back to the Core source repository when no solution is open.
+
+`chat.approval.v1` permits `chat.open.approvalMode` and
+`chat.setApproval {sessionId,mode}`. Modes: `always-ask`, `write`, `yolo`, `plan`.
+An idle change retires OMP, saves/releases the private conversation, then reopens
+the same savedSessionId with a new runtime config and current mode; its result is
+the ordinary `chat.open` result. Changes during a turn are rejected. Mode state is
+saved with the private session and returned as `approvalMode` and `approvalModes`.
+Native OMP uses its official approval-mode CLI setting. IDE changes keep their
+revision/dirty-buffer validation: always-ask confirms each, write confirms once
+per turn, yolo submits the owning adapter decision automatically. Restore always
+requires its own explicit preview/confirmation. Plan starts OMP without native
+tools/extensions and registers only read-only host tools; slash commands are rejected.
+Plan currently returns its plan as chat text, without creating a plan document.
+
+`chat.prompt.attachments` is an optional array of at most 16 selected file/folder
+paths, each at most 4096 characters without newline/NUL. References are labeled as
+user-selected data in the prompt; arbitrary binary data are never interpreted as
+protocol. Native OMP can inspect these paths using its ordinary tools and policy.
+`chat.extensions` is an idle native-profile adapter request for metadata listing,
+project MCP configuration editing, plugin toggles and MCP toggles. Responses omit
+server command/environment/secrets. Plugin changes restart the same saved chat.
+
 ## 두 transport
 
 IDE adapter ↔ Node.js/TypeScript Core: Windows duplex byte-mode Named Pipe / JSON-RPC 2.0.
@@ -291,3 +323,75 @@ One decision covers the entire batch. An adapter must show all diffs and check a
 Checkpoint lists include files for batches. Non-batch adapters cannot list/preview/restore multi-file checkpoints.
 All target hashes are validated before writes and before restore. Cancellation stops before writing; once writing
 starts, conditional rollback/completion takes priority. recoveryRequired means inspect remaining bytes/journal.
+
+
+## OMP controls and designer extension (development)
+
+Optional `omp.controls.v1` and `ide.designer.v1` depend on `chat.v1`. They do not change
+Named Pipe protocolVersion 1. `chat.open` adds `ompProfile: restricted|native` and
+`ompControlsEnabled: boolean`. Native profile additionally requires durable sessions and
+negotiated workspace.read.v1/workspace.edit.v1; it is unavailable on read-only connections.
+
+| Method | Params in addition to owning sessionId | Result |
+| --- | --- | --- |
+| omp.control | command, fields object (default {}) | normalized command data |
+| omp.respond | requestId, answer: {value:string} or {confirmed:boolean} or {cancelled:true} | answered:true |
+| designer.reply | requestId, result object or error string | accepted:true |
+| designer.decide | proposalId, approved:boolean | accepted:true |
+
+Controls use an explicit allowlist in `omp-controls.ts`, not arbitrary OMP passthrough.
+Model/effort discovery and selection are connected to the original UI. Additional allowlisted
+controls are transport support, not a claim that every original UI action is connected.
+Private get_state paths/system prompts are excluded. Unknown IDs, duplicate answers, non-option
+select values, excessive payloads and cross-session answers are rejected. Interaction requests
+expire after at most five minutes; adapters remove cards on cancel/session close.
+
+`chat.event` adds kind `omp_event` with `frame`. Sequence/session checks still apply.
+Interactive frames retain OMP `extension_ui_request` type/method/id and bounded data (256 KiB).
+`ui_event` wraps a normalized original RADAgent renderer event. Native turn completion follows
+session_settled/prompt_result, not an intermediate agent_end that may yield to background work.
+OMP stdin remains single-frame JSONL. Stdout v2 rpc_chunk sequences must be contiguous, ordered,
+valid base64 and UTF-8, and no larger than 64 MiB; raw large frames are not forwarded to IDEs.
+
+Designer host tools:
+- `ide_designer_inspect {}`: snapshot of active document/framework/revision/components/properties.
+- `ide_designer_set_property {component,property,value}`: one string-valued property proposal.
+
+Negotiating the designer capability enables IDE-neutral designer-first GUI workflow guidance
+on ordinary OMP prompts. Read-only connections receive inspection-only guidance. Native slash
+commands and user-visible transcript text remain unchanged. This does not add RPC methods or
+guarantee model compliance; workspace, approval and revision enforcement remain independent.
+
+Core sends `designer_request {id,operation:inspect|setProperty,args}` to the adapter. Responses
+must arrive through designer.reply within 30 seconds. Snapshot responses are limited to 240 KiB.
+Snapshot fields: document:string, framework:string, revision:string, canSetProperty:boolean,
+components:[{id:string,properties:[{name:string,value:string,writable:boolean}]}], optional mode/reason.
+Core issues `designer_approval {proposalId,path,reason,diff}`, then waits for designer.decide.
+Only after approval does it send setProperty with the exact inspected document/revision. Adapter
+rechecks document, dirty state, revision and property before mutation on the IDE main thread.
+`designer_resolved {proposalId,approved}` completes the card; errors do not count as successful edits.
+One mutating host-tool proposal is active per session; read operations may run concurrently.
+Disconnect/cancel invalidates all pending designer requests/approvals. Core checkpoint restore
+is not supported for these designer-native edits yet.
+
+### Designer snapshot schema 2 (additive, PiAgent 0.9.0)
+
+`ide.designer.v1` and pipe protocolVersion 1 remain unchanged. New tools reject old snapshots without
+schemaVersion 2; existing inspect/setProperty behavior remains compatible.
+
+- `ide_designer_set_reference {component,property,target}` maps to `setReference`.
+- `ide_designer_reparent {component,parent}` maps to `reparent`.
+- Both are write tools, share the mutation lock/approval channel, and carry the exact document/revision.
+- Snapshot adds `schemaVersion:2`, `supportedOperations:string[]`, `hierarchyKind:string`.
+- Components add `parentId`, optional `ownerId`, `allowedParentIds:string[]`, `references`.
+- Reference entries expose `name`, `target`, `writable`, `allowedTargets:string[]`; XAML expressions are
+  read-only `expression` entries instead. Empty string means no parent/reference; only an explicitly listed
+  empty allowed target can clear a reference. Component IDs remain opaque and document scoped.
+- RAD parent/reference operations require the returned allowed target AND a fresh adapter-side type/cycle check.
+- XAML adds `namespace`, `nodeKind:object-element|property-element`; parent IDs denote XML containment.
+- Core enriches only the OMP inspect result with `harness:{schemaVersion:1,packageVersion,instructions,catalog,authority}`.
+  No new adapter RPC is needed. A reference catalog never expands live operation permissions.
+
+Unsupported/dirty adapters advertise no write operations. Existing writable scalar fields remain guarded
+by canSetProperty. New reference setters can update related properties; approval discloses this. Native
+save failure leaves a dirty buffer after attempted relationship restoration, not a durable rollback guarantee.

@@ -14,10 +14,10 @@ VSIX와 Delphi BPL은 선택 capability를 요청하고 같은 WebView 승인 UI
 
 ## 사용 순서
 
-1. VS에서 Tools → PiAgent: Open Chat → Connect를 누른다. 승인 변경 가능 상태를 확인한다.
+1. VS에서 Tools → PiAgent: Open Chat을 열고 자동 연결을 기다린다.
 2. 기존 파일 변경을 요청한다. OMP의 `workspace_propose_edit`가 대상·이유·전체 diff를 표시한다.
 3. diff를 검토하고 승인 또는 거절한다. 각 제안은 5분 후 만료되며 취소/연결 종료도 대기를 해제한다.
-4. 완료 후 checkpoint 목록을 갱신하고 항목의 복원 미리보기를 연다. 역방향 diff를 확인하고 복원을 적용한다.
+4. 완료 후 /restore 또는 설정의 파일 변경 기록에서 항목의 복원 미리보기를 연다. 역방향 diff를 확인하고 복원을 적용한다.
 5. 복원 후에는 새 대화를 시작해 모델의 이전 파일 내용과 실제 파일 내용이 혼동되지 않게 한다.
 
 대상은 Git에 추적 중인 기존 UTF-8 일반 파일이며 변경 전/후 각각 최대 32 KiB이다.

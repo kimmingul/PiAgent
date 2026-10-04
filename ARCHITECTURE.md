@@ -1,5 +1,20 @@
 # PiAgent architecture
 
+2026-10-04 workspace update: the authenticated adapter can negotiate
+`workspace.bind.v1` and bind each closed chat to its currently open solution directory.
+OMP cwd, workspace reader/change services and private session storage use that
+canonical directory. VSIX listens for solution open/close and cancels the previous
+connection before changing projects. Separate IDE connections retain separate
+workspaces. No open solution means no fallback to the PiAgent implementation repository.
+Native OMP can work with a non-Git project; Git checkpoint tools require a standalone
+Git repository and are not offered when it is absent. No repository is created automatically.
+
+`chat.approval.v1` exposes the original composer mode control through Core. Mode changes
+restart only that chat's OMP process, preserving its private saved conversation. Plan
+uses read-only tools; yolo/write/always-ask use OMP's matching native policy and the
+adapter's original approval workflow. The original + menu routes file/folder references,
+MCP metadata/configuration, plugin toggles and solution build to the owning host.
+
 0.7.0: VS와 RAD는 동일한 WebView UI로 채팅·승인·복원을 제공한다. IDE별 미저장 문서 검사는
 adapter의 UI thread에서 수행한다. Core의 SessionStore는 broker가 보호한 사용자별 디렉터리 아래에
 workspace별 세션 metadata와 OMP JSONL을 저장하며, UsageService는 세션 통계와 계정 한도를 분리한다.
@@ -152,19 +167,19 @@ RAD는 IOTAMenuWizard / RegisterPackageWizard로 Help → Help Wizards에 등록
 WebView UI는 IDE SDK 코드와 분리한다. RADAgent의 HTML/CSS/JS를 먼저 분석·재사용하고
 필요한 부분을 TypeScript로 옮기되, shared view는 transcript/status/approval 모델만 다룬다.
 각 adapter의 WebView host bridge가 UI message를 typed Core API로 바꾸도록 설계한다.
-ui/src/chat.ts는 strict DOM TypeScript이고 ui/src/chat.html/chat.css와 함께 VSIX와 BPL 옆에 담는다.
+ui/src는 RADAgent 원본 HTML/CSS/JS를 재사용한다. strict TypeScript bridge.ts/controller.ts가 원본 UI 메시지를 PiAgent host action으로 바꾼다. 전체 정적 파일과 컴파일된 bridge/controller를 VSIX와 BPL 옆에 담는다.
 VS의 WPF ToolWindowPane은 WebView2로 local virtual host의 정적 UI를 열고 typed bridge로
 chat.open/prompt/cancel/close를 호출한다. UI에는 OMP raw command, IDE SDK나 shell 로직이 없다.
-HTML transcript는 textContent/TextNode만 사용한다. CSP, local-origin 확인, navigation/download
-차단으로 모델 출력이 host bridge를 실행하지 못하게 한다. UI 표시량은 메시지당 2M 문자와 100행이다.
+사용자 텍스트는 textContent, 모델 응답은 원본 Markdown renderer의 escaping을 사용한다. CSP, local-origin 확인, navigation/download
+차단으로 모델 출력이 host bridge를 실행하지 못하게 한다. 원본 스타일을 임의 변경하지 않으며 UI 연결 범위는 ui/README.md에 기록한다.
 WebView2 SDK의 managed DLL 및 x64/ARM64 loader는 adapter에만 있으며 Core는 native dependency가 없다.
 WebView2 Runtime은 PC에 설치된 것을 사용한다. RAD BPL은 Vcl.Edge의 TEdgeBrowser를 사용하며
 package 옆의 UI 및 bitness에 맞는 loader를 배포한다. Delphi worker는 pipe를 단독 소유하고,
 메인 thread가 bounded queue를 polling하여 WebView와 ToolsAPI에 접근한다. unload 시 worker를 cancel/join한다.
 
 ChatSession은 adapter connection마다 하나씩 만들고 chat.open 때 OMP를 시작한다.
-ready와 new_session/switch_session 이후에 runtime session ID를 반환한다. OMP의 built-in tools/extensions/skills/rules/LSP는
-비활성화한다. 세션 capability가 협상되지 않았을 때는 --no-session을 사용한다. 한 번에 한 prompt만 받으며 terminal event 전에는 busy이다. 응답 접수와 턴 완료를
+ready와 new_session/switch_session 이후에 runtime session ID를 반환한다. 기본 restricted profile에서는 OMP built-in tools/extensions/skills/rules/LSP를
+비활성화한다. 실험용 native profile은 이를 유지하며 아래 추가 조건과 제한을 따른다. 세션 capability가 협상되지 않았을 때는 --no-session을 사용한다. 한 번에 한 prompt만 받으며 terminal event 전에는 busy이다. 응답 접수와 턴 완료를
 분리하고 cooperative abort, deadline, disconnect/exit cleanup을 수행한다. 별도 connection끼리 session과
 이벤트를 공유하지 않는다. --omp가 없으면 chat.v1을 제공하지 않는다. protocol 계약은 PROTOCOL.md를 따른다.
 
@@ -214,3 +229,39 @@ Interrupted locks require inspection; approvals never survive a disconnected con
 with no shell, bounded output and a 30-second timeout. Account limits are cached for 60 seconds. Only normalized
 fields cross the pipe; unknown cost/token values remain null. No price table or guessed subscription cost is used.
 See [session and usage contract](docs/SESSIONS-USAGE.md) and [installation](docs/INSTALLATION.md).
+
+
+## OMP 18.6 / designer integration (development)
+
+2026-10-04 확인 기준은 OMP 18.6.0이다. OMP transport는 ready(v1) 후 지원 버전을 확인하여
+v2를 협상하고 stdout rpc_chunk를 검증·재조립한다. IDE Named Pipe JSON-RPC 버전은 그대로 1이다.
+새 선택 capability `omp.controls.v1`은 모델/effort 선택 및 OMP 상호작용 응답을 연결한다.
+원본 RADAgent model picker와 승인 카드 스타일을 사용하며 기존 UI 배치는 변경하지 않는다.
+
+`--omp-profile native`는 내장 도구/확장/skills/rules/LSP를 제거하지 않는다. secure transport,
+명시한 workspace, --allow-writes, durable session과 adapter의 쓰기/controls 협상이 모두 필요하다.
+세션별 exclusive config 파일로 tools.approvalMode=always-ask를 설정한다. 이 모드는 OS sandbox가 아니며,
+OMP 내장 도구/확장에 의한 변경에는 PiAgent WorkspaceChanges 체크포인트가 적용되지 않는다.
+따라서 현재 설치본의 기본 모드는 restricted이며 native는 개발 검증용 opt-in이다.
+시작 중 UI가 아직 없는 시점의 대화형 확장 요청은 취소하며, 전체 확장 UX 호환은 아직 완료되지 않았다.
+
+`ide.designer.v1`의 SDK-neutral broker는 inspect → 속성 제안 → 사용자 승인 → revision 재검사 → 적용을
+중계한다. 실제 IDE API는 adapter에서만 호출한다. Core에는 WinForms/WPF/VCL 타입이 없다.
+읽기 전용 연결에는 inspect만 등록한다. 문서가 workspace 밖이거나 저장되지 않았으면 변경을 거절한다.
+디자이너 편집의 IDE undo/save는 Core Git checkpoint와 별도이며 자동 복원을 보장하지 않는다.
+
+디자이너 capability가 협상된 연결은 일반 모델 요청에 GUI 개발 지침을 함께 전달한다.
+GUI 작업은 열린 폼의 inspect부터 시작하고 지원하는 시각 속성은 승인된 디자이너 도구로 편집한다.
+기존 UI/UX를 유지하며 지원하지 않는 작업만 필요한 승인된 소스 편집 후 디자이너와 빌드로 검증한다.
+사용자의 명시적 작업 방식이 우선이고, GUI와 무관한 작업에는 폼 검사를 요구하지 않는다.
+Native OMP slash 명령은 변경 없이 전달한다. 이 지침은 모델 행동 안내이며 capability/승인 검사를 대체하지 않는다.
+
+프레임워크별 구현·검증 범위와 남은 작업은 [designer/OMP compatibility](docs/OMP-DESIGNERS.md)에 기록한다.
+
+## Framework GUI harness (0.9.0)
+
+Core packages versioned framework skills/catalogs as data and selects them from the live adapter snapshot.
+The inspect host-tool result delivers this guidance directly to OMP. SDK-specific parent/reference rules stay
+inside adapters; the Core broker validates advertised operations and approval/revision boundaries.
+RAD adds existing-component reparenting and typed reference linking; Visual Studio exposes XAML syntax
+hierarchy and binding references without claiming a runtime visual tree. See [GUI harness](docs/GUI-HARNESS.md).

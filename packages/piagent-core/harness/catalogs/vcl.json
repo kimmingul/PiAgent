@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "framework": "vcl",
+  "kind": "reference",
+  "source": "https://docwiki.embarcadero.com/RADStudio/Alexandria/en/Handling_VCL_Actions_Using_an_Action_Manager",
+  "controls": [
+    {
+      "name": "TPanel",
+      "role": "layout",
+      "properties": "Align, Anchors, AutoSize, BevelOuter",
+      "usage": "Docked regions with deliberate border treatment",
+      "events": ""
+    },
+    {
+      "name": "TGridPanel / TFlowPanel",
+      "role": "layout",
+      "properties": "ColumnCollection, RowCollection, FlowStyle",
+      "usage": "Aligned or flowing groups; collections need supported edits",
+      "events": ""
+    },
+    {
+      "name": "TSplitter",
+      "role": "layout",
+      "properties": "Align, MinSize",
+      "usage": "Resize adjacent aligned panel",
+      "events": "OnMoved"
+    },
+    {
+      "name": "TMainMenu / TMenuItem",
+      "role": "menu",
+      "properties": "Items, Caption, Action, ShortCut",
+      "usage": "Hierarchical application commands; menu ancestry differs from Owner",
+      "events": "OnClick"
+    },
+    {
+      "name": "TToolBar / TToolButton",
+      "role": "toolbar",
+      "properties": "Align, Images, Action, Style",
+      "usage": "Common commands sharing TAction",
+      "events": "OnClick"
+    },
+    {
+      "name": "TActionList / TAction",
+      "role": "command",
+      "properties": "ActionList, Caption, Enabled, Checked, ShortCut",
+      "usage": "Shared menu/toolbar behavior and availability",
+      "events": "OnExecute, OnUpdate"
+    },
+    {
+      "name": "TStatusBar",
+      "role": "status",
+      "properties": "Panels, SimplePanel, SimpleText",
+      "usage": "Document and caret status",
+      "events": ""
+    },
+    {
+      "name": "TMemo / TRichEdit",
+      "role": "editor",
+      "properties": "Align, Lines, ScrollBars, WantTabs",
+      "usage": "Text editing; choose plain versus rich format",
+      "events": "OnChange"
+    },
+    {
+      "name": "TOpenDialog / TSaveDialog",
+      "role": "dialog",
+      "properties": "Filter, FileName, DefaultExt",
+      "usage": "Native file selection",
+      "events": "OnCanClose"
+    }
+  ]
+}

@@ -2,6 +2,9 @@
 /artifacts/
 /.tools/
 node_modules/
+.env
+.env.*
+*.clixml
 dist/
 *.tsbuildinfo
 *.log
@@ -10,5 +13,6 @@ dist/
 **/obj/
 *.bpl
 *.dcu
+/adapters/radstudio/resources/PiAgentIcons.res
 *.vsix
 !adapters/visualstudio/PiAgent.Vsix/

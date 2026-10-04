@@ -1,0 +1,95 @@
+/* Provider and model logos (brands.js). Colour logos are images; one-colour logos are masks
+   filled with the text colour so they stay visible on dark and light IDE themes. */
+.brand {
+  display: inline-block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  background: center / contain no-repeat;
+}
+.brand.mono {
+  background: currentColor;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
+.brand.letter {
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.7em;
+  width: 1.6em;
+  height: 1.6em;
+  line-height: 1.6em;
+  text-align: center;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* The working line: the running model's logo. */
+.working-logo { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; }
+.working-logo .brand { width: 18px; height: 18px; }
+.working-logo.spin { animation: brand-spin 1.6s linear infinite; }
+.working-logo.pulse { animation: brand-pulse 1.4s ease-in-out infinite; }
+@keyframes brand-spin { to { transform: rotate(360deg); } }
+@keyframes brand-pulse {
+  0%, 100% { transform: scale(0.82); opacity: 0.55; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+/* Model button and menu in the composer footer. */
+.footer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 170px;
+  flex: 0 1 auto;
+}
+.footer-btn:hover:not(:disabled) { color: var(--fg); background: rgba(127, 127, 127, 0.15); }
+.footer-btn:disabled { cursor: default; opacity: 0.7; }
+.footer-btn .model-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.footer-btn .model-arrow { font-size: 10px; flex: none; }
+#model-menu { right: 40px; width: 320px; max-width: calc(100% - 40px); max-height: 360px; display: flex; flex-direction: column; overflow: hidden; }
+#model-menu[hidden] { display: none; }
+#model-search {
+  margin: 6px;
+  padding: 4px 8px;
+  background: var(--input-bg, var(--bg));
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+#model-list { overflow-y: auto; padding-bottom: 4px; }
+.model-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 3px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+}
+.model-row { padding-left: 18px; }
+.model-row .popup-name { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.model-row.current .popup-name { font-weight: 700; }
+
+/* "Answered by" tag above an answer when the model changed. */
+.model-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  margin: 6px 0 2px 0;
+}
+.notice .brand { margin: 0 3px 0 2px; }

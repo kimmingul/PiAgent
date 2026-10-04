@@ -97,6 +97,9 @@ begin
   if Msg = nil then raise Exception.Create('Invalid UI request');
   try
     Action := Msg.GetValue<string>('action','');
+    // This adapter has no selection capture. The shared composer clears an
+    // optional selection before every prompt; acknowledge that harmless action.
+    if Action = 'clearSelection' then Exit;
     if Action = 'connect' then begin
       if FClient <> nil then Exit;
       Name := GetEnvironmentVariable('PIAGENT_PIPE_NAME'); if Name = '' then Name := 'piagent-dev';
@@ -115,6 +118,33 @@ begin
     end;
     if FSession = '' then raise Exception.Create('Session unavailable');
     Params := TJSONObject.Create.AddPair('sessionId',FSession);
+    if Action = 'setApproval' then begin
+      Params.AddPair('mode',Msg.GetValue<string>('mode',''));Reply := Rpc('chat.setApproval',Params);
+      try FSession := Reply.GetValue<string>('sessionId',''); FTurn := '';Reply.AddPair('type','session');Post(TJSONObject(Reply.Clone)); finally Reply.Free; end; Exit;
+    end;
+    if Action = 'designerReply' then begin
+      Params.AddPair('requestId',Msg.GetValue<string>('requestId',''));
+      if Msg.GetValue('result') is TJSONObject then Params.AddPair('result',TJSONValue(Msg.GetValue('result').Clone));
+      if Msg.GetValue('error') <> nil then Params.AddPair('error',Msg.GetValue<string>('error',''));
+      Reply := Rpc('designer.reply',Params); Reply.Free; Exit;
+    end;
+    if Action = 'designerDecide' then begin
+      Params.AddPair('proposalId',Msg.GetValue<string>('proposalId',''));
+      Params.AddPair('approved',TJSONBool.Create(Msg.GetValue<Boolean>('approved',False)));
+      Reply := Rpc('designer.decide',Params); Reply.Free; Exit;
+    end;
+    if Action = 'ompRespond' then begin
+      Params.AddPair('requestId',Msg.GetValue<string>('requestId',''));
+      if Msg.GetValue('answer') is TJSONObject then Params.AddPair('answer',TJSONValue(Msg.GetValue('answer').Clone));
+      Reply := Rpc('omp.respond',Params); Reply.Free; Exit;
+    end;
+    if Action = 'ompControl' then begin
+      Params.AddPair('command',Msg.GetValue<string>('command',''));
+      if Msg.GetValue('fields') is TJSONObject then Params.AddPair('fields',TJSONValue(Msg.GetValue('fields').Clone))
+      else Params.AddPair('fields',TJSONObject.Create);
+      Reply := Rpc('omp.control',Params);
+      try Post(TJSONObject.Create.AddPair('type','ompControl').AddPair('command',Msg.GetValue<string>('command','')).AddPair('data',TJSONValue(Reply.Clone))); finally Reply.Free; end; Exit;
+    end;
     if Action = 'reset' then begin
       Reply := Rpc('chat.close',Params); Reply.Free; OpenSession; Exit;
     end;

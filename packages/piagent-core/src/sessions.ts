@@ -11,7 +11,7 @@ const canonical=(path:string):string=>process.platform==='win32'?resolve(path).t
 export interface TranscriptLine { role: 'user'|'assistant'|'status'; text: string; }
 export interface SavedSession {
   version: 1; savedSessionId: string; title: string; createdAt: number; updatedAt: number;
-  ompFile?: string; transcript: TranscriptLine[];
+  ompFile?: string; approvalMode?:string; transcript: TranscriptLine[];
 }
 /** Storage is scoped by the daemon to one workspace and private credential directory. */
 export class SessionStore {
@@ -36,6 +36,7 @@ export class SessionStore {
     if (!isObject(value) || value['version']!==1 || value['savedSessionId']!==id || typeof value['title']!=='string'
       || typeof value['createdAt']!=='number' || typeof value['updatedAt']!=='number' || !Array.isArray(value['transcript'])
       || value['transcript'].length>200 || value['transcript'].some(line=>!isObject(line)||!['user','assistant','status'].includes(String(line['role']))||typeof line['text']!=='string')) throw new Error('Invalid saved session');
+    if(value['approvalMode']!==undefined&&!['always-ask','write','yolo','plan'].includes(String(value['approvalMode'])))throw new Error('Invalid approval mode');
     if (value['ompFile']!==undefined) await this.verifyOmpFile(String(id),value['ompFile']);
     return value as unknown as SavedSession;
   }
@@ -62,6 +63,10 @@ export class SessionStore {
     try {await lease.save(); return lease;} catch(error){await lease.release();throw error;}
   }
   ompDirectory(id:string):string {return join(this.path(id),'omp');}
+  async prepareOmpDirectory(id:string):Promise<string> {
+    await this.directory(this.path(id));
+    const dir=this.ompDirectory(id);await mkdir(dir,{recursive:true});await this.directory(dir);return dir;
+  }
   async verifyOmpFile(id:string,value:unknown):Promise<string> {
     if (typeof value!=='string' || basename(value)!==value || !value.endsWith('.jsonl')) throw new Error('Invalid OMP session file');
     const dir=this.ompDirectory(id);await this.directory(dir);

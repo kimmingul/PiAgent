@@ -1,7 +1,7 @@
 import { TextDecoder } from 'node:util';
 import { CORE_VERSION, PROTOCOL_VERSION, failure, isObject, success, validId } from '@piagent/protocol';
 import type { RpcId, RpcResponse } from '@piagent/protocol';
-import { ChatError, CHAT_CAPABILITY } from './chat.js';
+import { ChatError, CHAT_CAPABILITY,WORKSPACE_BIND_CAPABILITY,APPROVAL_MODE_CAPABILITY } from './chat.js';
 import type { ChatSession } from './chat.js';
 import { CONTEXT_CAPABILITY } from './context.js';
 import { WORKSPACE_CAPABILITY } from './workspace.js';
@@ -9,6 +9,8 @@ import { SESSION_CAPABILITY, USAGE_CAPABILITY } from './sessions.js';
 export { SessionStore } from './sessions.js';
 export { UsageService } from './usage.js';
 import { EDIT_CAPABILITY,BATCH_CAPABILITY } from './changes.js';
+import { OMP_CONTROL_CAPABILITY } from './omp-controls.js';
+import { DESIGNER_CAPABILITY } from './designer.js';
 export { WorkspaceChanges } from './changes.js';
 import { Authentication } from './authentication.js';
 export { Authentication, authProof, equalProof } from './authentication.js';
@@ -42,7 +44,7 @@ export class Session {
     let value: unknown;
     try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)) as unknown; }
     catch { return fallback; }
-    if (!isObject(value) || typeof value['method'] !== 'string' || !['chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore','sessions.list','chat.usage'].includes(value['method'])
+    if (!isObject(value) || typeof value['method'] !== 'string' || !['designer.reply','designer.decide','omp.respond','omp.control','chat.extensions','chat.setApproval','chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore','sessions.list','chat.usage'].includes(value['method'])
       || !('id' in value) || !validId(value['id']) || fallback?.error?.code !== -32601) return fallback;
     const id = value['id'];
     if (!this.ready) return failure(id, -32002, 'Handshake required');
@@ -50,7 +52,9 @@ export class Session {
     if (value['method'] === 'chat.prompt' && isObject(value['params']) && 'context' in value['params']
       && !this.negotiated.includes(CONTEXT_CAPABILITY)) return failure(id, -32005, 'Selection context capability not negotiated');
     if (!isObject(value['params'] ?? {})) return failure(id, -32602, 'Invalid params');
-    try { return success(id, await this.chat.handle(value['method'], (value['params'] ?? {}) as Record<string, unknown>, this.negotiated.includes(WORKSPACE_CAPABILITY), this.negotiated.includes(EDIT_CAPABILITY),this.negotiated.includes(SESSION_CAPABILITY),this.negotiated.includes(USAGE_CAPABILITY),this.negotiated.includes(BATCH_CAPABILITY))); }
+    if ((value['method']==='chat.setApproval'||(value['method']==='chat.open'&&isObject(value['params'])&&'approvalMode' in value['params']))&&!this.negotiated.includes(APPROVAL_MODE_CAPABILITY)) return failure(id,-32005,'Approval mode capability not negotiated');
+    if (value['method']==='chat.open'&&isObject(value['params'])&&'workspaceUri' in value['params']&&!this.negotiated.includes(WORKSPACE_BIND_CAPABILITY))return failure(id,-32005,'Workspace binding capability not negotiated');
+    try { return success(id, await this.chat.handle(value['method'], (value['params'] ?? {}) as Record<string, unknown>, this.negotiated.includes(WORKSPACE_CAPABILITY), this.negotiated.includes(EDIT_CAPABILITY),this.negotiated.includes(SESSION_CAPABILITY),this.negotiated.includes(USAGE_CAPABILITY),this.negotiated.includes(BATCH_CAPABILITY),this.negotiated.includes(OMP_CONTROL_CAPABILITY),this.negotiated.includes(DESIGNER_CAPABILITY))); }
     catch (error) { return failure(id, error instanceof ChatError ? error.code : -32010,
       error instanceof Error ? error.message : 'Chat failed'); }
   }
@@ -109,7 +113,7 @@ export class Session {
       return failure(id, -32001, 'Unsupported protocol version', { supportedProtocolVersions: [PROTOCOL_VERSION] });
     }
     const negotiated: string[] = offered.filter(capability => capability === 'core.ping'
-      || (this.chat && (capability === CHAT_CAPABILITY || (capability === CONTEXT_CAPABILITY && offered.includes(CHAT_CAPABILITY))
+      || (this.chat && (capability === CHAT_CAPABILITY || (capability===APPROVAL_MODE_CAPABILITY&&this.chat.supportsSessions&&offered.includes(CHAT_CAPABILITY)) || (capability===WORKSPACE_BIND_CAPABILITY&&this.chat.supportsWorkspaceBinding&&offered.includes(CHAT_CAPABILITY)) || ([OMP_CONTROL_CAPABILITY,DESIGNER_CAPABILITY].includes(capability) && offered.includes(CHAT_CAPABILITY)) || (capability === CONTEXT_CAPABILITY && offered.includes(CHAT_CAPABILITY))
         || (capability === WORKSPACE_CAPABILITY && this.chat.supportsWorkspace && offered.includes(CHAT_CAPABILITY))
         || (capability === SESSION_CAPABILITY && this.chat.supportsSessions && offered.includes(CHAT_CAPABILITY))
         || (capability === USAGE_CAPABILITY && this.chat.supportsUsage && offered.includes(CHAT_CAPABILITY))

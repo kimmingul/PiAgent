@@ -4,7 +4,10 @@
   <Commands package="guidPackage">
     <Groups><Group guid="guidCommands" id="ConnectionGroup" priority="0x0600"><Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" /></Group></Groups>
     <Buttons><Button guid="guidCommands" id="CheckConnection" priority="0x0100" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Check Core Connection</ButtonText></Strings></Button>
-    <Button guid="guidCommands" id="OpenChat" priority="0x0101" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Open Chat</ButtonText></Strings></Button></Buttons>
+    <Button guid="guidCommands" id="OpenChat" priority="0x0101" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Icon guid="guidIcons" id="ChatIcon"/><Strings><ButtonText>PiAgent: Open Chat</ButtonText></Strings></Button></Buttons>
+  <Bitmaps><Bitmap guid="guidIcons" href="Resources\MenuIcon.png" usedList="ChatIcon"/></Bitmaps>
   </Commands>
-  <Symbols><GuidSymbol name="guidPackage" value="{38557171-e01d-4d7b-9842-3b435c5eed83}"/><GuidSymbol name="guidCommands" value="{e648642e-3b01-454a-a5f5-77ab0b763a90}"><IDSymbol name="ConnectionGroup" value="0x1020"/><IDSymbol name="CheckConnection" value="0x0100"/><IDSymbol name="OpenChat" value="0x0101"/></GuidSymbol></Symbols>
+  <Symbols><GuidSymbol name="guidIcons" value="{1BD7BF12-2078-41E7-BDB4-BDFE239548D6}"><IDSymbol name="ChatIcon" value="1"/></GuidSymbol><GuidSymbol name="guidPackage" value="{38557171-e01d-4d7b-9842-3b435c5eed83}"/><GuidSymbol name="guidCommands" value="{e648642e-3b01-454a-a5f5-77ab0b763a90}"><IDSymbol name="ConnectionGroup" value="0x1020"/><IDSymbol name="CheckConnection" value="0x0100"/><IDSymbol name="OpenChat" value="0x0101"/></GuidSymbol></Symbols>
 </CommandTable>
+
+

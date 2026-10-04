@@ -11,7 +11,9 @@ export const defaultBroker = existsSync(repositoryBroker) ? repositoryBroker
   : fileURLToPath(new URL('../../../../transport/PiAgent.PipeHost/bin/Release/net8.0-windows/PiAgent.PipeHost.dll', import.meta.url));
 export function credentialPath(name: string): string {
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(name)) throw new Error('Invalid credential pipe name');
-  return join(process.env['LOCALAPPDATA'] ?? join(homedir(), 'AppData', 'Local'), 'PiAgent', 'security', name, 'token');
+  // AppData can be redirected into a packaged parent's LocalCache for child processes.
+  // User-profile data is shared with IDEs launched directly from the Windows shell.
+  return join(process.env['USERPROFILE'] ?? homedir(), '.piagent', 'security', name, 'token');
 }
 class Peer extends Duplex {
   constructor(readonly id: number, private readonly command: (value: unknown) => void) { super(); }

@@ -46,7 +46,10 @@ lines.on('line', line => {
   const prior=previousMessages.slice(); previousMessages.push(command.message);
   if(sessionFile) appendFileSync(sessionFile,JSON.stringify(command.message)+'\n');
   if(command.message==='recall') {emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:prior.join('|')}});emit({type:'agent_end',isTerminal:true});return;}
-  if (command.message === 'propose-batch') {
+  // RAD advertises designer support, so Core prefixes its workflow instructions.
+  // Keep this batch fixture exercising the requested edit through that real path.
+  if (command.message === 'propose-batch' ||
+      (command.message.startsWith('PiAgent GUI development workflow:') && command.message.endsWith('\n\npropose-batch'))) {
     toolMode='propose-batch'; emit({type:'host_tool_call',id:'host-edit',toolCallId:'edit-1',toolName:'workspace_propose_changes',arguments:{files:[{path:'Example.cs',content:'updated first\r\n'},{path:'Second.cs',content:'updated second\n'}],reason:'Update two files'}});return;
   }
   if (command.message === 'propose-edit') {
@@ -64,7 +67,7 @@ lines.on('line', line => {
     if (toolMode === 'workspace-cancel') emit({ type: 'host_tool_cancel', targetId: 'host-read' });
     return;
   }
-  if (command.message.startsWith('PiAgent IDE context v1')) {
+  if (command.message.startsWith('PiAgent IDE context v1') || command.message.startsWith('PiAgent GUI development workflow:')) {
     emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: command.message } });
     emit({ type: 'agent_end', isTerminal: true }); return;
   }

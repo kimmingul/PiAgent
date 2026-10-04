@@ -48,6 +48,7 @@ public sealed class PiAgentPackage : AsyncPackage
             if (shell != null && ErrorHandler.Succeeded(shell.GetProperty((int)__VSSPROPID5.VSSPROPID_ReleaseVersion, out var version)))
                 ideVersion = Convert.ToString(version) ?? ideVersion;
             var name = Environment.GetEnvironmentVariable("PIAGENT_PIPE_NAME") ?? "piagent-dev";
+            await CoreRuntime.EnsureRunningAsync(name, lifetime.Token);
             // Ensure the complete transport operation starts away from the IDE UI thread.
             message = await Task.Run(async () =>
             {

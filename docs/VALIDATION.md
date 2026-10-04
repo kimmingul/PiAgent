@@ -1,4 +1,43 @@
-# PiAgent 0.7.0 validation
+# PiAgent validation history
+
+## RADAgent UI restoration / VSIX 0.7.3 (2026-10-04)
+
+- Reused the local RADAgent HTML structure, six CSS files, renderer modules, translations and provider icons.
+  No reference files were modified. Source SHA-256 inventory and licenses are in ui/.
+  Only the host hook, capability guard, page title/CSP and TypeScript bridge change the original UI sources.
+- Replaced the feature-button dashboard with the original conversation/composer, title-based sessions,
+  context-ring usage and inline diff approval. Unsupported Core operations remain disabled in their original places.
+  File restore explicitly describes its file-only semantics; it does not claim RADAgent conversation rollback.
+- npm test: 46 passed before the source-preservation assertion was added. Final UI suite: 5 passed,
+  including byte-exact CSS/renderer/icon preservation. Adapter integration: 13 passed.
+- VSIX and Delphi Win32/Win64 BPL builds succeeded; both ship all source assets and compiled bridge/controller.
+- Real WebView2 test of the extracted final VSIX: history/Markdown, safe labels, inline approval, session overlay,
+  zero JavaScript/CSP errors, and 12 reparent/tab/hide transitions preserving Korean draft and browser PID passed.
+- Installed final VSIX 0.7.3 into default VS 2026 instance 4dee894c, reopened NanumPDF, verified the pinned UI,
+  automatic Core connection, actual model display, session list and replay of the user's pre-update conversation.
+  Core workspace remains D:\source\PiAgent. VS 2022 and the running RADAgent IDE were not changed.
+- UI scope and deliberately unavailable Core commands: ui/README.md. Original CSS must not be redesigned.
+## VSIX 0.7.1 docking fix (2026-10-04)
+
+- Reproduced the blank view in VS 2026 18.10.3, including a diagnostic PiAgentTest profile.
+  The SDK WPF WebView2Base caches the initial Window and subscribes to its Closed event;
+  that event calls Uninitialize after VS docks the control and closes the former floating window.
+  PiAgent's tool window and OMP connection remained alive, but the WebView controller was gone.
+- ChatWebView now owns the public WebView2 controller through HwndHost, updates ParentWindow
+  when the WPF presentation source changes, and closes it only when the host is disposed.
+  The same browser document survives reparenting; no transcript/approval/draft replay is involved.
+- Added PiAgent.WebView.Smoke (x64 .NET Framework, emulated on this ARM64 PC).
+  `--baseline` with SDK WPF WebView2 fails at the first reparent/old-window-close transition.
+  The fixed host passes 12 real-WebView checks: four reparent/close, four tab switches and four
+  hide/show cycles, retaining browser PID, an in-page marker and a Korean draft.
+- VSIX Release rebuild: zero warnings/errors. Release/UI tests: 3 passed.
+  Full adapter packaging succeeds with VSIX 0.7.1 and compatible Core/RAD 0.7.0.
+- Installed 0.7.1 into the default VS 2026 profile (instance 4dee894c), reopened the user's existing
+  NanumPDF solution, and verified the right-hand PiAgent tab, Solution Explorer tab switching,
+  float → dock and unpin → auto-hide → pin. The Korean draft, WebView PID 9516 and OMP PID 14684
+  survived all transitions. Core remains configured for D:\source\PiAgent.
+- The diagnostic test-profile DLL was restored to its original 0.7.0 after investigation.
+  VS 2022 was not upgraded or manually retested for this adapter-only patch.
 
 ## Final seven-stage validation (2026-10-04)
 
@@ -147,3 +186,301 @@ File/IDE-changing tools, approval UI, Git checkpoints/restore, usage aggregation
 persistent session restoration and OMP protocol v2 chunk reassembly remain future capabilities.
 Chat is ephemeral; 0.4.0 optionally enables bounded read-only workspace tools. 0.5.0 provides current-user pipe ACL and mutual
 credential authentication. Approval/checkpoint and additional authorization remain required for future file-changing tools.
+
+
+## 2026-10-04 OMP 18.6 / designer development branch
+
+- npm test: 54 tests passed (strict TypeScript + secure transport build included).
+- Adapter integration: 13 tests passed using C# and Delphi Win32/Win64 clients.
+- VSIX / Delphi Win32 / Win64 builds passed; no VS main-thread analyzer warnings after fixes.
+- Real OMP 18.6.0 ARM64: v2 negotiation, 121-model discovery, current model/effort round-trip.
+- Native smoke: fresh temporary Git workspace, private session, host tools, event delta filter,
+  subagent progress subscription; rejects opening native with read-only negotiation. No model prompt sent.
+- Actual WebView2 harness: model/effort controls enabled, safe confirmation card, disconnect cleanup,
+  original Markdown/approval/session views and 12 docking transitions passed without CSP/JS errors.
+- Designer broker: read-only denial, explicit approval, revision propagation, stale adapter rejection,
+  cancellation and forged/duplicate response rejection covered by automated tests.
+- The development checks above preceded the interactive installation below.
+
+## 2026-10-04 installed document-editor validation (0.8.0 / 0.8.1)
+
+- Installed VSIX 0.8.0, then 0.8.1, into the default VS2026 Community instance 4dee894c.
+  VSIXInstaller exited 0 and installed manifest reports 0.8.1. VS2022 was not used;
+  the user requested its live test only immediately before final completion.
+- Installed Core 0.8.1 in `%LOCALAPPDATA%/PiAgent/runtime/0.8.1`, pipe `piagent-validation08`,
+  standalone fixture repository `D:/source/PiAgentValidation08`, native OMP 18.6.0 ARM64.
+  Original `piagent-dev` Core and RADAgent reference checkout were not changed.
+- RAD13.2 Delphi37.0.60952.8797 uses the separate `PiAgentValidation08` registry profile.
+  Its x64 IDE reads `Known Packages x64`; updating `Known Packages` alone initially left the
+  previous development BPL loaded. Corrected the x64 entry and verified the actual loaded module
+  is runtime/0.8.1/adapters/radstudio/Win64/PiAgent370.bpl. Its SHA-256 matches the build output.
+- Both original WebView chat hosts ran real Anthropic Opus5.5/high turns. Approved WPF XAML
+  SaveButton Width80→110 through IDE buffer/undo/save and VCL Width80→110 through ToolsAPI/RTTI.
+  Real designers displayed the new sizes. WPF/VCL event handlers were generated by OMP and
+  explicitly approved through `workspace_propose_edit`; their Git checkpoints were created.
+- Built and launched both standalone document editors. Tested New, native Save dialog, UTF-8
+  Korean text and Korean filenames, cleared the document, and reopened the saved file.
+  WPF status reported58characters; VCL61characters. Strict UTF-8 file decoding passed.
+  WPF build had zero warnings/errors; Delphi Win64 compiled successfully.
+- Final IDE builds also passed: VS2026 Ctrl+Shift+B reported1success/0failures;
+  RAD13.2 Ctrl+F9 reported Windows64Debug Success,0errors/0warnings/0hints.
+  Latest VCL IDE executable is VclEditor/VclEditor.exe; the earlier CLI-built copy is in Win64/.
+- VS0.8.1 approved a temporary trailing comment, opened `/restore`, reviewed the latest checkpoint,
+  approved its inverse diff, and restored the exact original SHA-256 of MainWindow.xaml.cs.
+- RAD0.8.1 performed the same explicit comment approval, checkpoint preview and restore sequence;
+  Main.pas returned to its exact original SHA-256. Both document editor implementations remain intact.
+- Repeated VCL designer inspect/approved Width110→120 on the confirmed installed0.8.1BPL:
+  live form resized, Main.dfm saved120, Main.pas hash stayed unchanged.
+- Fixed RAD draft retention/missing user bubble: selection-free adapter must not receive unsupported
+  clearSelection actions. Core/UI regression suite now55passed; adapter integration13passed;
+  VSIX and Delphi Win32/Win64 rebuilds passed. Actual RAD0.8.1 now displays the user message and
+  clears the composer after the started acknowledgement.
+- Host tools use OMP's supported essential loadMode, avoiding opaque xd:// write proxy calls.
+  Always-ask OMP still prompts for direct host tools, followed by PiAgent's reviewed mutation card.
+
+Scope: WPF and VCL on this ARM64 Windows machine (x64 RAD IDE through Windows compatibility).
+WinForms, WinUI, FMX and native x64 hardware live tests remain separate work; this is not a claim
+of full OMP feature parity or durable checkpoint coverage for native OMP/designer writes.
+
+## 2026-10-04 RAD Studio 13.2 64-bit-only live repeat (0.8.1)
+
+- Tested the separate PiAgentValidation08 profile in `Studio/37.0/bin64/bds.exe`.
+  Verified IDE PE machine 0x8664 (AMD64) and its actual loaded package at
+  `%LOCALAPPDATA%/PiAgent/runtime/0.8.1/adapters/radstudio/Win64/PiAgent370.bpl`.
+  The host is Windows ARM64 running the x64 IDE through Windows compatibility.
+- Sent a fresh real OMP chat turn through the installed BPL. User message appeared and
+  the composer cleared. Approved `ide_designer_inspect` and `workspace_read_file`;
+  the live VCL form inspection reported the existing SaveButton Width120.
+- Reviewed and approved `workspace_propose_edit` for a single trailing validation comment
+  in VclEditor/Main.pas (the proposed replacement also normalized line endings).
+  Checkpoint `7158fe4f-1412-479b-a727-5362b0bf4511` was created. Opened `/restore`,
+  selected that checkpoint and approved the inverse diff through the chat UI.
+  Restored bytes exactly matched the pre-turn SHA-256:
+  `91E1F24739F208DA8042EC1EA03D6F52C22445E55B4201F73CFE851807CB0656`.
+- Launched VclEditor/VclEditor.exe and verified its PE machine 0x8664.
+  Tested New, entered Korean text, saved `D:/source/PiAgentValidation08/rad64-실사용.txt`,
+  cleared with New and reopened through the native file dialog. The same two lines and
+  47-character count were displayed; strict UTF-8 decoding and exact content comparison passed.
+- Repeated Ctrl+F9 in the actual IDE with Windows64Debug selected: Success,
+  0errors/0warnings/0hints. This was an incremental IDE compile.
+- No Win32 IDE, Win32 adapter build or Win32 executable test was run in this repeat.
+  Current requested RAD live validation scope is 64-bit only. RADAgent was not modified.
+
+This repeat validates VCL; it does not add FMX live coverage or native AMD64 hardware coverage.
+
+## 2026-10-04 FMX / default designer workflow validation
+
+- Added capability-selected GUI workflow guidance to Core: inspect the open form first,
+  prefer supported designer operations with approval, preserve existing UI/UX, explain unsupported
+  operations, and verify necessary source edits in the designer/build/run. Read-only mode remains
+  inspection-only; native slash commands pass through unchanged. No chat UI layout was changed.
+- Strict TypeScript build and regression suite: 57 passed, 0 failed. A real Named Pipe/OMP fixture
+  test confirms guidance and selection context reach OMP with the read-only boundary intact.
+- Packaged this development revision at artifacts/piagent-2026-10-04T06-48-35-151Z and installed
+  it separately at `%LOCALAPPDATA%/PiAgent/designer-validation/runtime/0.8.1`. Restarted only the
+  validation Core on piagent-validation08; the older production piagent-dev daemon was retained.
+  The installed RAD Win64 BPL remains0.8.1; no adapter rebuild or Win32 test was needed.
+- Created `D:/source/PiAgentValidation08/FmxEditor` with a real editable Main.fmx and basic
+  New/Open/Save document editor. Fixed fixture-only integer ClientHeight/ClientWidth serialization
+  and FMX Memo.Lines.Clear differences discovered during initial IDE loading.
+- In RAD13.2 bin64/bds.exe, the actual FMX designer displayed the form and controls.
+  A fresh real OMP turn requested SaveButton Width80→110 without naming designer tools.
+  The recorded OMP prompt contained the default workflow guidance, and the model chose
+  ide_designer_inspect, then ide_designer_set_property. Approved the OMP tool and PiAgent mutation
+  card. ToolsAPI saved Main.fmx; a subsequent approved inspect reported framework=fmx, Width110,
+  Height32 and Text=Save. The designer visibly widened the button. Main.pas SHA-256 was unchanged
+  by that designer turn (later fixture-only IO refactoring is separate).
+- Actual Windows64Debug IDE compiles succeeded with0errors/0warnings/0hints, including after
+  the property edit. F9 launched the x64 application; its buttons, memo and Ready status rendered.
+- Computer Use list_windows/list_apps did not expose the FMX application window despite its
+  rendered appearance in the IDE screenshot. Runtime button clicks and native file-dialog flows
+  therefore remain unverified; they are not reported as completed live interaction tests.
+- Added FmxSmoke.dpr using the real FMX form resource and the same LoadDocument/SaveDocument
+  methods as the button handlers. Win64 compilation and execution passed: serialized Width110,
+  New, UTF-8 save, clear, reopen, text equality and Opened status. Independently decoded
+  `D:/source/PiAgentValidation08/fmx-한글.txt` with strict UTF-8 and confirmed exact two-line contents.
+  This is an in-process functional smoke test, distinct from runtime GUI clicks.
+- Windows host remains ARM64 with x64 RAD/FMX compatibility execution. No Win32 or VS2022 test
+  was run, and RADAgent reference files were not modified. Designer-native edits still have no
+  Core Git checkpoint restore coverage.
+
+## 2026-10-04 GUI harness 0.9.0
+
+- Five packaged framework skills pass skill-creator validation. All 63 Node/Core tests pass,
+  including release resource loading outside the checkout, invalid targets, approval denial,
+  cancellation, read-only gating and old-adapter rejection. VSIX and RAD Win64 builds pass.
+- `scripts/test-gui-harness.ps1` compiles/runs only Win64. Actual VCL/FMX objects verify control
+  parentage, menu ancestry, common Action references, unchanged Owner, cycle/root rejection and
+  read-only relationships. The streamed FMX example verifies native menu/toolbar/status composition,
+  common New command execution and Unicode file save/load.
+- Installed Core 0.9.0 at `%LOCALAPPDATA%/PiAgent/harness-validation/runtime/0.9.0`, native OMP 18.6.0,
+  pipe `piagent-harness09`, workspace `D:/source/PiAgentValidation08`. RAD13.2 x64 validation profile
+  `PiAgentValidation08` loads the BPL from that runtime (loaded module path verified).
+- Live OMP tool results include schemaVersion 2, 19 FMX components, selected FMX skill and catalog.
+  SaveButton.Action was deliberately empty in the isolated NativeEditor fixture. The real chat showed
+  the OMP tool permission and concrete Core approval, then ToolsAPI saved Action=SaveAction.
+  Reinspection confirmed SaveMenu and SaveButton share SaveAction. The .pas bytes stayed unchanged.
+- Two separately approved reparent operations moved StatusLabel from StatusBar to EditorForm and back.
+  OMP reinspection recorded each actual parentId and ownerId=EditorForm throughout. Final parent=StatusBar.
+  Compiling/running the smoke against these IDE-saved resources passed. RAD's actual Win64 IDE build
+  succeeded with 0 errors, 0 warnings and 0 hints. Desktop menu/dialog clicks and DPI behavior are not
+  inferred from these functional checks.
+- Existing RADAgent sources and PiAgent chat UI assets were not changed in this harness step.
+  No RAD Win32 or VS2022 build/live test was performed in this cycle. Earlier validation sections
+  describe historical releases and must not be read as current test coverage.
+- Updated only VS2026 Community instance 4dee894c to VSIX 0.9.0 (installed manifest verified),
+  reopened the same PiAgentEditors solution with pipe piagent-harness09. A real OMP inspect returned
+  framework=wpf-xaml, schemaVersion=2, hierarchyKind=xaml-syntax-tree, harness.catalog.framework=wpf
+  and eight XML nodes. The WPF source hash was unchanged by this read-only validation.
+- WinForms/WinUI 3 guidance selection is covered by automated routing tests, not newly completed live
+  framework tests. Modern .NET WinForms native bridge, component creation/deletion, batch structural
+  transactions and a separately exposed MCP server are not implemented by this release.
+
+## 2026-10-04 RAD Studio View / Tools menu patch
+
+- Built the Win64 BPL with Delphi 37.0. Replaced IOTAMenuWizard's Help Wizards entry
+  with owned View > PiAgent and Tools > PiAgent menu items using INTAServices.MainMenu.
+- Tools rebuilds its submenu on opening. The adapter chains the original OnClick handler,
+  then restores its owned item; unload restores the original handler and frees the items.
+- Installed only this RAD adapter patch at
+  `%LOCALAPPDATA%/PiAgent/adapters/radstudio/0.9.0-menu1/Win64`, preserving the Core 0.9.0
+  runtime manifest and the RADAgent package registration. Verified loaded BPL path and SHA-256
+  `8B9AC8D9AF68929DAA404F852DD2D33F786F7EDF1573CB0C1AE1FE5554E71BEE`.
+- Live default RAD13.2 64-bit IDE showed one PiAgent entry in each menu. Tools opened the
+  connected WebView chat; closing and reopening through View reused the same window handle
+  (1705658) and connection. No chat HTML/CSS, RADAgent files, VSIX, or RAD Win32 build changed.
+- Updated installation instructions and generated release README menu paths.
+  `node --check scripts/package-core.mjs` passed. Earlier unsuccessful menu builds were
+  replaced before this verification; their artifacts are not the installed patch.
+
+## 2026-10-04 original icons and signing integration (authentication pending)
+
+- Copied original RADAgent menu PNGs, ICO and VSIX extension PNG without changing the reference.
+  Verified menu PNG and ICO hashes match the reference. Compiled SDK icon resources and Win64 BPL,
+  transport/chat harnesses, Core/UI and VSIX. VSCT embeds the chat command menu icon; VSIX includes
+  Resources/PiAgent.png. No RAD Win32 or VS2022 tests were run.
+- Added default signed adapter builds, pre-container VSIX assembly signing, signed PipeHost and
+  Sign CLI container signing, with expected-signer and signature validation. Negative test confirms
+  verify-vsix.ps1 rejects an unsigned VSIX. PowerShell parser validation passed for signing scripts.
+- USB certificate 3CE49DE1124F325082FA90BDE4944756D1626251 is present with private-key association,
+  expires 2027-06-05. The SafeNet Token Logon prompt requires the user's PIN. An initial x64
+  SignTool attempt found no usable certificate; native ARM64 signing is pending token authentication.
+  Actual signing, signed release verification and installation of this icon build are not yet complete.
+  Previously installed menu patch remains running. Do not treat integration as validated signing.
+
+## 2026-10-04 signed unified setup and VSIX error 2004 repair
+
+- Created `dist/PiAgent-Setup-0.9.0.exe` (210,278,024 bytes), SHA-256
+  `846506283714C5C2ABFF65A1585F8639C7E1ACE6C7056349C9D2B1C7BD528394`.
+  Setup, Win32/Win64 BPLs, PipeHost, VSIX and its first-party DLLs are signed with
+  Nanum Space certificate `3CE49DE1124F325082FA90BDE4944756D1626251`.
+  PE signature/timestamp checks, OPC content checks and independent Microsoft
+  VSIXSignTool validation passed. Earlier authentication-pending notes above are historical.
+- SafeNet on this ARM64 PC exposes the private key to x86 processes. SDK x86 SignTool
+  and the pinned official Sign CLI source compatibility build completed signing.
+  No PIN or private key was exported or stored. See CODE-SIGNING.md for build details.
+- This PC detected ARM64, RAD13.2 Win32/Win64, VS2026 instance 4dee894c,
+  VS2022 instance 8967bed4 and existing OMP under LocalAppData/omp.
+  The user selected all four IDE components in the preview setup. A leftover
+  VS2022 ServiceHub controller caused VSIXInstaller error 2004.
+  Added `/shutdownprocesses`, resumable installation records, same-version repair,
+  component-specific logs and explicit unattended component selection.
+- Repaired this installation using the final signed setup. Final process exit code 0,
+  completion at 20:18:20 KST. Both installed VSIX manifests report 0.9.1 and both
+  installed first-party DLLs have valid expected-signer signatures. RAD 32/64
+  registrations point to the signed setup-owned release. Previous PiAgent entries
+  are backed up; the RADAgent reference and registrations were not modified.
+  The original frozen VS2022 ServiceHub PID 17772 was stopped only after confirming
+  no IDE processes were running. No running IDE was forcibly stopped.
+- `scripts/test-installer.ps1` passed full embedded payload extraction/hash checks,
+  and authenticated handshake/capability negotiation/Unicode ping using private
+  Node 24.21.0 and .NET runtimes under both ARM64 and x64 emulation on this ARM64 PC.
+  Native x64 hardware was not tested. Installer tests reject tampering, path traversal,
+  existing extraction directories and unavailable IDE selection before registry writes.
+  A signed VSIX container with unsigned embedded first-party DLLs is now rejected.
+- Start Menu shortcuts and Windows Installed Apps entry were verified. Existing OMP
+  is reused. The absent-OMP network download and uninstall flows were not executed
+  against this PC. VS2022 and RAD Win32 installation were checked; this does not
+  represent new live editor/designer functional tests in those IDEs.
+
+## 2026-10-04 VS2026 authentication connection patch (VSIX 0.9.2)
+
+- Reproduced `Cannot read authentication credential` in the live VS2026 App1
+  solution at `D:/source/test/App1/App1.slnx`; retrying in the old VSIX failed.
+  The existing secure Core, private token ACL and separate Node/C# handshake probes
+  worked. VS ran as the same user and had the expected LOCALAPPDATA with no explicit
+  PIAGENT_AUTH_FILE override. No credentials or token bytes were logged.
+- Changed C# credential resolution to match Core's LOCALAPPDATA-first rule, retaining
+  the explicit PIAGENT_AUTH_FILE override and Shell folder fallback only when the
+  environment value is absent. Read failures now include path, error type and HRESULT
+  for diagnosis; authentication, HMAC proof checks and token ACL were not weakened.
+  The former in-process Shell folder result was not captured before the restart.
+- Built/signed VSIX 0.9.2 and installed it only in VS2026. Saved/reopened the same
+  App1 solution; the real pinned chat connected, showed the current model/effort
+  and green connection state, with no credential error. A separate authenticated
+  Core → OMP → live model test returned `연결 확인`; it requested no tool/file work.
+- C# credential-location regression (LOCALAPPDATA and explicit override), eight UI
+  tests and signed setup/payload/runtime tests passed. The disconnected unsupported
+  action notice now points to connection recovery; original UI placement/assets
+  were retained. VS2022 and RAD adapters were not newly installed or live-tested.
+- Refreshed signed `dist/PiAgent-Setup-0.9.0.exe` to include VSIX 0.9.2;
+  SHA-256 `010B898C584B35BB4A24751A95E15BB663B38D367CF8D9E76A051E3397D7DD2D`.
+  The installed Core workspace configuration was retained; this authentication patch
+  does not implement automatic workspace switching between Visual Studio solutions.
+
+## 2026-10-04: shell-launched VS2026 authentication and Core bootstrap (VSIX 0.9.3)
+
+- Corrected the earlier 0.9.2 conclusion: the successful IDE had inherited the
+  Codex launch environment. GetFinalPathNameByHandleW showed the old logical AppData
+  token actually resided under OpenAI.Codex's package LocalCache. A user-launched
+  IDE could not access that token at the logical path.
+- Core, C# transport and Delphi transport now share
+  `%USERPROFILE%/.piagent/security/<pipe>/token`; explicit PIAGENT_AUTH_FILE still
+  overrides it. The private user-only ACL and HMAC authentication remain enabled.
+  VSIX starts the installed bundled Core when absent and reuses an existing Core.
+- Signed VSIX 0.9.3, RAD Win32/Win64 adapters and unified setup were built and
+  installed. Setup returned 0. Existing workspace/native OMP/write settings were
+  preserved and 12 previous saved sessions were copied without copying the old key.
+- Cold test: stopped the previous Core, opened App1 using an Explorer shortcut
+  targeting VS2026. Explorer PID 20820 launched devenv PID 21348, which started
+  bundled ARM64 Node/Core PID 31496. The pinned original chat showed its model,
+  effort and green connected indicator with no credential error.
+- Warm restart: closed VS normally and reopened from Explorer. New devenv PID 5008
+  connected successfully while Core PID 31496 remained unchanged. A separate
+  authenticated Core -> OMP -> live model test returned `연결 확인` with no file/tool work.
+- Strict TypeScript build, 15 security/UI tests, .NET Framework cold startup/reuse,
+  signed setup payload checks and both bundled ARM64/x64 authenticated runtime
+  probes passed. VS2022 and RAD were updated for the shared credential path but
+  were not live-tested in this authentication task.
+- Setup SHA-256: `781FC950536EA053A74605E049CFFE34D69F8EAACF8716DA22E0C23C03ED2197`.
+  GetFinalPathNameByHandleW confirmed the new key's physical location is
+  `C:/Users/kimmi/.piagent/security/piagent-dev/token`, outside the Codex cache.
+  Adapter integration tests now use the package's current build version rather
+  than stale 0.7.0 harnesses; the batch OMP fixture recognizes the real designer
+  workflow prefix. All 14 C#/Delphi transport/chat integration tests passed.
+  Core remains scoped to the previously configured PiAgent workspace; automatic
+  switching to App1 is outside this authentication fix.
+
+## 2026-10-04: access modes, solution binding and original + menu (0.9.4 candidate)
+
+- Root causes: bridge.ts disabled approval-select and plus-btn unconditionally;
+  Controller always emitted always-ask and did not handle setApproval/plus actions.
+  ChatControl never sent an IDE workspace; Core reused its configured PiAgent cwd.
+- Implemented authenticated per-connection workspace binding, solution open/close
+  lifecycle, per-workspace private sessions, persistent per-chat access modes and
+  restart/resume of OMP with its explicit native approval-mode flag. No automatic
+  Git init is performed. Non-Git native projects are usable without checkpoint tools.
+- The original + menu now routes attachments, folder references, extension metadata,
+  MCP toggles/config editing, plugin toggles and IDE compilation. Reference renderer,
+  CSS and icons remain unchanged. No tool secrets are included in extension metadata.
+- Full Core suite: 66 passed. Additional UI/mode/plus/scope tests: 11 passed.
+  Actual OMP 18.6 native startup on a no-Git solution tested all four mode changes,
+  retained one savedSessionId and matched each runtime config, without model prompts.
+  Strict TS and VSIX/RAD Win32/Win64 development builds succeeded.
+- DPAPI SecureString storage round-tripped from Windows PowerShell to x86 Windows
+  PowerShell. CSP helper compiled on x86; no PIN was submitted by this test.
+- Candidate is not yet installed or represented as a completed signed release:
+  USB SignTool requested Token Logon, with no encrypted PIN registered. That blocked
+  signing process was stopped without typing into the authentication dialog.
+  User must run set-signing-pin.ps1 once locally; actual encrypted-PIN token unlock,
+  final signed setup and live VS2026 verification remain pending.

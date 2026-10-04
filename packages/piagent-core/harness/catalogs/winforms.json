@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "framework": "winforms",
+  "kind": "reference",
+  "source": "https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/",
+  "controls": [
+    {
+      "name": "MenuStrip / ToolStripMenuItem",
+      "role": "menu",
+      "properties": "Items, DropDownItems, ShortcutKeys, Checked",
+      "usage": "Hierarchical application commands; share handlers with toolbar",
+      "events": "Click"
+    },
+    {
+      "name": "ToolStrip / ToolStripButton",
+      "role": "toolbar",
+      "properties": "Items, DisplayStyle, Enabled",
+      "usage": "Frequently used commands, not every feature",
+      "events": "Click"
+    },
+    {
+      "name": "StatusStrip / ToolStripStatusLabel",
+      "role": "status",
+      "properties": "Items, Spring, Text",
+      "usage": "Document state and caret position",
+      "events": ""
+    },
+    {
+      "name": "TableLayoutPanel",
+      "role": "layout",
+      "properties": "RowStyles, ColumnStyles, Dock, AutoSize",
+      "usage": "Aligned forms; percent and auto sizing",
+      "events": ""
+    },
+    {
+      "name": "FlowLayoutPanel",
+      "role": "layout",
+      "properties": "FlowDirection, WrapContents, AutoSize",
+      "usage": "Flowing related controls",
+      "events": ""
+    },
+    {
+      "name": "SplitContainer",
+      "role": "layout",
+      "properties": "Dock, Orientation, SplitterDistance",
+      "usage": "Resizable two-pane workspace",
+      "events": "SplitterMoved"
+    },
+    {
+      "name": "RichTextBox",
+      "role": "editor",
+      "properties": "Dock, ReadOnly, AcceptsTab",
+      "usage": "Native rich text/document region",
+      "events": "TextChanged, SelectionChanged"
+    },
+    {
+      "name": "OpenFileDialog / SaveFileDialog",
+      "role": "dialog",
+      "properties": "Filter, FileName, DefaultExt",
+      "usage": "Native file selection; cancellation leaves document intact",
+      "events": "FileOk"
+    }
+  ]
+}

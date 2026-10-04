@@ -13,6 +13,7 @@ var version = args.Length > 1 ? args[1] : "2022";
 using var client = new PipeAdapterClient(name);
 using var cancellation = new CancellationTokenSource();
 var mode = args.Length > 2 ? args[2] : "normal";
+if (mode == "credential") { Console.WriteLine(client.AuthenticationCredentialPath); return; }
 if (mode == "changes")
 {
     var approval = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously);

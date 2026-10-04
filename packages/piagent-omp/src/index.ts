@@ -5,6 +5,8 @@ import { isAbsolute } from 'node:path';
 import { TextDecoder } from 'node:util';
 import { isObject, MAX_FRAME_BYTES } from '@piagent/protocol';
 import { JsonlDecoder } from './jsonl.js';
+import { ChunkDecoder } from './chunks.js';
+export { ChunkDecoder } from './chunks.js';
 export { JsonlDecoder } from './jsonl.js';
 
 export interface OmpOptions {
@@ -15,6 +17,7 @@ export interface OmpOptions {
   readyTimeoutMs?: number;
   requestTimeoutMs?: number;
   shutdownTimeoutMs?: number;
+  profile?: 'restricted' | 'native';
 }
 export type OmpState = 'new' | 'starting' | 'ready' | 'stopping' | 'stopped' | 'failed';
 interface Pending {
@@ -24,7 +27,7 @@ interface Pending {
   timer: NodeJS.Timeout;
 }
 
-/** OMP v1 JSONL lifecycle, separate from IDE JSON-RPC. No agent loop or IDE tools. */
+/** OMP v1/v2 JSONL lifecycle, separate from IDE JSON-RPC. No agent loop or IDE tools. */
 export class OmpProcess extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | undefined;
   private currentState: OmpState = 'new';
@@ -36,6 +39,8 @@ export class OmpProcess extends EventEmitter {
   private readyReject: ((error: Error) => void) | undefined;
   private readyTimer: NodeJS.Timeout | undefined;
   private readonly options: Required<OmpOptions>;
+  private readonly chunks = new ChunkDecoder();
+  private protocol = 1;
 
   constructor(options: OmpOptions) {
     super();
@@ -43,7 +48,7 @@ export class OmpProcess extends EventEmitter {
     if (!options.executable || /\.(cmd|bat)$/i.test(options.executable)) {
       throw new Error('OMP executable must be a native executable, not a shell script');
     }
-    this.options = { executableArgs: [], readyTimeoutMs: 10_000, requestTimeoutMs: 5_000,
+    this.options = { profile:'restricted', executableArgs: [], readyTimeoutMs: 30_000, requestTimeoutMs: 30_000,
       shutdownTimeoutMs: 2_000, ...options };
     for (const ms of [this.options.readyTimeoutMs, this.options.requestTimeoutMs, this.options.shutdownTimeoutMs]) {
       if (!Number.isSafeInteger(ms) || ms < 1 || ms > 300_000) throw new Error('Invalid OMP deadline');
@@ -93,16 +98,27 @@ export class OmpProcess extends EventEmitter {
       catch (error) { this.fail(error instanceof Error ? error : new Error(String(error))); }
     });
     child.stdout.on('end', () => {
-      try { lines.end(); }
+      try { lines.end(); this.chunks.end(); }
       catch (error) { this.fail(error instanceof Error ? error : new Error(String(error))); }
     });
-    try { return await ready; }
+    try {
+      const frame=await ready;
+      if(Array.isArray(frame['supportedProtocolVersions'])&&frame['supportedProtocolVersions'].includes(2)) {
+        await this.request('negotiate_protocol',{protocolVersion:2}); this.protocol=2;
+      }
+      return frame;
+    }
     catch (error) { await this.stop(); throw error; }
   }
 
   request(command: string, fields: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     if (this.currentState !== 'ready' || this.child === undefined) return Promise.reject(new Error('OMP is not ready'));
-    if (!['get_state', 'get_available_commands', 'get_session_stats', 'abort', 'new_session', 'switch_session', 'prompt', 'set_host_tools'].includes(command)) {
+    if (!['negotiate_protocol','get_state', 'get_available_commands', 'get_session_stats', 'abort', 'new_session', 'switch_session', 'prompt', 'set_host_tools',
+      'get_available_models','set_model','get_available_thinking_levels','set_thinking_level','set_event_filter',
+      'steer','follow_up','remove_queued_message','promote_queued_message','abort_retry','compact','get_subagents',
+      'get_subagent_messages','cancel_subagent','steer_subagent','set_subagent_subscription','get_messages_page',
+      'get_entries','get_tree','get_last_assistant_text','set_session_name','get_login_providers','login','export_html',
+      'set_fast_mode','set_auto_compaction','set_auto_retry','set_cache_warming','goal'].includes(command)) {
       return Promise.reject(new Error('OMP command not enabled in this slice'));
     }
     if ('id' in fields || 'type' in fields) return Promise.reject(new Error('Reserved OMP fields'));
@@ -111,7 +127,7 @@ export class OmpProcess extends EventEmitter {
     let body: Buffer;
     try { body = Buffer.from(JSON.stringify({ ...fields, id, type: command }), 'utf8'); }
     catch (error) { return Promise.reject(error); }
-    if (body.length > MAX_FRAME_BYTES) return Promise.reject(new Error('OMP request exceeds limit'));
+    if (body.length + 1 > MAX_FRAME_BYTES || this.child.stdin.writableLength > 2 * MAX_FRAME_BYTES) return Promise.reject(new Error('OMP request exceeds limit'));
     const child = this.child;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -138,6 +154,14 @@ export class OmpProcess extends EventEmitter {
     if (body.length > MAX_FRAME_BYTES || this.child.stdin.writableLength > 2 * MAX_FRAME_BYTES) throw new Error('Host reply exceeds limit');
     const child = this.child;
     await new Promise<void>((resolve, reject) => child.stdin.write(body, error => error ? reject(error) : resolve()));
+  }
+
+  async uiResponse(id: string, fields: {value?:string;confirmed?:boolean;cancelled?:true}):Promise<void> {
+    if(this.currentState!=='ready'||!this.child||!id||Buffer.byteLength(id)>256)throw new Error('Invalid UI response');
+    const body=Buffer.from(JSON.stringify({type:'extension_ui_response',id,...fields})+'\n');
+    if(body.length>MAX_FRAME_BYTES||this.child.stdin.writableLength>2*MAX_FRAME_BYTES)throw new Error('UI response exceeds limit');
+    const child=this.child;
+    await new Promise<void>((resolve,reject)=>child.stdin.write(body,error=>error?reject(error):resolve()));
   }
 
   private async stopChild(): Promise<void> {
@@ -174,9 +198,11 @@ export class OmpProcess extends EventEmitter {
       this.readyResolve = undefined;
       this.readyReject = undefined;
     }
-    if (frame['type'] === 'rpc_chunk') {
-      this.fail(new Error('OMP v2 chunking is not enabled')); return;
-    }
+    try {
+      if(frame['type']==='rpc_chunk'&&this.protocol!==2)throw new Error('Unnegotiated OMP chunks');
+      frame=this.chunks.accept(frame);if(!frame)return;
+    } catch(error){this.fail(error instanceof Error?error:new Error(String(error)));return;}
+    if(!isObject(frame))return;
     if (frame['type'] === 'response' && typeof frame['id'] === 'string') {
       const pending = this.pending.get(frame['id']);
       if (pending) {
@@ -184,7 +210,10 @@ export class OmpProcess extends EventEmitter {
         clearTimeout(pending.timer);
         if (frame['command'] !== pending.command || typeof frame['success'] !== 'boolean') {
           pending.reject(new Error('Mismatched OMP response'));
-        } else if (frame['success']) pending.resolve(frame);
+        } else if (frame['success']) {
+          if(pending.command==='negotiate_protocol')this.protocol=2;
+          pending.resolve(frame);
+        }
         else pending.reject(new Error(`OMP command failed: ${pending.command}`));
       }
     }

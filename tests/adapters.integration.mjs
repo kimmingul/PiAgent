@@ -6,15 +6,22 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDaemon, pipePath } from '@piagent/daemon';
 const execute = promisify(execFile);
 const file = path => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const csharp = file('adapters/visualstudio/PiAgent.Transport.Smoke/bin/Release/net10.0/PiAgent.Transport.Smoke.dll');
-const delphi = platform => file(`adapters/radstudio/bin/${platform}/0.7.0/PipeSmoke.exe`);
+const releaseVersion = JSON.parse(await readFile(file('package.json'), 'utf8')).version;
+const delphi = platform => file(`adapters/radstudio/bin/${platform}/${releaseVersion}/PipeSmoke.exe`);
 const windows = { skip: process.platform !== 'win32', timeout: 15_000 };
+test('C# credential location uses shared USERPROFILE outside AppData and honors an explicit override',windows,async()=>{
+ const local=join(tmpdir(),'piagent-credential-path-fixture');const env={...process.env,USERPROFILE:local,LOCALAPPDATA:join(local,'virtualized')};delete env.PIAGENT_AUTH_FILE;
+ const probe=async(vars)=> (await execute('dotnet',[csharp,'credential-test','2026','credential'],{windowsHide:true,env:vars})).stdout.trim();
+ assert.equal(await probe(env),join(local,'.piagent','security','credential-test','token'));
+ const explicit=join(tmpdir(),'piagent-explicit-token');assert.equal(await probe({...env,PIAGENT_AUTH_FILE:explicit}),explicit);
+});
 for(const platform of ['Win32','Win64']) test(`Delphi ${platform} chat worker approves/restores a batch and resumes a saved session`,{...windows,timeout:30000},async()=>{
  const root=await mkdtemp(join(tmpdir(),'piagent-rad-chat-'));let daemon;
  try{
@@ -22,7 +29,7 @@ for(const platform of ['Win32','Win64']) test(`Delphi ${platform} chat worker ap
   await git('init');await writeFile(join(root,'Example.cs'),'first\r\n');await writeFile(join(root,'Second.cs'),'second\n');await git('add','.');await git('commit','-m','Fixture');
   const name='piagent-rad-chat-'+randomUUID(),authFile=join(root,'private','token');
   daemon=await startDaemon({pipeName:name,secure:{authFile},workspaceRoot:root,allowWrites:true,omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
-  const result=await execute(file(`adapters/radstudio/bin/${platform}/0.7.0/ChatSmoke.exe`),[],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_PIPE_NAME:name,PIAGENT_AUTH_FILE:authFile}});
+  const result=await execute(file(`adapters/radstudio/bin/${platform}/${releaseVersion}/ChatSmoke.exe`),[],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_PIPE_NAME:name,PIAGENT_AUTH_FILE:authFile}});
   assert.deepEqual(JSON.parse(result.stdout.trim()),{applied:true,restored:true,resumed:true,usage:true});assert.equal((await git('diff')).stdout.trim(),'');
  }finally{await daemon?.close();await rm(root,{recursive:true,force:true});}
 });

@@ -8,6 +8,12 @@ function manager(scenario = 'normal', overrides = {}) {
     cwd: process.cwd(), readyTimeoutMs: 2_000, requestTimeoutMs: 150, shutdownTimeoutMs: 100, ...overrides });
 }
 
+test('OMP switches decoder before a v2 chunk coalesced with the negotiation response',async()=>{
+  const omp=manager('v2-coalesced'),frames=[];omp.on('frame',frame=>frames.push(frame));
+  try {await omp.start();assert.ok(frames.some(frame=>frame.text==='v2 한글'));}
+  finally {await omp.stop();}
+});
+
 test('OMP launch flags/cwd, ready gate, ID correlation, Unicode events and stderr', async () => {
   const omp = manager('delayed');
   const frames = []; const stderr = [];

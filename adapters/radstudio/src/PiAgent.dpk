@@ -3,8 +3,12 @@ package PiAgent;
 {$DESIGNONLY}
 {$IMPLICITBUILD OFF}
 {$LIBSUFFIX AUTO}
+{$R '..\resources\PiAgentIcons.res'}
 requires rtl, vcl, vcledge, designide;
 contains
+  PiAgent.MenuIcon in 'PiAgent.MenuIcon.pas',
+  PiAgent.DesignerRelations in 'PiAgent.DesignerRelations.pas',
+  PiAgent.Designer in 'PiAgent.Designer.pas',
   PiAgent.PipeClient in 'PiAgent.PipeClient.pas',
   PiAgent.ChatWorker in 'PiAgent.ChatWorker.pas',
   PiAgent.ChatForm in 'PiAgent.ChatForm.pas',

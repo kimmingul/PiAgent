@@ -25,13 +25,23 @@ public sealed class PipeAdapterClient : IDisposable
     private readonly string pipeName;
     public event Action<JObject>? Notification;
     public event Action<Exception>? Disconnected;
+    public string AuthenticationCredentialPath
+    {
+        get
+        {
+            var explicitPath = Environment.GetEnvironmentVariable("PIAGENT_AUTH_FILE");
+            var profile = Environment.GetEnvironmentVariable("USERPROFILE");
+            if (string.IsNullOrWhiteSpace(profile)) profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return explicitPath ?? Path.Combine(profile, ".piagent", "security", pipeName, "token");
+        }
+    }
     public PipeAdapterClient(string pipeName)
     {
         if (!Regex.IsMatch(pipeName, @"\A[a-zA-Z0-9_-]{1,128}\z")) throw new ArgumentException("Invalid pipe name");
         this.pipeName = pipeName;
         pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
     }
-    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false, bool writes = false)
+    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false, bool writes = false, bool designers = false)
     {
         if (ready) throw new InvalidOperationException("Already initialized");
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation))
@@ -46,12 +56,14 @@ public sealed class PipeAdapterClient : IDisposable
         var offered = chat ? new JArray("core.ping", "chat.v1") : new JArray("core.ping");
         if (selectionContext) { if (!chat) throw new ArgumentException("Selection context requires chat"); offered.Add("context.selection.v1"); }
         var required = (JArray)offered.DeepClone();
+        if(chat) { offered.Add("omp.controls.v1"); offered.Add("workspace.bind.v1"); offered.Add("chat.approval.v1"); }
+        if(chat && designers) offered.Add("ide.designer.v1");
         if (chat) { offered.Add("chat.sessions.v1"); offered.Add("chat.usage.v1"); offered.Add("workspace.read.v1"); } // Optional; the daemon owner must opt in with --workspace.
         if (writes) { if (!chat) throw new ArgumentException("Writes require chat"); offered.Add("workspace.edit.v1"); offered.Add("workspace.edit.batch.v1"); }
         var result = await CallAsync("adapter.hello", new JObject {
             ["protocolVersions"] = new JArray(1), ["capabilities"] = offered,
             ["requiredCapabilities"] = required,
-            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.7.0", ["ideVersion"] = ideVersion,
+            ["adapter"] = new JObject { ["kind"] = kind, ["version"] = "0.9.0", ["ideVersion"] = ideVersion,
                 ["instanceId"] = instanceId, ["capabilities"] = new JArray() }
         }, cancellation).ConfigureAwait(false);
         if ((int?)result["protocolVersion"] != 1 || result["capabilities"] is not JArray capabilities
@@ -68,10 +80,15 @@ public sealed class PipeAdapterClient : IDisposable
     private async Task AuthenticateAsync(CancellationToken cancellation)
     {
         var explicitPath = Environment.GetEnvironmentVariable("PIAGENT_AUTH_FILE");
-        var path = explicitPath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiAgent", "security", pipeName, "token");
+        // Match Node's credentialPath outside virtualized AppData.
+        var path = AuthenticationCredentialPath;
         if (explicitPath == null && !File.Exists(path) && Environment.GetEnvironmentVariable("PIAGENT_DEV_PIPE") == "1") return;
         string token;
-        try { token = File.ReadAllText(path); } catch { throw new IOException("Cannot read authentication credential"); }
+        try { token = File.ReadAllText(path); }
+        catch (Exception error) when (error is IOException || error is UnauthorizedAccessException || error is System.Security.SecurityException)
+        {
+            throw new IOException($"PiAgent 인증 파일을 읽지 못했습니다: {path} ({error.GetType().Name}, 0x{error.HResult:X8}). PiAgent Core 실행 상태와 인증 경로를 확인해 주세요.", error);
+        }
         if (!Regex.IsMatch(token, @"\A[0-9a-f]{64}\z")) throw new IOException("Invalid authentication credential");
         var bytes = new byte[32]; using (var random = RandomNumberGenerator.Create()) random.GetBytes(bytes);
         var nonce = BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
@@ -95,9 +112,9 @@ public sealed class PipeAdapterClient : IDisposable
     }
     public Task<JObject> RequestAsync(string method, JObject parameters, CancellationToken cancellation)
     {
-        if (!ready || !new[] { "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
+        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
             throw new InvalidOperationException("Unsupported request or handshake required");
-        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : method == "chat.open" ? 20000 : 5000);
+        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.open", "chat.usage", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
     }
     private async Task<JObject> CallAsync(string method, JObject parameters, CancellationToken cancellation, int timeout = 5000)
     {

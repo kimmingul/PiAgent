@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$MsBuildPath, [string]$BdsRoot)
+param([string]$MsBuildPath, [string]$BdsRoot, [ValidateSet('Win32','Win64')][string[]]$RadPlatforms = @('Win64'), [switch]$SkipCodeSign)
 $ErrorActionPreference = 'Stop'
 $workspacePath = Split-Path $PSScriptRoot -Parent
 if (-not $MsBuildPath) {
@@ -23,9 +23,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'C# transport build failed' }
     & npm run build
     if ($LASTEXITCODE -ne 0) { throw 'Core/UI TypeScript build failed' }
-    & $MsBuildPath adapters/visualstudio/PiAgent.Vsix/PiAgent.Vsix.csproj /restore /t:Rebuild /p:Configuration=Release /v:minimal /nologo
+    $codeSign = if ($SkipCodeSign) { 'false' } else { 'true' }
+    & $MsBuildPath adapters/visualstudio/PiAgent.Vsix/PiAgent.Vsix.csproj /restore /t:Rebuild /p:Configuration=Release "/p:PiAgentCodeSign=$codeSign" /v:minimal /nologo
     if ($LASTEXITCODE -ne 0) { throw 'VSIX build failed' }
-    foreach ($platform in @('Win32', 'Win64')) {
+    Push-Location adapters/radstudio/resources
+    try {
+        $resourceCompiler = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\rc.exe" |
+            Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
+        if (!$resourceCompiler) { throw 'Windows SDK resource compiler is required.' }
+        & $resourceCompiler /fo PiAgentIcons.res PiAgentIcons.rc
+        if ($LASTEXITCODE -ne 0) { throw 'Icon resource compilation failed' }
+    } finally { Pop-Location }
+    foreach ($platform in $RadPlatforms) {
         $compilerName = if ($platform -eq 'Win32') { 'dcc32.exe' } else { 'dcc64.exe' }
         $compiler = Join-Path $BdsRoot "bin\$compilerName"
         $output = Join-Path $workspacePath "adapters\radstudio\bin\$platform\$releaseVersion"
@@ -37,7 +46,8 @@ try {
         } finally { Pop-Location }
         $uiOutput = Join-Path $output 'ui'
         New-Item -ItemType Directory -Path $uiOutput -Force | Out-Null
-        Copy-Item -LiteralPath ui/src/chat.html,ui/src/chat.css,ui/dist/chat.js -Destination $uiOutput
+        Get-ChildItem -LiteralPath ui/src | Where-Object Extension -ne '.ts' | Copy-Item -Destination $uiOutput -Recurse -Force
+        Copy-Item -LiteralPath ui/dist/bridge.js,ui/dist/controller.js,ui/dist/interactions.js -Destination $uiOutput -Force
         $loaderArch = if ($platform -eq 'Win32') { 'win-x86' } else { 'win-x64' }
         $loader = Join-Path $env:USERPROFILE ".nuget\packages\microsoft.web.webview2\1.0.4258.31\runtimes\$loaderArch\native\WebView2Loader.dll"
         Copy-Item -LiteralPath $loader -Destination $output
@@ -48,5 +58,10 @@ try {
             & $compiler -B -Q "-U$(Join-Path $BdsRoot "lib\$platform\release")" "-N0$output" "-E$output" ChatSmoke.dpr
             if ($LASTEXITCODE -ne 0) { throw "$platform chat smoke build failed" }
         } finally { Pop-Location }
+        if (!$SkipCodeSign) { & "$PSScriptRoot\sign-artifacts.ps1" -Directory $output }
+    }
+    if (!$SkipCodeSign) {
+        & "$PSScriptRoot\sign-artifacts.ps1" -Directory 'transport/PiAgent.PipeHost/bin/Release'
+        & "$PSScriptRoot\sign-vsix.ps1"
     }
 } finally { Pop-Location }

@@ -27,7 +27,7 @@ type
 procedure ShowPiAgentChat;
 implementation
 uses System.SysUtils, System.IOUtils, System.NetEncoding, System.Win.ComObj, Winapi.Windows, Winapi.ActiveX,
-  Winapi.WebView2, Vcl.Controls, Vcl.StdCtrls, ToolsAPI;
+  Winapi.WebView2, Vcl.Controls, Vcl.StdCtrls, ToolsAPI, PiAgent.Designer;
 const Page = 'https://piagent.local/chat.html';
   // Windows SDK flags, absent from older Delphi Winapi.Windows declarations.
   LoadFromDllDirectory = $00000100;
@@ -37,6 +37,8 @@ constructor TPiChatForm.Create(AOwner: TComponent);
 var ModuleName: array[0..32767] of Char; LoaderPath: string;
 begin
   inherited CreateNew(AOwner); Caption := 'PiAgent Chat'; Width := 780; Height := 820;
+  if FindResource(HInstance,'PIAGENT_ICON',RT_GROUP_ICON) <> 0 then
+    Icon.LoadFromResourceName(HInstance,'PIAGENT_ICON');
   ShowInTaskbar := True;
   GetModuleFileName(HInstance,ModuleName,Length(ModuleName)); LoaderPath := TPath.Combine(ExtractFilePath(ModuleName),'WebView2Loader.dll');
   FLoader := LoadLibraryEx(PChar(LoaderPath),0,LoadFromDllDirectory or LoadFromDefaultDirectories);
@@ -138,7 +140,7 @@ begin
   finally CoTaskMemFree(Source); CoTaskMemFree(Json); end;
 end;
 procedure TPiChatForm.Poll(Sender: TObject);
-var Json: string; Msg, Data: TJSONObject; Kind: string; I: Integer;
+var Json: string; Msg, Data, Frame, Reply: TJSONObject; Kind: string; I: Integer;
 begin
   // Bound work on the IDE thread. All SDK and browser access remains on this thread.
   for I := 1 to 32 do begin
@@ -150,6 +152,18 @@ begin
       if Kind = 'restorePreview' then begin FreeAndNil(FRestore); FRestore := TJSONObject(Msg.GetValue('data').Clone); end;
       if Kind = 'event' then begin
         Data := Msg.GetValue('data') as TJSONObject; Kind := Data.GetValue<string>('kind','');
+        if (Kind = 'omp_event') and (Data.GetValue('frame') is TJSONObject) then begin
+          Frame := Data.GetValue('frame') as TJSONObject;
+          if Frame.GetValue<string>('type','') = 'designer_request' then begin
+            Reply := TJSONObject.Create.AddPair('action','designerReply').AddPair('requestId',Frame.GetValue<string>('id',''));
+            try
+              try Reply.AddPair('result',ExecuteDesigner(Frame.GetValue<string>('operation',''),Frame.GetValue('args') as TJSONObject,FWorkspace));
+              except on E: Exception do Reply.AddPair('error',E.Message); end;
+              FWorker.Enqueue(Reply.ToJSON);
+            finally Reply.Free; end;
+            Continue;
+          end;
+        end;
         if Kind = 'approval_requested' then begin FreeAndNil(FApproval); FApproval := TJSONObject(Data.GetValue('approval').Clone); end;
         if (Kind = 'approval_resolved') or (Kind = 'closed') then FreeAndNil(FApproval);
       end;

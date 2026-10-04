@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { randomUUID, createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { packageCore } from '../scripts/package-core.mjs';
+import {pathToFileURL} from 'node:url';
 const execute=promisify(execFile);
 test('default PowerShell install/start connects, checks integrity and removes only its verified version',
  {skip:process.platform!=='win32',timeout:30000},async()=>{
@@ -52,6 +53,8 @@ test('release runs outside the workspace without npm install and verifies file h
       await packageCore(output);
       await assert.rejects(packageCore(output), { code: 'EEXIST' });
       const manifest = JSON.parse(await readFile(join(output, 'release-manifest.json'), 'utf8'));
+      const {guiHarness}=await import(pathToFileURL(join(output,'node_modules/@piagent/core/dist/gui-harness.js')).href);
+      assert.equal((await guiHarness({framework:'fmx'})).catalog.framework,'fmx');
       for (const [path, expected] of Object.entries(manifest.sha256))
         assert.equal(createHash('sha256').update(await readFile(join(output, path))).digest('hex'), expected);
       const pipe = `piagent-release-${randomUUID()}`;

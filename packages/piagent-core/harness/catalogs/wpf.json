@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "framework": "wpf",
+  "kind": "reference",
+  "source": "https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/commanding-overview",
+  "controls": [
+    {
+      "name": "Grid",
+      "role": "layout",
+      "properties": "RowDefinitions, ColumnDefinitions, Grid.Row, Grid.Column",
+      "usage": "Auto/star sizing and aligned resizable regions",
+      "events": ""
+    },
+    {
+      "name": "DockPanel",
+      "role": "layout",
+      "properties": "DockPanel.Dock, LastChildFill",
+      "usage": "Menu/status edges with editor filling remainder",
+      "events": ""
+    },
+    {
+      "name": "Menu / MenuItem",
+      "role": "menu",
+      "properties": "Items, Header, Command, InputGestureText",
+      "usage": "Hierarchical commands; InputGestureText alone does not bind a shortcut",
+      "events": ""
+    },
+    {
+      "name": "ToolBar / ToolBarTray",
+      "role": "toolbar",
+      "properties": "Items, Band, BandIndex",
+      "usage": "Frequently used shared commands",
+      "events": ""
+    },
+    {
+      "name": "StatusBar / StatusBarItem",
+      "role": "status",
+      "properties": "Items, Content",
+      "usage": "Document and caret state",
+      "events": ""
+    },
+    {
+      "name": "TextBox / RichTextBox",
+      "role": "editor",
+      "properties": "AcceptsReturn, TextWrapping, Document",
+      "usage": "Choose plain text or flow document semantics deliberately",
+      "events": "TextChanged"
+    },
+    {
+      "name": "ICommand / RoutedCommand",
+      "role": "command",
+      "properties": "CanExecute, Execute, CommandBinding, InputBinding",
+      "usage": "One behavior and enabled state across multiple surfaces",
+      "events": "CanExecuteChanged"
+    }
+  ]
+}

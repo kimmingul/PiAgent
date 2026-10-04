@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "framework": "winui3",
+  "kind": "reference",
+  "source": "https://learn.microsoft.com/en-us/windows/apps/develop/ui/xaml-runtime-design-tools",
+  "controls": [
+    {
+      "name": "Grid",
+      "role": "layout",
+      "properties": "RowDefinitions, ColumnDefinitions, Grid.Row, Grid.Column",
+      "usage": "Auto/star responsive regions",
+      "events": ""
+    },
+    {
+      "name": "NavigationView",
+      "role": "navigation",
+      "properties": "MenuItems, SelectedItem, PaneDisplayMode",
+      "usage": "Application navigation only when warranted",
+      "events": "SelectionChanged"
+    },
+    {
+      "name": "MenuBar / MenuBarItem / MenuFlyoutItem",
+      "role": "menu",
+      "properties": "Items, Text, Command, KeyboardAccelerators",
+      "usage": "Desktop command hierarchy",
+      "events": "Click"
+    },
+    {
+      "name": "CommandBar / AppBarButton",
+      "role": "toolbar",
+      "properties": "PrimaryCommands, SecondaryCommands, Label, Icon, Command",
+      "usage": "Frequent versus overflow commands",
+      "events": "Click"
+    },
+    {
+      "name": "InfoBar",
+      "role": "feedback",
+      "properties": "IsOpen, Severity, Message",
+      "usage": "Actionable inline feedback, not a generic status bar",
+      "events": "Closed"
+    },
+    {
+      "name": "TextBox / RichEditBox",
+      "role": "editor",
+      "properties": "AcceptsReturn, TextWrapping, Document",
+      "usage": "Plain text or rich editing",
+      "events": "TextChanged"
+    },
+    {
+      "name": "XamlUICommand / StandardUICommand",
+      "role": "command",
+      "properties": "ExecuteRequested, CanExecuteRequested, KeyboardAccelerators",
+      "usage": "Shared command state and keyboard invocation",
+      "events": "ExecuteRequested"
+    }
+  ]
+}

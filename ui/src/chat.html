@@ -1,14 +1,108 @@
-<!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'">
-<title>PiAgent Chat</title><link rel="stylesheet" href="chat.css"><script type="module" src="chat.js"></script></head>
-<body><header><strong>PiAgent</strong><div><button id="connect">연결</button><button id="reset" disabled>새 대화</button></div></header>
-<p id="status" role="status">Core를 실행한 뒤 연결해 주세요.</p><main id="transcript" aria-label="대화"></main>
-<section id="sessionTools" hidden><button id="refreshSessions" type="button">저장된 대화</button><select id="sessions" aria-label="재개할 대화"></select><button id="resumeSession" type="button">재개</button><span id="savedSession"></span></section>
-<section id="usageTools" hidden><button id="refreshUsage" type="button">사용량 새로고침</button><details><summary>사용량 · 비용</summary><pre id="usageText">조회 중…</pre></details></section>
-<section id="checkpointTools" hidden><button id="refreshCheckpoints" type="button">변경 기록</button><select id="checkpoints" aria-label="복원할 변경"></select><button id="previewRestore" type="button">복원 미리보기</button></section>
-<section id="approvalCard" hidden aria-label="파일 변경 검토"><strong id="approvalTitle"></strong><p id="approvalReason"></p><p class="diffHint">파일 전체의 삭제(-)·추가(+) 내용입니다. ␍는 CR, ⟨BOM⟩은 UTF-8 BOM을 표시합니다.</p><pre id="approvalDiff"></pre><div class="approvalActions"><button id="rejectChange" type="button">거절</button><button id="approveChange" type="button">승인하고 적용</button></div></section>
-<form id="composer"><label for="message">메시지</label><textarea id="message" rows="3" placeholder="질문을 입력하세요. Shift+Enter로 줄바꿈"></textarea>
-<div><button id="capture" type="button" disabled>선택 코드 가져오기</button><button id="clearContext" type="button" disabled>첨부 해제</button></div>
-<details id="contextPreview" hidden><summary id="contextLabel">선택 코드 첨부</summary><pre id="contextText"></pre></details>
-<footer><span id="toolScope">텍스트 채팅 · 파일 변경 도구 없음</span><button id="stop" type="button" disabled>취소</button><button id="send" disabled>보내기</button></footer></form></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PiAgent Chat</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <link rel="stylesheet" href="chat.css">
+  <link rel="stylesheet" href="activity.css">
+  <link rel="stylesheet" href="chrome.css">
+  <link rel="stylesheet" href="btw.css">
+  <link rel="stylesheet" href="brands.css">
+  <link rel="stylesheet" href="panels.css">
+</head>
+<body>
+  <div id="topbar">
+    <button id="title-btn" class="icon-btn" title="Session list" data-i18n-title="page.topbar.sessionListTitle" data-i18n="page.topbar.newChat">New chat</button>
+    <span id="project-chip" class="chip" hidden></span>
+    <span class="spacer"></span>
+    <button id="btw-btn" class="icon-btn" title="Side questions (/btw)" data-i18n-title="page.topbar.btwTitle">BTW<span id="btw-count"></span></button>
+    <button id="new-btn" class="icon-btn" title="New session" data-i18n-title="page.topbar.newSessionTitle">＋</button>
+    <button id="export-btn" class="icon-btn" title="Export to HTML" data-i18n-title="page.topbar.exportTitle">⤓</button>
+    <button id="settings-btn" class="icon-btn" title="Settings" data-i18n-title="page.topbar.settingsTitle">⚙</button>
+  </div>
+  <div id="banner" hidden></div>
+  <div id="log"></div>
+  <button id="scroll-bottom-btn" aria-label="New messages" data-i18n-aria-label="page.chat.newMessages" data-i18n="page.chat.scrollBottom">↓ New messages</button>
+  <div id="btw-panel" hidden>
+    <div class="btw-head">
+      <span class="btw-title" data-i18n="page.btw.panelTitle">Side question notes</span>
+      <span class="spacer"></span>
+      <button id="btw-close" class="icon-btn" title="Close (Esc)" data-i18n-title="page.btw.closeTitle">×</button>
+    </div>
+    <div class="btw-tools">
+      <input id="btw-search" type="search" placeholder="Search questions & answers" data-i18n-placeholder="page.btw.searchPlaceholder">
+      <label><input id="btw-only" type="checkbox"> <span data-i18n="page.btw.onlyHere">This chat only</span></label>
+    </div>
+    <div id="btw-list"></div>
+    <div class="btw-new">
+      <textarea id="btw-new-input" rows="2" placeholder="New side question (Enter to send) · Answered separately using current context, not added to chat" data-i18n-placeholder="page.btw.newPlaceholder"></textarea>
+    </div>
+  </div>
+  <div id="sheet" hidden>
+    <div class="sheet-head">
+      <span id="sheet-title" class="sheet-title"></span>
+      <span class="spacer"></span>
+      <button id="sheet-close" class="icon-btn" title="Close (Esc)" data-i18n-title="page.btw.closeTitle">×</button>
+    </div>
+    <div id="sheet-body" class="markdown-body"></div>
+  </div>
+  <div id="composer">
+    <div class="composer-col">
+      <div id="slash-menu" class="popup" hidden></div>
+      <div id="plus-menu" class="popup" hidden>
+        <div class="popup-item" data-action="attachFiles"><span class="menu-icon">📎</span><span class="popup-name" data-i18n="page.plusmenu.attachFiles">Add files or photos</span></div>
+        <div class="popup-item" data-action="addFolder"><span class="menu-icon">📁</span><span class="popup-name" data-i18n="page.plusmenu.addFolder">Add folder</span></div>
+        <div class="popup-sep"></div>
+        <div class="popup-item has-sub" data-sub="mcpServers"><span class="menu-icon">⊞</span><span class="popup-name" data-i18n="page.plusmenu.mcpServers">MCP servers</span><span class="sub-arrow">›</span></div>
+        <div class="popup-item has-sub" data-sub="plugins"><span class="menu-icon">⧉</span><span class="popup-name" data-i18n="page.plusmenu.plugins">Plugins</span><span class="sub-arrow">›</span></div>
+        <div class="popup-sep"></div>
+        <div class="popup-item" data-action="compile"><span class="menu-icon">▶</span><span class="popup-name" data-i18n="page.plusmenu.compile">Compile project</span></div>
+      </div>
+      <div id="sub-menu" class="popup" hidden></div>
+      <div id="usage-pop" class="popup" hidden></div>
+      <div id="model-menu" class="popup" hidden>
+        <input id="model-search" type="search" placeholder="Search models" data-i18n-placeholder="page.modelpicker.search">
+        <div id="model-list"></div>
+      </div>
+      <div id="chips"></div>
+      <div class="composer-box">
+        <textarea id="input" rows="1" placeholder="Type a message · / for commands" data-i18n-placeholder="page.composer.placeholder"></textarea>
+        <button id="send-btn" title="Send (Enter)" data-i18n-title="page.composer.sendTitle" disabled>↑</button>
+      </div>
+      <div class="composer-footer">
+        <button id="plus-btn" class="icon-btn" title="Files, folders, MCP servers, plugins" data-i18n-title="page.composer.plusTitle">＋</button>
+        <select id="approval-select" title="Approval mode: omp tools and IDE changes (buffers, forms, debugger). Always ask = each change, Accept edits = once per turn, Bypass permissions = never ask (does not save), Plan = write plan in docs\plans without changes" data-i18n-title="page.composer.approvalTitle">
+          <option value="always-ask" data-i18n="page.composer.approvalAlwaysAsk">Always ask</option>
+          <option value="write" data-i18n="page.composer.approvalWrite">Accept edits</option>
+          <option value="yolo" data-i18n="page.composer.approvalYolo">Bypass permissions</option>
+          <option value="plan" data-i18n="page.composer.approvalPlan">Plan</option>
+        </select>
+        <span class="spacer"></span>
+        <button id="model-btn" class="footer-btn" type="button"></button>
+        <select id="thinking-select" title="Thinking level" data-i18n-title="page.composer.thinkingTitle"></select>
+        <svg id="ctx-ring" viewBox="0 0 20 20" role="button"><circle cx="10" cy="10" r="8" fill="none" stroke="var(--border)" stroke-width="3"/><circle id="ctx-arc" cx="10" cy="10" r="8" fill="none" stroke="var(--muted)" stroke-width="3" stroke-dasharray="0 50.3" transform="rotate(-90 10 10)"/></svg>
+        <span id="conn-dot" class="off" title="Connecting" data-i18n-title="page.composer.connectingTitle"></span>
+      </div>
+    </div>
+  </div>
+  <script src="brands.js"></script>
+  <script src="markdown.js"></script>
+  <script src="activity.js"></script>
+  <script src="tools.js"></script>
+  <script src="approval.js"></script>
+  <script src="btw.js"></script>
+  <script src="checkpoints.js"></script>
+  <script src="turntime.js"></script>
+  <script src="queue.js"></script>
+  <script src="topbar.js"></script>
+  <script src="modelpicker.js"></script>
+  <script src="composer.js"></script>
+  <script src="plusmenu.js"></script>
+  <script src="panels.js"></script>
+  <script src="clicks.js"></script>
+  <script src="chat.js"></script>
+  <script type="module" src="bridge.js"></script>
+</body>
+</html>

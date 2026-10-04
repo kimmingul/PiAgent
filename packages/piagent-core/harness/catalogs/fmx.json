@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "framework": "fmx",
+  "kind": "reference",
+  "source": "https://docwiki.embarcadero.com/Libraries/Florence/en/FMX.Layouts",
+  "controls": [
+    {
+      "name": "TLayout",
+      "role": "layout",
+      "properties": "Align, Margins, Padding, Position, Size",
+      "usage": "Non-rendering container; FMX coordinates and alignment",
+      "events": ""
+    },
+    {
+      "name": "TGridPanelLayout / TFlowLayout",
+      "role": "layout",
+      "properties": "ColumnCollection, RowCollection, HorizontalGap, VerticalGap",
+      "usage": "Structured cells or flow; properties differ by class",
+      "events": ""
+    },
+    {
+      "name": "TSplitter",
+      "role": "layout",
+      "properties": "Align, MinSize",
+      "usage": "Resizable adjacent regions",
+      "events": ""
+    },
+    {
+      "name": "TMainMenu / TMenuItem",
+      "role": "menu",
+      "properties": "Items, Text, Action, ShortCut",
+      "usage": "Desktop menu hierarchy; use Text rather than VCL Caption",
+      "events": "OnClick"
+    },
+    {
+      "name": "TToolBar",
+      "role": "toolbar",
+      "properties": "Align, Height",
+      "usage": "Container for FMX TButton/TSpeedButton commands",
+      "events": ""
+    },
+    {
+      "name": "TActionList / TAction",
+      "role": "command",
+      "properties": "ActionList, Text, Enabled, Checked, ShortCut",
+      "usage": "Shared FMX action behavior",
+      "events": "OnExecute, OnUpdate"
+    },
+    {
+      "name": "TStatusBar / TLabel",
+      "role": "status",
+      "properties": "Align, Text",
+      "usage": "Put TLabel inside status bar; no VCL Panels",
+      "events": ""
+    },
+    {
+      "name": "TMemo",
+      "role": "editor",
+      "properties": "Align, Lines, TextSettings, ReadOnly",
+      "usage": "Native FMX multiline editing",
+      "events": "OnChange"
+    },
+    {
+      "name": "TOpenDialog / TSaveDialog",
+      "role": "dialog",
+      "properties": "Filter, FileName, DefaultExt",
+      "usage": "Windows native file selection",
+      "events": "OnCanClose"
+    }
+  ]
+}
