@@ -1,6 +1,9 @@
 import {Controller, type Frame} from './controller.js';
 import {interaction,clearInteractions} from './interactions.js';
 import {settings,settingsResult,applyPreferences} from './settings.js';
+import {accountStatus,accountEvent,clearAccount} from './account.js';
+import {rolesResult,clearRoles} from './roles.js';
+import {executionResult,executionEvent,clearExecution} from './execution.js';
 interface Host { postMessage(frame: Frame): void; addEventListener(type: string, listener: (event: MessageEvent) => void): void; }
 const hostWindow = window as unknown as {chrome: {webview: Host}; piagentPost: (frame: Frame) => void; __agentHost: (frame: Frame) => void};
 const element = (id: string): HTMLElement => document.getElementById(id)!;
@@ -14,6 +17,10 @@ const applyCapabilities=(frame:Frame):void=>{
 const controller = new Controller(frame => hostWindow.chrome.webview.postMessage(frame), {
   interaction, clearInteractions,
   settingsResult,
+  accountStatus,
+  accountEvent,clearAccount,
+  rolesResult,clearRoles,
+  executionResult,executionEvent,clearExecution,
   settings:(frame,save)=>settings(frame,save,msg=>controller.action(msg)),
   sheet:(title,text,next)=>{hostWindow.__agentHost({t:'sheet',title,text});if(next){const button=document.createElement('button');button.className='icon-btn popup-item';button.textContent='다음 기록';button.onclick=next;element('sheet-body').append(button);}},
   emit: frame => {if(frame['t']==='status')lastStatus=frame;if(frame['t']==='preferences'){const values=frame['values'] as Frame;applyPreferences(values);const lang=values['language']==='auto'?(['ko','en','ja','de','fr'].find(lang=>navigator.language.startsWith(lang))??'en'):String(values['language']);void fetch(`lang/${lang}.json`).then(r=>r.json()).then(items=>{hostWindow.__agentHost({t:'strings',lang,items});if(lastStatus)hostWindow.__agentHost(lastStatus);if(lastCapabilities)applyCapabilities(lastCapabilities);}).catch(()=>{});return;}hostWindow.__agentHost(frame);},

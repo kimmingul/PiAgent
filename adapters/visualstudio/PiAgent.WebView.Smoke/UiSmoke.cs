@@ -6,7 +6,7 @@ using Microsoft.Web.WebView2.Core;
 
 internal static class UiSmoke
 {
-    internal static async Task Run(CoreWebView2 core)
+    internal static async Task Run(CoreWebView2 core, Func<Task>? settingsLayout=null)
     {
         var sent=new List<string>();var json=new JavaScriptSerializer();
         core.WebMessageReceived+=(_,args)=>sent.Add(args.WebMessageAsJson);
@@ -66,18 +66,68 @@ internal static class UiSmoke
         await Check(core,"!document.getElementById('btw-new-input').disabled && document.getElementById('btw-new-input').value==='노트 질문'","BTW notes failure keeps draft");
         await core.ExecuteScriptAsync("ChatBtw.close();document.getElementById('settings-btn').click();");await Task.Delay(100);
         if(!sent.Exists(message=>message.Contains("\"action\":\"preferences\"")))throw new Exception("Settings did not request preferences");
-        core.PostWebMessageAsJson("""{"type":"preferences","values":{"language":"ko","fontSize":13,"showThinking":true,"showTools":true,"showTodos":true,"showSubagents":true,"notifications":false,"highContrast":false,"defaultApproval":"always-ask"},"ompExecutable":"fixture","ompProfile":"native"}""");
+        core.PostWebMessageAsJson("""{"type":"preferences","piagentVersion":"0.9.13","values":{"language":"ko","fontSize":13,"showThinking":true,"showTools":true,"showTodos":true,"showSubagents":true,"notifications":false,"highContrast":false,"defaultApproval":"always-ask"},"ompExecutable":"fixture","ompProfile":"native"}""");
         await Task.Delay(150);await Check(core,"document.querySelectorAll('[role=tab]').length === 5 && !document.getElementById('sheet').hidden","settings preserves five original areas");
+        await Check(core,"document.querySelector('.settings-about').textContent.includes('PiAgent 0.9.13') && document.querySelector('.settings-about').textContent.includes('김민걸 (Min-Gul Kim)') && document.querySelector('.settings-about').textContent.includes('mgkim@jbnu.ac.kr')","settings shows actual version and developer identity");
+        await core.ExecuteScriptAsync("document.querySelector('input[type=number]').value='16';document.querySelector('input[type=number]').dispatchEvent(new Event('change'));document.getElementById('settings-tab-1').click();Array.from(document.querySelectorAll('.settings-content button')).find(b=>b.textContent==='로그인 제공자 상태').click();document.getElementById('settings-tab-4').click();");
+        await Task.Delay(100);if(!sent.Exists(message=>message.Contains("get_login_providers")))throw new Exception("Account status did not request providers");
+        core.PostWebMessageAsJson("""{"type":"ompControl","command":"get_login_providers","data":{"providers":[{"id":"fixture","name":"Fixture provider","available":true,"authenticated":true}]}}""");await Task.Delay(100);
+        await Check(core,"document.getElementById('sheet-title').textContent==='PiAgent 설정' && document.querySelectorAll('[role=tab]').length===5 && document.getElementById('settings-tab-4').getAttribute('aria-selected')==='true'","late provider result preserves settings navigation and selected tab");
+        await core.ExecuteScriptAsync("document.getElementById('settings-tab-1').click()");
+        await Check(core,"document.querySelector('.settings-account-status').textContent.includes('Fixture provider: 로그인됨') && document.querySelector('.settings-actions')!==null","provider status renders inside account tab with footer intact");
+        sent.Clear();await core.ExecuteScriptAsync("document.querySelector('.settings-providers button').click()");await Task.Delay(100);
+        if(!sent.Exists(message=>message.Contains("\"command\":\"login\"")&&message.Contains("fixture")))throw new Exception("Account login button did not reach host");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"complete","sequence":2,"kind":"omp_event","frame":{"type":"login_status","state":"pending"}}}""");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"complete","sequence":3,"kind":"omp_event","frame":{"type":"extension_ui_request","login":true,"id":"login:fixture:code","method":"input","title":"인증 코드"}}}""");await Task.Delay(100);
+        await Check(core,"document.querySelectorAll('[role=tab]').length===5 && document.querySelector('.settings-login-card input')!==null && !document.querySelector('#log .settings-login-card')","OAuth input stays inside account tab");
+        await core.ExecuteScriptAsync("document.querySelector('.settings-login-card input').value='fixture-code';Array.from(document.querySelectorAll('.settings-login-card button')).find(b=>b.textContent==='제출').click()");await Task.Delay(100);
+        if(!sent.Exists(message=>message.Contains("ompRespond")&&message.Contains("fixture-code")))throw new Exception("OAuth code did not reach host");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"complete","sequence":4,"kind":"omp_event","frame":{"type":"login_status","state":"completed"}}}""");await Task.Delay(100);
+        await Check(core,"document.querySelector('.settings-account-status').textContent.includes('로그인했습니다.') && !document.querySelector('.settings-login-card')","OAuth completion clears input and preserves settings");
+        await core.ExecuteScriptAsync("document.getElementById('settings-tab-0').click()");
+        await Check(core,"document.querySelector('input[type=number]').value==='16'","provider lookup preserves unsaved preferences");
+        await core.ExecuteScriptAsync("document.getElementById('settings-tab-0').dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));");
+        await Check(core,"document.getElementById('settings-tab-4').getAttribute('aria-selected')==='true' && document.activeElement.id==='settings-tab-4' && document.querySelector('.settings-content').textContent.includes('mgkim@jbnu.ac.kr')","keyboard tabs expose developer information in Advanced");
+        core.PostWebMessageAsJson("""{"type":"ompControl","command":"feature_catalog","data":{"version":"18.6.1","verifiedContract":true,"message":"verified fixture"}}""");await Task.Delay(100);
+        await Check(core,"document.querySelector('.settings-execution').textContent.includes('18.6.1') && document.querySelectorAll('[role=tab]').length===5","execution catalogue preserves five original settings tabs");
+        sent.Clear();await core.ExecuteScriptAsync("Array.from(document.querySelectorAll('.settings-execution button')).find(b=>b.textContent==='목록 조회').click()");await Task.Delay(100);
+        if(!sent.Exists(message=>message.Contains("get_subagents")))throw new Exception("Subagents did not reach Core");
+        core.PostWebMessageAsJson("""{"type":"ompControl","command":"get_subagents","data":{"subagents":[{"id":"agent-1","agent":"scout","status":"running","description":"Fixture"}]}}""");await Task.Delay(100);
+        await Check(core,"document.querySelector('.settings-subagent').textContent.includes('scout')","subagent snapshot renders inside Advanced");
+        sent.Clear();await core.ExecuteScriptAsync("Array.from(document.querySelectorAll('.settings-subagent button')).find(b=>b.textContent==='기록').click()");await Task.Delay(100);
+        core.PostWebMessageAsJson("""{"type":"ompControl","command":"get_subagent_messages","data":{"messages":[{"role":"assistant","content":"<script>fixture log</script>"}]}}""");await Task.Delay(100);
+        await Check(core,"document.querySelector('.settings-agent-log').textContent.includes('<script>fixture log</script>') && document.querySelectorAll('[role=tab]').length===5 && document.getElementById('sheet-title').textContent==='PiAgent 설정'","subagent logs escape HTML and keep settings navigation");
+        sent.Clear();await core.ExecuteScriptAsync("document.getElementById('settings-tab-2').click()");await Task.Delay(100);
+        if(!sent.Exists(message=>message.Contains("model_roles")))throw new Exception("Role tab did not query OMP");
+        core.PostWebMessageAsJson("""{"type":"ompControl","command":"model_roles","data":{"revision":"fixture","scope":"OMP 전역 설정","roles":[{"id":"slow","kinds":["chat"],"value":"fixture/model:low"}],"models":[{"selector":"fixture/model","name":"Fixture","kind":"chat","efforts":["low","high"]}]}}""");await Task.Delay(100);
+        await Check(core,"Array.from(document.querySelector('[aria-label=\"slow effort\"]').options).map(o=>o.value).join(',')===',low,high'","role effort choices come from OMP model catalogue");
+        sent.Clear();await core.ExecuteScriptAsync("const effort=document.querySelector('[aria-label=\"slow effort\"]');effort.value='high';effort.dispatchEvent(new Event('change'));Array.from(document.querySelectorAll('.settings-roles button')).find(b=>b.textContent==='역할 설정 저장').click()");await Task.Delay(100);
+        if(!sent.Exists(message=>message.Contains("fixture/model:high")&&message.Contains("model_roles")))throw new Exception("Role save did not reach Core");
+        core.PostWebMessageAsJson("""{"type":"operationError","action":"ompControl","command":"model_roles","message":"fixture stale settings"}""");await Task.Delay(100);
+        await Check(core,"document.querySelector('.settings-roles').textContent.includes('stale settings') && document.querySelectorAll('[role=tab]').length===5","role save error preserves settings tabs");
+        await core.ExecuteScriptAsync("document.getElementById('settings-tab-0').click()");
+        await core.ExecuteScriptAsync("document.getElementById('scroll-bottom-btn').classList.add('visible')");
+        await Check(core,"getComputedStyle(document.getElementById('scroll-bottom-btn')).display==='none' && !document.getElementById('sheet').hidden","settings sheet hides the floating new-message button");
+        if(settingsLayout!=null)await settingsLayout();
         await Check(core,"document.getElementById('title-btn').textContent.includes('Preserved conversation') && document.getElementById('conn-dot').title !== '연결 중'","translation refresh preserves conversation title and live connection state: "+await core.ExecuteScriptAsync("JSON.stringify({title:document.getElementById('title-btn').textContent,state:document.getElementById('conn-dot').title})"));
         sent.Clear();await core.ExecuteScriptAsync("const font=document.querySelector('#sheet-body input[type=number]');font.value='17';font.dispatchEvent(new Event('change'));Array.from(document.querySelectorAll('#sheet-body button')).find(b=>b.textContent==='적용').click();");await Task.Delay(100);
         if(!sent.Exists(message=>message.Contains("\"fontSize\":17")))throw new Exception("Settings apply did not reach host");
         core.PostWebMessageAsJson("""{"type":"operationError","action":"preferences","message":"fixture disk full"}""");await Task.Delay(100);
         await Check(core,"!document.getElementById('sheet').hidden && document.querySelector('#sheet-body [role=status]').textContent.includes('disk full')","settings save failure keeps sheet open");
+        sent.Clear();await core.ExecuteScriptAsync("Array.from(document.querySelectorAll('.settings-actions button')).find(b=>b.textContent==='저장하고 닫기').click()");await Task.Delay(100);
+        if(!sent.Exists(message=>message.Contains("\"fontSize\":17")))throw new Exception("Save and close did not reach host");
+        core.PostWebMessageAsJson("""{"type":"preferences","piagentVersion":"0.9.13","values":{"language":"ko","fontSize":17}}""");await Task.Delay(150);
+        await Check(core,"document.getElementById('sheet').hidden","save and close waits for successful host acknowledgement");
+        await core.ExecuteScriptAsync("document.getElementById('settings-btn').click()");await Task.Delay(100);
+        core.PostWebMessageAsJson("""{"type":"preferences","piagentVersion":"0.9.13","values":{"language":"ko","fontSize":17}}""");await Task.Delay(100);
+        sent.Clear();await core.ExecuteScriptAsync("document.querySelector('.settings-field input[type=number]').value='23';document.querySelector('.settings-field input[type=number]').dispatchEvent(new Event('change'));Array.from(document.querySelectorAll('.settings-actions button')).find(b=>b.textContent==='취소').click()");await Task.Delay(100);
+        if(sent.Exists(message=>message.Contains("\"action\":\"preferences\"")))throw new Exception("Cancel wrote preferences");
+        await Check(core,"document.getElementById('sheet').hidden","cancel closes without saving local edits");
         sent.Clear();await core.ExecuteScriptAsync("document.getElementById('sheet').hidden=true;ChatComposer.setInput('@Main');document.getElementById('input').dispatchEvent(new Event('input'));");await Task.Delay(100);
         if(!sent.Exists(message=>message.Contains("\"action\":\"listFiles\"")))throw new Exception("@ completion did not request workspace files");
         core.PostWebMessageAsJson("""{"type":"files","items":["Main.cs","Main.xaml"]}""");await Task.Delay(100);
         await Check(core,"document.getElementById('slash-menu').textContent.includes('Main.cs')","@ completion renders returned files");
-        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"complete","turnId":"busy","sequence":2,"kind":"started"}}""");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"complete","turnId":"busy","sequence":10,"kind":"started"}}""");
         core.PostWebMessageAsJson("""{"type":"preferences","values":{"language":"ko","fontSize":13}}""");await Task.Delay(200);
         await Check(core,"document.getElementById('approval-select').disabled && document.getElementById('model-btn').disabled && document.getElementById('input').placeholder.includes('omp 작업 중') && document.getElementById('input').value === '@Main'","translation refresh preserves busy capability gates and draft");
         core.PostWebMessageAsJson("""{"type":"session","sessionId":"plan-check","approvalMode":"plan","transcript":[{"role":"event","text":"","event":{"t":"plan","path":"docs/plans/fixture.md","title":"Fixture plan"}}]}""");await Task.Delay(100);
@@ -102,13 +152,20 @@ internal static class UiSmoke
         sent.Clear();await core.ExecuteScriptAsync("document.querySelector('.retry-cancel').click()");await Task.Delay(100);
         if(!sent.Exists(message=>message.Contains("\"command\":\"abort_retry\"")))throw new Exception("Retry cancellation did not reach the host");
         await Check(core,"!document.querySelector('.retry-cancel')","retry cancellation reaches native control once and removes the button");
+        core.PostWebMessageAsJson("""{"type":"session","sessionId":"long-running"}""");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"long-running","turnId":"long","sequence":1,"kind":"started"}}""");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"long-running","turnId":"long","sequence":2,"kind":"activity","text":"하위 에이전트 작업 중","frame":{"elapsedMs":661000}}}""");await Task.Delay(100);
+        await Check(core,"!document.getElementById('working').hidden && document.querySelector('#working .working-text').textContent.includes('하위 에이전트 작업 중 · 11분 1초')","long-running activity remains busy beyond ten minutes");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"long-running","turnId":"long","sequence":3,"kind":"error","text":"OMP 프로세스가 예기치 않게 종료되었습니다."}}""");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"long-running","turnId":null,"sequence":4,"kind":"closed","text":"OMP 프로세스가 예기치 않게 종료되었습니다."}}""");await Task.Delay(100);
+        await Check(core,"!document.getElementById('banner').hidden && document.getElementById('banner').textContent.includes('OMP 프로세스') && document.getElementById('log').textContent.includes('OMP 프로세스')","session closure preserves failure reason in status and conversation");
         await Check(core, "smokeErrors.length === 0", "no JavaScript or CSP errors: " + await core.ExecuteScriptAsync("smokeErrors"));
         await core.ExecuteScriptAsync("document.getElementById('sheet').hidden=true;window.marker=42;ChatComposer.setInput('도킹 전 초안');");
     }
     private static async Task Check(CoreWebView2 core, string script, string name)
     {
         var result = await core.ExecuteScriptAsync(script);
-        if (result != "true") throw new Exception(name + ": " + result);
+        if (result != "true") throw new Exception(name + ": " + result + " · browser errors: " + await core.ExecuteScriptAsync("JSON.stringify(window.smokeErrors || [])"));
         Console.WriteLine("PASS: " + name);
     }
 }

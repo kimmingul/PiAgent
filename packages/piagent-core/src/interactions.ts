@@ -3,6 +3,7 @@ import type {OmpProcess} from '@piagent/omp';
 
 /** Correlate only live requests from this OMP child. Never infer approval from button labels. */
 export class Interactions {
+  get waiting(): boolean { return this.pending.size > 0; }
   private pending=new Map<string,{frame:Record<string,unknown>;timer:NodeJS.Timeout}>();
   constructor(private readonly omp:OmpProcess,private readonly emit:(frame:Record<string,unknown>)=>void) {}
   accept(frame:Record<string,unknown>):void {

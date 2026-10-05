@@ -1,6 +1,6 @@
 # Visual Studio adapter
 
-0.7.3 C# VSIX는 Tools → **PiAgent: Open Chat**의 WPF/WebView2 창에서 채팅 스트리밍·취소,
+현재 0.9.14 (문서 갱신 2026-10-06). C# VSIX는 Tools → **PiAgent: Open Chat**의 WPF/WebView2 창에서 채팅 스트리밍·취소,
 다중 파일 승인·복원, 저장 대화 재개와 세션 사용량·비용·계정 한도를 제공한다.
 Tools → PiAgent: Check Core Connection은 별도의 일회성 hello/ping 검사다.
 hello 전에 current-user credential로 상호 HMAC 인증하며 credential/revision은 WebView에 전달하지 않는다.
@@ -30,7 +30,7 @@ WebView2 Runtime은 PC의 설치본을 사용한다.
 4. 모든 diff를 검토한 뒤 승인한다. 변경 기록에서는 역방향 diff를 확인해 복원 적용한다.
 
 다른 endpoint는 IDE 실행 전 PIAGENT_PIPE_NAME으로 지정한다(기본 piagent-dev).
-Core 자동 실행과 VSIX 자동 설치는 하지 않는다. [설치 안내](../../docs/INSTALLATION.md).
+통합 설치된 VSIX는 Core를 자동 실행하거나 재사용한다. VSIX 설치는 통합 설치파일 또는 VSIXInstaller로 수행한다. [설치 안내](../../docs/INSTALLATION.md).
 WebView는 local-origin만 허용하며 모델 출력을 HTML로 실행하지 않는다.
 창 숨김/재표시는 연결을 유지하고 IDE/tool window disposal에서 연결을 정리한다.
 0.7.1은 Core 0.7.0과 호환되는 VSIX 전용 수정이다. SDK WPF wrapper는 초기 부모 Window의
@@ -50,6 +50,11 @@ Closed 이벤트에서 controller를 해제한다. 도킹 후 이전 부동 창�
 업데이트 뒤에는 해당 프로필에 `/UpdateConfiguration`을 실행한다. 기본 프로필에는 적용하지 않는다.
 
 ## Validation
+
+최신 설치 검증 대상은 VS2026다. 2026-10-05 NanumPDF의 약 2시간 37분 작업이 연결 끊김 없이
+최종 응답과 Core 완료 기록으로 종료됨을 확인했다. 최신 VS2022 전수 검증은 보류하며 아래
+0.7.x PiAgentTest 기록을 현재 버전의 PASS로 승계하지 않는다.
+[장시간 검증](../../docs/LONG-RUNNING-TURN-FIX.md) · [설치 acceptance](../../docs/INSTALLED-ACCEPTANCE-0.9.14.md).
 
 VS 2022와 VS 2026 MSBuild로 DLL/pkgdef/VSCT/VSIX와 payload를 검증했다.
 C# 통합 테스트는 실제 secure Named Pipe에서 인증, Unicode, 취소, capability negotiation,

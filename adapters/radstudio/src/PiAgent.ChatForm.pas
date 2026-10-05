@@ -9,6 +9,8 @@ type
     FWorker: TPiChatWorker;
     FReady: Boolean;
     FWorkspace: string;
+    FWorkspacePending: Boolean;
+    FWorkspaceCheckAt: UInt64;
     FApproval, FRestore, FSelection, FMessageRestore: TJSONObject;
     FLoader: NativeUInt;
     procedure Created(Sender: TCustomEdgeBrowser; AResult: HRESULT);
@@ -22,13 +24,14 @@ type
     procedure EnsureSaved(View: TJSONObject);
     procedure RefreshRestored(View: TJSONObject);
     function CurrentWorkspace: string;
+    procedure SyncWorkspace;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
   end;
 procedure ShowPiAgentChat;
 implementation
-uses System.SysUtils, System.IOUtils, System.NetEncoding, System.Win.ComObj, Winapi.Windows, Winapi.ActiveX,
+uses System.SysUtils, System.StrUtils, System.IOUtils, System.NetEncoding, System.Win.ComObj, Winapi.Windows, Winapi.ActiveX,
   Winapi.WebView2, Winapi.ShellAPI, Vcl.Controls, Vcl.StdCtrls, Vcl.Dialogs, Vcl.FileCtrl, Vcl.Clipbrd, ToolsAPI, PiAgent.Designer;
 const Page = 'https://piagent.local/chat.html';
   // Windows SDK flags, absent from older Delphi Winapi.Windows declarations.
@@ -104,6 +107,24 @@ begin
   Root := ExcludeTrailingPathDelimiter(ExtractFilePath(TPath.GetFullPath(Project.FileName))).Replace('\','/');
   Result := 'file:///' + TNetEncoding.URL.Encode(Root).Replace('%2F','/').Replace('%3A',':').Replace('+','%20');
 end;
+procedure TPiChatForm.SyncWorkspace;
+var Workspace: string; Reply: TJSONObject;
+begin
+  if not FReady or FWorkspacePending or (GetTickCount64 < FWorkspaceCheckAt) then Exit;
+  FWorkspaceCheckAt := GetTickCount64 + 500;
+  try Workspace := CurrentWorkspace; except Workspace := ''; end;
+  if SameText(Workspace,FWorkspace) then Exit;
+  FWorkspacePending := True;
+  FreeAndNil(FApproval); FreeAndNil(FRestore); FreeAndNil(FSelection); FreeAndNil(FMessageRestore);
+  Reply := TJSONObject.Create.AddPair('type','workspaceChanging').AddPair('workspaceUri',Workspace);
+  try Post(Reply.ToJSON); finally Reply.Free; end;
+  Reply := TJSONObject.Create;
+  try
+    if Workspace = '' then Reply.AddPair('action','disconnectWorkspace')
+    else Reply.AddPair('action','connect').AddPair('workspaceUri',Workspace);
+    FWorker.Enqueue(Reply.ToJSON);
+  finally Reply.Free; end;
+end;
 procedure TPiChatForm.EnsureSaved(View: TJSONObject);
 var Services: IOTAModuleServices; Files: TJSONArray; K: Integer;
   procedure CheckPath(const RelativePath: string);
@@ -163,10 +184,13 @@ begin
       Action := Msg.GetValue<string>('action','');RequestId := Msg.GetValue<string>('id','');
       if Action = 'ready' then begin FReady := True; Exit; end;
       if Action = 'notify' then begin if not Active then FlashWindow(Handle,True);Exit;end;
-      if Action = 'connect' then Msg.AddPair('workspaceUri',CurrentWorkspace);
-      if (Action = 'prompt') and not SameText(CurrentWorkspace,FWorkspace) then begin
-        Reply := TJSONObject.Create.AddPair('action','connect').AddPair('workspaceUri',CurrentWorkspace);try FWorker.Enqueue(Reply.ToJSON);finally Reply.Free;end;
-        raise Exception.Create('The active project changed. PiAgent is reconnecting; your draft was preserved. Send again after connection completes');
+      if Action = 'connect' then begin
+        if FWorkspacePending then Exit;
+        Msg.AddPair('workspaceUri',CurrentWorkspace); FWorkspacePending := True;
+      end else if not MatchText(Action,['cancel','clearSelection']) then begin
+        FWorkspaceCheckAt := 0; SyncWorkspace;
+        if FWorkspacePending or not SameText(CurrentWorkspace,FWorkspace) then
+          raise Exception.Create('프로젝트를 다시 연결하고 있습니다. 입력 초안은 보존됩니다. 연결이 끝난 뒤 다시 시도해 주세요.');
       end;
       if Action = 'clearSelection' then begin FreeAndNil(FSelection);Exit;end;
       if Action = 'captureSelection' then begin
@@ -236,7 +260,7 @@ var Json: string; Msg, Data, Frame, Reply: TJSONObject; Kind,Path: string; I,K,J
 begin
   // Bound work on the IDE thread. All SDK and browser access remains on this thread.
   for I := 1 to 32 do begin
-    Json := FWorker.Pop; if Json = '' then Exit;
+    Json := FWorker.Pop; if Json = '' then Break;
     Msg := TJSONObject.ParseJSONValue(Json) as TJSONObject;
     try
       Kind := Msg.GetValue<string>('type','');
@@ -263,7 +287,9 @@ begin
           try Post(Reply.ToJSON);finally Reply.Free;end;
         end;end;
       end;
-      if Kind = 'session' then begin FWorkspace := Msg.GetValue<string>('workspaceUri',''); FreeAndNil(FApproval); FreeAndNil(FRestore); FreeAndNil(FSelection); FreeAndNil(FMessageRestore); end;
+      if Kind = 'session' then begin FWorkspace := Msg.GetValue<string>('workspaceUri',''); FWorkspacePending := False; FreeAndNil(FApproval); FreeAndNil(FRestore); FreeAndNil(FSelection); FreeAndNil(FMessageRestore); end;
+      if Kind = 'workspaceDisconnected' then begin FWorkspace := ''; FWorkspacePending := False; end;
+      if (Kind = 'operationError') and MatchText(Msg.GetValue<string>('action',''),['connect','disconnectWorkspace']) then begin FWorkspacePending := False; FWorkspaceCheckAt := GetTickCount64 + 5000; end;
       if Kind = 'messageRestorePreview' then begin FreeAndNil(FMessageRestore);FMessageRestore := TJSONObject(Msg.GetValue('data').Clone);end;
       if Kind = 'restorePreview' then begin FreeAndNil(FRestore); FRestore := TJSONObject(Msg.GetValue('data').Clone); end;
       if Kind = 'event' then begin
@@ -273,7 +299,9 @@ begin
           if Frame.GetValue<string>('type','') = 'designer_request' then begin
             Reply := TJSONObject.Create.AddPair('action','designerReply').AddPair('requestId',Frame.GetValue<string>('id',''));
             try
-              try Reply.AddPair('result',ExecuteDesigner(Frame.GetValue<string>('operation',''),Frame.GetValue('args') as TJSONObject,FWorkspace));
+              try
+                if FWorkspacePending or not SameText(CurrentWorkspace,FWorkspace) then raise Exception.Create('디자이너 요청의 프로젝트가 변경되었습니다.');
+                Reply.AddPair('result',ExecuteDesigner(Frame.GetValue<string>('operation',''),Frame.GetValue('args') as TJSONObject,FWorkspace));
               except on E: Exception do Reply.AddPair('error',E.Message); end;
               FWorker.Enqueue(Reply.ToJSON);
             finally Reply.Free; end;
@@ -286,6 +314,7 @@ begin
       Post(Json);
     finally Msg.Free; end;
   end;
+  SyncWorkspace;
 end;
 procedure ShowPiAgentChat;
 begin if ChatForm = nil then ChatForm := TPiChatForm.Create(nil); ChatForm.Show; ChatForm.BringToFront; end;

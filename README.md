@@ -1,5 +1,77 @@
 # PiAgent
 
+현재 버전 **0.9.14** · 문서 갱신일 **2026-10-06 KST**.
+개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
+
+[제품 홈페이지](https://kimmingul.github.io/PiAgent-site/) ·
+[0.9.14 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.14).
+소스와 릴리즈 저장소는 비공개이므로 다운로드에는 저장소 접근 권한이 필요하다.
+
+Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 Delphi BPL은
+인증된 Named Pipe JSON-RPC로 연결하고 Core는 OMP와 `--mode rpc-ui` JSONL로 통신한다.
+기존 RADAgent의 WebView UI/UX를 유지하며 RADAgent repository는 수정하지 않는다.
+
+## 현재 사용 및 설치
+
+서명된 통합 설치파일은 `dist/PiAgent-Setup-0.9.14.exe`다. Core와 RAD13.2 32/64-bit,
+VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
+[설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.md).
+
+- VS: **Tools → PiAgent: Open Chat**.
+- RAD: **View → PiAgent** 또는 **Tools → PiAgent**.
+- 통합 설치된 adapter는 Core를 자동 시작하거나 기존 Core를 재사용한다.
+- 사용자별 루트는 `%LOCALAPPDATA%\Programs\PiAgent`, release별 runtime을 사용한다.
+  ARM64 Windows에서는 ARM64 Node/.NET/OMP를 사용하고 setup은 x64 호환 실행이다.
+
+이 PC의 receipt는 `0.9.14-20261005095258` release를 가리키며 VS2022/2026와 RAD32/64
+등록을 기록한다. 설치 기록은 실사용 검증 완료를 뜻하지 않는다. 현재 우선 실사용 검증 대상은
+**VS2026와 RAD13.2 64-bit**다. VS2022 최종 검증과 RAD32 UI 검증은 완료로 주장하지 않는다.
+
+## 현재 기능과 검증
+
+스트리밍 채팅·취소·BTW·설정·UI 로그인·모델/effort·OMP 역할/프리셋, 첨부/선택 코드,
+workspace 자동완성·MCP/플러그인·내보내기, 저장 세션 재개·메시지 분기/복원,
+다중 파일 승인/checkpoint 복원·사용량, 실행 제어·하위 에이전트 관리와 GUI harness를 제공한다.
+기능은 OMP profile, capability와 IDE별 지원 범위에 따라 활성화된다.
+[UI 구현](docs/CHAT-UI-IMPLEMENTATION.md) · [GUI harness](docs/GUI-HARNESS.md).
+
+Goal, 전체 세션 트리/handoff, worktree 연동, SSH/background 관리, 확장 custom UI 등의
+잔여 범위는 [OMP 진행표](docs/OMP-FEATURE-IMPLEMENTATION.md)를 따른다.
+Native 도구나 추가 폴더의 모든 변경을 PiAgent checkpoint가 복원한다고 가정하지 않는다.
+
+인증 후 연결의 idle 강제 종료와 턴 전체 고정 10분 제한을 제거했다. handshake/frame/ACK와
+명시적 취소 등의 제한은 유지하며 중단한 프롬프트는 자동 재전송하지 않는다.
+수정 시 전체 자동 회귀 **118/118**, Named Pipe fixture **631초**, WebView2 smoke **PASS 57개**를 확인했다.
+설치 VS2026의 NanumPDF 작업은 2026-10-05 18:58:30–21:35:54 KST, 약 2시간 37분 진행 후
+실제 최종 응답과 Core `completed` 기록을 확인했다. 이는 장시간 실행 검증이며 모든 기능의 전수
+실사용 검증 완료를 의미하지 않는다. [장시간 작업 기록](docs/LONG-RUNNING-TURN-FIX.md).
+기존 [acceptance](docs/INSTALLED-ACCEPTANCE-0.9.14.md)의 PARTIAL/MANUAL 항목은 남아 있다.
+
+## 현재 개발 명령
+
+```powershell
+npm ci --ignore-scripts
+npm run build
+npm run build:transport
+npm test
+npm run test:adapters
+# 기본 RAD build는 Win64; 통합 설치 배포 시 두 bitness 포함
+& .\scripts\build-adapters.ps1 -RadPlatforms Win32,Win64
+& .\scripts\build-installer.ps1
+```
+
+Node 24.21.0 이상 24 LTS, .NET SDK, adapter 빌드용 VS MSBuild/RAD compiler가 필요하다.
+Core는 x64/ARM64 공통 JS이며 Rust/native npm addon은 사용하지 않는다. package 버전은
+`package.json`을 단일 기준으로 생성한다. 서명은 USB 인증서와 Windows 암호화 저장소를 사용하며
+PIN을 문서나 repository에 기록하지 않는다. [코드 서명](docs/CODE-SIGNING.md).
+
+CLI 기본 profile은 `restricted`다. native 개발 실행은 `--omp-profile native --allow-writes`를
+명시하며 IDE binding은 열린 프로젝트를 사용한다. 설치 실행과 과거 수동 실행은 구분한다.
+
+## 초기 버전 이력과 수동 개발 예제
+
+아래 0.2–0.7 설명과 당시 테스트 숫자는 이력이다. 최신 설치/기능/검증은 위 안내와 연결 문서를 따른다.
+
 0.7.0은 **VS 2022/2026 및 RAD Studio WebView 채팅·승인·복원**, **세션 자동 저장·재개**,
 **세션 토큰·비용과 계정 한도**, **다중 파일 승인·복원**을 제공한다.
 [설치](docs/INSTALLATION.md) · [세션/사용량](docs/SESSIONS-USAGE.md) · [검증 결과](docs/VALIDATION.md).
@@ -66,7 +138,7 @@ npm run probe -- piagent-dev visual-studio 2026
 
 probe는 hello에서 core.ping을 필수 capability로 요청하고, 결과와 Unicode nonce pong을 검증한다.
 불일치/RPC 오류는 비정상 종료한다. daemon 로그는 stderr, pipe는 JSON-RPC 전용이다.
-Ctrl+C로 종료하며 client가 30초 idle 상태이면 연결을 닫는다.
+Ctrl+C로 종료한다. 인증 완료 연결은 idle만으로 닫지 않으며 불완전 frame 등에는 deadline을 유지한다.
 
 ## OMP 연결 (선택)
 
@@ -148,7 +220,7 @@ npm start -- --pipe piagent-dev --omp "$env:LOCALAPPDATA\omp\omp.exe" --cwd C:\p
 연결 종료/IDE 종료는 세션을 정리한다. IDE 실행 전에 PIAGENT_PIPE_NAME으로 endpoint를 바꿀 수 있다.
 WebView2 Runtime이 필요하다. SDK DLL/loader는 VSIX에 포함하며 Node Core는 native dependency가 없다.
 기존 RADAgent의 composer/bridge 패턴을 참고한 최소 TypeScript UI이며 원본 repository는 수정하지 않는다.
-이번 버전은 일반 텍스트만 받으며 slash commands, 이미지, 파일 변경 도구를 제공하지 않는다.
+당시 0.2.0은 일반 텍스트만 지원했다. 현재 slash commands·첨부·파일 변경 지원은 위 현재 기능 안내를 따른다.
 
 실제 모델 호출 smoke (설치된 OMP 인증을 사용하며 모델 사용량이 발생한다):
 

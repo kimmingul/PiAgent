@@ -20,7 +20,7 @@ for (const flag of (process.argv.includes('--approval-mode') ? ['--no-title','--
   if (!process.argv.includes(flag)) process.exit(2);
 if (!directory && !process.argv.includes('--no-session')) process.exit(2);
 emit({ type: 'ready', protocolVersion: 1, supportedProtocolVersions: [1, 2] });
-let timers = []; let active = false; let tools = []; let toolMode = '';
+let timers = []; let active = false; let tools = []; let toolMode = '';let loginRequest;
 const lines = readline.createInterface({ input: process.stdin });
 lines.on('line', line => {
   const command = JSON.parse(line);
@@ -30,6 +30,10 @@ lines.on('line', line => {
     emit({ type: 'agent_end', isTerminal: true }); return;
   }
   const response = data => emit({ type: 'response', id: command.id, command: command.type, success: true, data });
+  if(command.type==='compact'){setTimeout(()=>response({summary:'fixture compacted'}),400);return;}
+  if(command.type==='get_login_providers'){response({providers:[{id:'fixture',name:'Fixture',available:true,authenticated:false}]});return;}
+  if(command.type==='login'){loginRequest=command;emit({type:'extension_ui_request',id:'oauth-code',method:'input',title:'Fixture OAuth code'});return;}
+  if(command.type==='extension_ui_response'&&command.id==='oauth-code'){emit({type:'response',id:loginRequest.id,command:'login',success:true,data:{providerId:'fixture'}});return;}
   if (command.type === 'new_session') {
     if (directory) { mkdirSync(directory,{recursive:true}); sessionFile=join(directory,randomUUID()+'.jsonl');writeFileSync(sessionFile,''); }
     response({ argv: process.argv.slice(2) }); return;
@@ -98,6 +102,18 @@ lines.on('line', line => {
   }
   if (command.message === 'crash') { setTimeout(() => process.exit(7), 10); return; }
   if (command.message === 'wait') return;
+  if (command.message === 'long-running') {
+    const duration=Number(process.argv[process.argv.indexOf('--long-run-ms')+1])||630000;
+    emit({type:'tool_execution_start',toolCallId:'long-tool',toolName:'fixture'});
+    const progress=()=>emit({type:'subagent_progress',payload:{progress:{id:'long-agent',status:'running',agent:'fixture',lastIntent:'Long duration transport check'}}});
+    progress(); const pulse=setInterval(progress,10000); timers.push(pulse);
+    timers.push(setTimeout(()=>{clearInterval(pulse);active=false;
+      emit({type:'subagent_lifecycle',payload:{id:'long-agent',status:'completed'}});
+      emit({type:'tool_execution_end',toolCallId:'long-tool',toolName:'fixture',isError:false});
+      emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:'long-running-completed'}});
+      emit({type:'session_settled',status:'completed'});emit({type:'agent_end',isTerminal:true});
+    },duration));return;
+  }
   if (command.message === 'interaction') { emit({ type: 'extension_ui_request', id: 'ask', method: 'select' }); return; }
   ['안녕 ', '<script>alert(1)</script> ', '🚀'].forEach((delta, index) => {
     timers.push(setTimeout(() => emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta } }), 40 + index * 20));

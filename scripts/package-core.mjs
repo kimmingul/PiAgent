@@ -4,13 +4,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 
 const repository = fileURLToPath(new URL('../', import.meta.url));
-const components = ['protocol', 'core', 'omp', 'daemon'];
+  const components = ['protocol', 'core', 'omp', 'daemon'];
 
 // Copy real directories: release archives must not depend on workspace junctions.
 export async function packageCore(destination, { adapters = false, radPlatforms = ['Win64'] } = {}) {
   if (!Array.isArray(radPlatforms) || radPlatforms.length === 0 || new Set(radPlatforms).size !== radPlatforms.length || radPlatforms.some(p => !['Win32','Win64'].includes(p))) throw new Error('Invalid RAD platforms');
   const output = resolve(destination);
   await mkdir(output); // Refuse to overwrite a previous release or user directory.
+  await cp(join(repository,'node_modules/yaml'),join(output,'node_modules/yaml'),{recursive:true});
   const hostTarget = join(output, 'transport/PiAgent.PipeHost/bin/Release/net8.0-windows');
   await mkdir(hostTarget, { recursive: true });
   for (const suffix of ['dll', 'deps.json', 'runtimeconfig.json'])
@@ -40,7 +41,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await cp(join(repository, 'docs/WORKSPACE-TOOLS.md'), join(output, 'docs/WORKSPACE-TOOLS.md'));
   await cp(join(repository, 'docs/SECURITY.md'), join(output, 'docs/SECURITY.md'));
   await cp(join(repository, 'docs/APPROVED-CHANGES.md'), join(output, 'docs/APPROVED-CHANGES.md'));
-  for(const document of ['SESSIONS-USAGE.md','INSTALLATION.md','OMP-DESIGNERS.md','GUI-HARNESS.md','CHAT-UI-IMPLEMENTATION.md','MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md',`RELEASE-${version}.md`]) await cp(join(repository,'docs',document),join(output,'docs',document));
+  for(const document of ['SESSIONS-USAGE.md','INSTALLATION.md','OMP-DESIGNERS.md','GUI-HARNESS.md','CHAT-UI-IMPLEMENTATION.md','MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md','CORE-IDLE-DISCONNECT-FIX.md','LONG-RUNNING-TURN-FIX.md',`RELEASE-${version}.md`]) await cp(join(repository,'docs',document),join(output,'docs',document));
   await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
     'Secure transport also requires .NET 8+ runtime; no npm install, TypeScript compiler or native Node addon is needed.\n\n' +

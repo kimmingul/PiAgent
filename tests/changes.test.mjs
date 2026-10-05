@@ -22,6 +22,21 @@ async function setup(){
 }
 const proposal=(changes,content=after,path='Example.cs')=>changes.propose({path,content,reason:'Change test'},new AbortController().signal);
 
+test('turn observation reuses the exact approved checkpoint but records subsequent native changes',windows,async()=>{
+ const env=await setup();try{
+  await writeFile(join(env.root,'Second.cs'),'second\r\n');await git(env.root,'add','Second.cs');await git(env.root,'commit','-m','Second');
+  const snapshot=await env.changes.beginTurn();
+  const edit=await env.changes.proposeMany({files:[{path:'Example.cs',content:after},{path:'Second.cs',content:'changed second\n'}],reason:'approved batch'},new AbortController().signal);
+  const applied=await env.changes.apply(edit,new AbortController().signal);
+  const observed=await env.changes.observeTurn(snapshot);assert.equal(observed.recorded,false);assert.equal(observed.alreadyRecorded,true);assert.equal(observed.checkpointId,applied.checkpointId);assert.equal((await env.changes.list()).length,1);
+  await writeFile(join(env.root,'Second.cs'),'native additional edit\r\n');const extra=await env.changes.observeTurn(snapshot);assert.equal(extra.recorded,true);assert.equal((await env.changes.list()).length,2);
+  const preview=await env.changes.previewRestore(extra.checkpointId);await env.changes.restore(extra.checkpointId,preview.revision);
+  assert.equal(await readFile(join(env.root,'Example.cs'),'utf8'),before);assert.equal(await readFile(join(env.root,'Second.cs'),'utf8'),'second\r\n');
+  // An identical later turn must not be mistaken for an earlier historical checkpoint.
+  const later=await env.changes.beginTurn();await writeFile(join(env.root,'Example.cs'),after);await writeFile(join(env.root,'Second.cs'),'changed second\n');assert.equal((await env.changes.observeTurn(later)).recorded,true);
+ }finally{await env.close();}
+});
+
 test('multi-file approvals validate the whole batch, restore raw bytes and roll back a failed second write',windows,async()=>{
  const env=await setup();try{
   await writeFile(join(env.root,'Second.cs'),'\ufeffsecond\r\n');await git(env.root,'add','Second.cs');await git(env.root,'commit','-m','Second fixture');

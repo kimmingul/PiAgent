@@ -1,6 +1,6 @@
 export { encodeFrame, FrameDecoder, MAX_FRAME_BYTES } from './framing.js';
 export const PROTOCOL_VERSION = 1;
-export const CORE_VERSION = '0.9.0';
+export { CORE_VERSION } from './version.js';
 export type RpcId = string | number;
 export interface RpcResponse {
   jsonrpc: '2.0';

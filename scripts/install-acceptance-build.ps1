@@ -28,10 +28,10 @@ $release=Join-Path $installRoot ("releases\"+$manifest.version+"-acceptance-$sta
 New-Item -ItemType Directory -Path $release | Out-Null
 Copy-Item -LiteralPath $packagePath -Destination (Join-Path $release 'core') -Recurse
 Copy-Item -LiteralPath (Join-Path $receipt.Release 'runtimes') -Destination (Join-Path $release 'runtimes') -Recurse
-$dependencies=Join-Path $release 'dependencies\omp';New-Item -ItemType Directory -Path $dependencies -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $workspaceRoot '.tools\omp-18.6.0\omp.exe') -Destination (Join-Path $dependencies 'omp.exe')
 $settings=Get-Content -LiteralPath (Join-Path $receipt.Release 'core\settings.json') -Raw | ConvertFrom-Json
-$settings.node=Join-Path $release 'runtimes\arm64\node\node.exe';$settings.omp=Join-Path $dependencies 'omp.exe'
+# Keep the currently configured OMP, including its version and authentication owner.
+if (!$settings.omp -or !(Test-Path -LiteralPath $settings.omp -PathType Leaf)) { throw 'Configured OMP executable is unavailable; do not downgrade or replace it implicitly' }
+$settings.node=Join-Path $release 'runtimes\arm64\node\node.exe'
 $settings | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $release 'core\settings.json') -Encoding utf8
 # Stop only the old, verified installed PiAgent daemon, with no IDE clients running.
 $oldCore=Join-Path $receipt.Release 'core\core.mjs'

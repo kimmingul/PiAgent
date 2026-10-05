@@ -1,5 +1,6 @@
-import { resolve } from 'node:path';
-import { startDaemon } from './index.js';
+import { resolve,dirname } from 'node:path';
+import { startDaemon,credentialPath } from './index.js';
+import {lifecycleLog} from './lifecycle-log.js';
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -31,6 +32,7 @@ async function main(): Promise<void> {
   }
   if (development && (authFile || workspaceRoot || executable)) throw new Error('--dev-pipe is only for tool-free protocol development');
   const daemon = await startDaemon({ pipeName, onDiagnostic: error => console.error(error.message),
+    ...(!development?{onLifecycle:lifecycleLog(dirname(authFile??credentialPath(pipeName)))}:{}),
     allowWrites,
     ...(!development ? { secure: { ...(authFile ? { authFile } : {}) } } : {}),
     ...(executable ? { omp: { executable, cwd, profile } } : {}), ...(workspaceRoot ? { workspaceRoot } : {}) });

@@ -95,7 +95,7 @@ test('workspace tool registration, errors, cancellation and capability gating cr
         events.length = 0;
         await client.request('chat.prompt', { sessionId: opened.sessionId, message: 'workspace-duplicate' });
         for (let i = 0; i < 200 && !events.some(e => e.kind === 'closed'); i++) await delay(10);
-        assert.ok(events.some(e => e.kind === 'error' && e.text.includes('duplicate')));
+        assert.ok(events.some(e => e.kind === 'error' && e.text === '잘못되었거나 중복된 IDE 도구 요청을 받아 작업 세션을 종료했습니다.'));
         assert.ok(events.some(e => e.kind === 'closed'));
       }
     }

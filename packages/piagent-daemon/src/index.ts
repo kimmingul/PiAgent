@@ -22,6 +22,7 @@ export interface DaemonOptions {
   ioTimeoutMs?: number;
   maxConnections?: number;
   onDiagnostic?: (error: Error) => void;
+  onLifecycle?: (event: Record<string,unknown>) => void;
   omp?: OmpOptions;
   workspaceRoot?: string;
   allowWrites?: boolean;
@@ -69,7 +70,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     const done = chat.dispose().catch(error => options.onDiagnostic?.(error));
     cleanup.add(done); void done.finally(() => cleanup.delete(done));
   };
-  const services:{sessions?:SessionStore;usage?:UsageService}={};
+  const services:{sessions?:SessionStore;usage?:UsageService;lifecycle?:(event:Record<string,unknown>)=>void}={...(options.onLifecycle?{lifecycle:options.onLifecycle}:{})};
   if(options.omp)services.usage=new UsageService(options.omp);
   let servicesResolve:()=>void=()=>{};
   const servicesReady=new Promise<void>(resolve=>{servicesResolve=resolve;});
@@ -78,7 +79,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     sockets.add(socket);
     const frames = new FrameDecoder();
     const writeTimers = new Set<NodeJS.Timeout>();
-    let readTimer: NodeJS.Timeout;
+    let readTimer: NodeJS.Timeout | undefined;
     const close = (error: Error): void => { options.onDiagnostic?.(error); socket.destroy(); };
     const send = (message: unknown): void => {
       if (socket.destroyed) return;
@@ -98,21 +99,29 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     const session = new Session(chat, token ? new Authentication(token, options.pipeName ?? 'piagent-dev') : undefined);
     const authTimer = token ? setTimeout(() => { if (!session.ready) close(new Error('Authentication/handshake deadline exceeded')); }, 10_000) : undefined;
     let inFlight = 0;
-    const nextReadDeadline = (): void => {
+    const clearReadDeadline = (): void => {
       clearTimeout(readTimer);
-      readTimer = setTimeout(() => close(new Error('Pipe read/idle deadline exceeded')), deadline);
+      readTimer = undefined;
     };
-    nextReadDeadline();
+    const updateReadDeadline = (): void => {
+      // A ready connection between frames is healthy even when the IDE's UI thread
+      // cannot run its heartbeat. Bound incomplete frames and pre-handshake peers only.
+      if (socket.destroyed || (session.ready && !frames.partial)) { clearReadDeadline(); return; }
+      readTimer ??= setTimeout(() => close(new Error(frames.partial
+        ? 'Pipe frame read deadline exceeded' : 'Pipe handshake read deadline exceeded')), deadline);
+    };
+    updateReadDeadline();
     socket.on('data', (chunk: Buffer) => {
       try {
         frames.push(chunk, body => {
           if (socket.destroyed) return;
-          nextReadDeadline(); // Full-frame progress only; trickled bytes do not extend deadline.
+          clearReadDeadline(); // Full-frame progress only; trickled bytes do not extend deadline.
           if (++inFlight > 16) throw new Error('Too many pending RPC requests');
           void servicesReady.then(()=>session.handleAsync(body)).then(reply => { if (reply !== undefined) send(reply); })
             .catch(error => close(error instanceof Error ? error : new Error(String(error))))
-            .finally(() => { inFlight--; });
+            .finally(() => { inFlight--; updateReadDeadline(); });
         });
+        updateReadDeadline();
       } catch (error) { close(error instanceof Error ? error : new Error(String(error))); }
     });
     socket.on('end', () => {

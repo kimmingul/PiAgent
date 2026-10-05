@@ -118,7 +118,7 @@ export class OmpProcess extends EventEmitter {
       'steer','follow_up','remove_queued_message','promote_queued_message','abort_retry','compact','get_subagents',
       'get_subagent_messages','cancel_subagent','steer_subagent','set_subagent_subscription','get_messages_page',
       'get_entries','get_tree','get_last_assistant_text','set_session_name','get_login_providers','login','export_html',
-      'set_fast_mode','set_auto_compaction','set_auto_retry','set_cache_warming','goal'].includes(command)) {
+      'set_fast_mode','set_auto_compaction','set_auto_retry','set_cache_warming','set_steering_mode','set_follow_up_mode','set_interrupt_mode','goal'].includes(command)) {
       return Promise.reject(new Error('OMP command not enabled in this slice'));
     }
     if ('id' in fields || 'type' in fields) return Promise.reject(new Error('Reserved OMP fields'));
@@ -133,7 +133,7 @@ export class OmpProcess extends EventEmitter {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`OMP request timeout: ${command}`));
-      }, this.options.requestTimeoutMs);
+      }, command==='compact'?300_000:this.options.requestTimeoutMs);
       this.pending.set(id, { command, resolve, reject, timer });
       child.stdin.write(Buffer.concat([body, Buffer.from('\n')]), error => {
         if (error) this.fail(error);
@@ -214,7 +214,13 @@ export class OmpProcess extends EventEmitter {
           if(pending.command==='negotiate_protocol')this.protocol=2;
           pending.resolve(frame);
         }
-        else pending.reject(new Error(`OMP command failed: ${pending.command}`));
+        else pending.reject(new Error(pending.command==='login'&&typeof frame['error']==='string'&&/secret input|not supported in RPC mode/i.test(frame['error'])
+          ? '이 제공자는 OMP RPC 로그인을 지원하지 않습니다. 터미널 인증이 필요합니다.'
+          : pending.command==='compact'&&typeof frame['error']==='string'&&/nothing to compact \(session too small\)/i.test(frame['error'])
+            ? '대화 기록이 아직 짧아 압축할 수 없습니다. 대화를 더 진행한 뒤 다시 시도해 주세요.'
+            : pending.command==='compact'&&typeof frame['error']==='string'&&/already compacted/i.test(frame['error'])
+              ? '현재 대화는 이미 압축되어 있습니다. 새 대화 기록이 쌓인 뒤 다시 시도해 주세요.'
+              : `OMP command failed: ${pending.command}`));
       }
     }
     this.emit('frame', frame);

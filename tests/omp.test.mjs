@@ -8,6 +8,15 @@ function manager(scenario = 'normal', overrides = {}) {
     cwd: process.cwd(), readyTimeoutMs: 2_000, requestTimeoutMs: 150, shutdownTimeoutMs: 100, ...overrides });
 }
 
+test('compact exposes only known safe failure reasons and never raw provider credentials',async()=>{
+  const omp=manager('compact-errors');
+  try{await omp.start();
+    await assert.rejects(omp.request('compact',{nonce:'Nothing to compact (session too small); secret-token'}),error=>error.message.includes('기록이 아직 짧아')&&!error.message.includes('secret-token'));
+    await assert.rejects(omp.request('compact',{nonce:'Session already compacted; secret-token'}),error=>error.message.includes('이미 압축')&&!error.message.includes('secret-token'));
+    await assert.rejects(omp.request('compact',{nonce:'provider auth secret-token'}),error=>error.message==='OMP command failed: compact');
+  }finally{await omp.stop();}
+});
+
 test('OMP switches decoder before a v2 chunk coalesced with the negotiation response',async()=>{
   const omp=manager('v2-coalesced'),frames=[];omp.on('frame',frame=>frames.push(frame));
   try {await omp.start();assert.ok(frames.some(frame=>frame.text==='v2 한글'));}

@@ -4,6 +4,7 @@ import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink } from 
 import { join, relative } from 'node:path';
 import { isObject } from '@piagent/protocol';
 import { WorkspaceReader } from './workspace.js';
+import {changeDiff as diff} from './change-diff.js';
 
 export const EDIT_CAPABILITY = 'workspace.edit.v1';
 export const BATCH_CAPABILITY='workspace.edit.batch.v1';
@@ -14,9 +15,8 @@ const hash = (bytes: Buffer | string): string => createHash('sha256').update(byt
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const signal = (): AbortSignal => new AbortController().signal;
-const decode = (bytes: Buffer): string => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
 export interface FileEdit {path:string;before:Buffer;after:Buffer;beforeHash:string;afterHash:string;}
-export interface TurnSnapshot {files:{path:string;bytes:Buffer}[];excluded:number;}
+export interface TurnSnapshot {files:{path:string;bytes:Buffer}[];excluded:number;checkpointIds?:string[];}
 export interface Proposal {
   files?:FileEdit[];
   id: string; path: string; reason: string; before: Buffer; after: Buffer; beforeHash: string; afterHash: string; revision: string; expiresAt: number;
@@ -24,17 +24,6 @@ export interface Proposal {
 interface CheckpointFile {path:string;before:string;after:string;beforeHash:string;afterHash:string;}
 interface Checkpoint { files?:CheckpointFile[]; version: 1; id: string; path: string; before: string; after: string; beforeHash: string; afterHash: string; createdAt: number;
   state: 'prepared' | 'applied' | 'restoring' | 'restored' | 'failed'; }
-/** Exact full-file unified preview. CR is shown explicitly so CRLF changes cannot hide in the preview. */
-function diff(path: string, before: Buffer, after: Buffer): string {
-  const lines = (value: Buffer): string[] => {
-    const text = decode(value); const parts = text.split('\n'); if (text.endsWith('\n')) parts.pop();
-    return text === '' ? [] : parts.map(line => line.replaceAll('\r', '␍').replaceAll('\ufeff', '⟨BOM⟩'));
-  };
-  const left = lines(before), right = lines(after);
-  return [`--- a/${path}`, `+++ b/${path}`, `@@ -1,${left.length} +1,${right.length} @@`,
-    ...left.map(line => `-${line}`), ...(before.length && before.at(-1) !== 10 ? ['\\ No newline at end of old file'] : []),
-    ...right.map(line => `+${line}`), ...(after.length && after.at(-1) !== 10 ? ['\\ No newline at end of new file'] : [])].join('\n');
-}
 export function proposalView(proposal: Proposal): Record<string, unknown> {
   return { proposalId: proposal.id, path: proposal.path, reason: proposal.reason, revision: proposal.revision,
     beforeHash: proposal.beforeHash, afterHash: proposal.afterHash, expiresAt: proposal.expiresAt,
@@ -167,7 +156,8 @@ export class WorkspaceChanges {
     if(paths.length>500)throw new Error('Turn checkpoint is limited to 500 tracked files');
     const files:TurnSnapshot['files']=[];let excluded=0,total=0;
     for(const path of paths){try{await this.tracked(path);const snapshot=await this.reader.snapshot(path,signal());if(snapshot.bytes.length>32768||total+snapshot.bytes.length>8*1024*1024){excluded++;continue;}total+=snapshot.bytes.length;files.push({path,bytes:snapshot.bytes});}catch{excluded++;}}
-    return {files,excluded};
+    const checkpointIds=(await readdir(this.directory)).filter(name=>name.endsWith('.json')).map(name=>name.slice(0,-5));
+    return {files,excluded,checkpointIds};
   }
   async observeTurn(snapshot:TurnSnapshot):Promise<Record<string,unknown>> {
     await this.drain();const files:FileEdit[]=[];let excluded=snapshot.excluded;
@@ -175,6 +165,16 @@ export class WorkspaceChanges {
     if(files.length>8||files.reduce((sum,file)=>sum+file.before.length+file.after.length,0)>256*1024)throw new Error('Observed turn exceeds eight files or 256 KiB; no complete turn checkpoint was recorded');
     if(!files.length)return {recorded:false,excluded};
     return this.serialize(async()=>{
+      // An approved proposal already persisted this exact turn delta. Keep its ID/restoration journal.
+      if(snapshot.checkpointIds){
+        const previous=new Set(snapshot.checkpointIds);
+        for(const name of (await readdir(this.directory)).filter(name=>name.endsWith('.json')&&!previous.has(name.slice(0,-5)))){
+          const item=await this.load(name.slice(0,-5)),recorded=item.files??[item];
+          if(item.state==='applied'&&recorded.length===files.length&&files.every(file=>recorded.some(record=>record.path===file.path&&record.beforeHash===file.beforeHash&&record.afterHash===file.afterHash))){
+            await this.verifyFiles(files,true);return {recorded:false,checkpointId:item.id,alreadyRecorded:true,excluded};
+          }
+        }
+      }
       if((await readdir(this.directory)).filter(name=>name.endsWith('.json')).length>=1000)throw new Error('Checkpoint history limit reached');
       await this.verifyFiles(files,true);const id=randomUUID(),records:CheckpointFile[]=[],refs:string[]=[];
       for(const [index,file]of files.entries()) {

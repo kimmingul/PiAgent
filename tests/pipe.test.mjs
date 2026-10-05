@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { createConnection } from 'node:net';
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -14,6 +17,62 @@ function hello(kind, ideVersion) {
     adapter: { kind, version: '0.1.0', ideVersion, instanceId: randomUUID(), capabilities: [] } };
 }
 const windows = { skip: process.platform !== 'win32', timeout: 10_000 };
+test('secure pipe keeps idle and silent running chats alive without IDE heartbeat', windows, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piagent-idle-'));
+  let daemon, client;
+  const diagnostics = [], events = [];
+  try {
+    const authFile = join(root, 'private', 'token');
+    daemon = await startDaemon({pipeName:`piagent-idle-${randomUUID()}`,ioTimeoutMs:500,secure:{authFile},
+      onDiagnostic:error=>diagnostics.push(error.message),
+      omp:{executable:process.execPath,executableArgs:[fileURLToPath(new URL('./fixtures/chat-omp.mjs',import.meta.url))],cwd:root}});
+    client = await PipeClient.connect(daemon.path,{authFile});
+    const profile = hello('test-ide','idle'); profile.capabilities.push('chat.v1');
+    assert.ok((await client.request('adapter.hello',profile)).result);
+    await delay(1100); // No pings: an IDE UI thread may be blocked by a synchronous build.
+    assert.equal((await client.request('core.ping',{nonce:'after-idle'})).result.nonce,'after-idle');
+    const sessionId = (await client.request('chat.open')).result.sessionId;
+    client.on('chat.event',event=>events.push(event));
+    const turn = (await client.request('chat.prompt',{sessionId,message:'wait'})).result;
+    await delay(1100); // OMP is silent while working/waiting for external tools.
+    assert.equal(events.some(event=>['cancelled','closed','error'].includes(event.kind)),false);
+    assert.equal((await client.request('core.ping')).result.pong,true);
+    assert.equal((await client.request('chat.cancel',{sessionId,turnId:turn.turnId})).result.requested,true);
+    assert.deepEqual(diagnostics,[]);
+  } finally {
+    client?.close(); await daemon?.close();
+    assert.ok(root.startsWith(join(tmpdir(),'piagent-idle-')));
+    await rm(root,{recursive:true,force:true});
+  }
+});
+
+test('ready idle peer can send split frames later; stalled partial frames still expire', windows, async () => {
+  const diagnostics = [];
+  const daemon = await startDaemon({pipeName:`piagent-partial-${randomUUID()}`,ioTimeoutMs:200,onDiagnostic:error=>diagnostics.push(error.message)});
+  const socket = createConnection(daemon.path); socket.on('error',()=>{});
+  const connected = once(socket,'connect');
+  const frames=[], decoder=new FrameDecoder();
+  socket.on('data',chunk=>decoder.push(chunk,body=>frames.push(JSON.parse(body.toString('utf8')))));
+  const good = await PipeClient.connect(daemon.path,{authenticate:false});
+  try {
+    await connected;
+    socket.write(encodeFrame({jsonrpc:'2.0',id:'hello',method:'adapter.hello',params:hello('test-ide','partial')}));
+    await good.request('adapter.hello',hello('test-ide','good'));
+    for(let i=0;i<100&&!frames.length;i++)await delay(10);
+    assert.equal(frames[0].result.protocolVersion,1);
+    await delay(450);
+    const ping=encodeFrame({jsonrpc:'2.0',id:'ping',method:'core.ping',params:{nonce:'split-after-idle'}});
+    socket.write(ping.subarray(0,2)); await delay(30); socket.write(ping.subarray(2));
+    for(let i=0;i<100&&frames.length<2;i++)await delay(10);
+    assert.equal(frames[1]?.result.nonce,'split-after-idle');
+    const closed=once(socket,'close');
+    socket.write(ping.subarray(0,1));
+    await delay(130); socket.write(ping.subarray(1,2)); // Trickling must not reset the frame deadline.
+    await closed;
+    assert.ok(diagnostics.includes('Pipe frame read deadline exceeded'));
+    assert.equal((await good.request('core.ping')).result.pong,true);
+  } finally {socket.destroy();good.close();await daemon.close();}
+});
 test('Windows pipe RAD/VS profiles, capability intersection, reconnect, isolation and duplicate listener', windows, async () => {
   const pipeName = `piagent-test-${randomUUID()}`;
   const daemon = await startDaemon({ pipeName }); const clients = [];

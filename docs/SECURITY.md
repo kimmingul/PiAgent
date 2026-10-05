@@ -1,5 +1,12 @@
 # PiAgent local connection security
 
+현재 상태: 2026-10-06, 0.9.14. 기본 인증 경로는 `%USERPROFILE%\.piagent\security\<pipe>\token`이며
+`PIAGENT_AUTH_FILE` 명시 값이 우선한다. 토큰 내용은 UI·로그·문서에 노출하지 않는다.
+인증 완료 연결은 idle만으로 닫지 않지만 인증/handshake·불완전 frame의 제한은 유지한다.
+lifecycle 진단 로그는 인증 파일의 부모에 제한된 크기로 저장하며 prompt·token·도구 인자를 기록하지 않는다.
+통합 설치본은 private Node/.NET runtime을 포함하고 기존 세션과 외부 OMP 인증은 제거 시 보존한다.
+아래 0.7.0 표기는 저장소 보호 설계의 도입 이력이다.
+
 0.7.0: 저장 대화 metadata와 OMP JSONL은 검증된 credential의 private parent 아래에 보관한다.
 credential의 실제 private 경로를 확인한 후 workspace별 namespace를 만든다.
 savedSessionId만 wire에 노출하고 임의 파일 경로로 재개하지 않는다. 세션 디렉터리와 파일의

@@ -1,5 +1,10 @@
 # PiAgent pipe protocol v1
 
+문서 상태: 2026-10-06, 구현 0.9.14. pipe protocol은 v1 및 additive capability 협상을 유지한다.
+제품 버전과 protocol 버전은 별개이며 CORE_VERSION은 package 버전에서 생성한다.
+현재 구현의 인증 후 idle 정책과 turn activity/종료 계약은 아래 해당 절을 따른다.
+새 기능을 제공했다고 해서 wire version을 임의로 올리거나 미협상 기능을 활성화하지 않는다.
+
 ### IDE workspace and access modes (VSIX 0.9.4)
 
 `workspace.bind.v1` is available only on an authenticated Core with OMP configured.
@@ -49,7 +54,10 @@ Frame = `uint32 little-endian bodyLength` 4 bytes + UTF-8 JSON body.
 bodyLength는 문자 수가 아닌 byte 수로 1~1,048,576이다. BOM, trailing NUL과 줄 구분자는 없다.
 Pipe read/write와 frame 경계는 다르며 부분 header/body 및 여러 frame의 coalescing을 처리한다.
 0/초과 길이, header/body 중간 EOF는 응답 없이 해당 연결을 닫는다. frame 사이 EOF는 정상
-disconnect다. 각 frame의 read/idle deadline은 30초, write deadline도 30초다.
+disconnect다. 초기 handshake 대기와 불완전한 frame의 read deadline은 30초,
+write deadline도 30초다. 인증·handshake를 마친 연결은 frame 사이 idle 시간이
+길어도 닫지 않는다. IDE UI 스레드가 빌드·디자이너 작업으로 지연되거나 OMP가
+오래 실행 중이어도 heartbeat 지연만으로 대화를 취소하지 않는다.
 partial bytes는 deadline을 연장하지 않는다. output queue는 2 MiB, 기본 최대 16 connection이다.
 
 ## JSON-RPC profile와 ID migration
@@ -217,10 +225,22 @@ unsupported error로 턴을 종료하고 세션을 닫는다. 임의 승인 응�
 
 cancel은 OMP abort 응답을 기다리지 않고 `{requested:true}`를 반환한다. abort 전부터 5초
 종료 deadline을 시작한다. terminal event가 없거나 abort가 실패하면 취소 이벤트를 한 번 전달하고
-해당 세션의 process를 정리한다. 정리 중 같은 abort를 다시 기다리지 않는다. 턴 제한은 10분이다.
+해당 세션의 process를 정리한다. 정리 중 같은 abort를 다시 기다리지 않는다.
+턴 전체의 고정 시간 제한은 없다. 장시간 도구·하위 에이전트·사용자 입력 대기 또는
+모델의 무출력 시간만으로 정상 세션을 종료하지 않는다. prompt acknowledgement,
+개별 도구·승인·취소의 제한은 별도로 유지한다.
 prompt acknowledgement timeout은 세션을 폐기해 늦은 응답이 다음 턴에 섞이지 않게 한다.
 close, pipe disconnect, daemon graceful shutdown은 OMP stdin EOF/2초 kill fallback으로 정리한다.
-VS chat은 20초마다 ping해 idle connection을 유지한다. RPC는 기본 5초, chat.open은 adapter에서
+VS chat은 20초마다 ping해 연결 상태를 확인한다. ping은 연결 유지의 필수 조건이 아니다.
+실행 중인 턴은 15초마다 `chat.event`의 `kind: "activity"`를 보낸다.
+`frame`에는 `phase`, `elapsedMs`, `quietMs`, `activeTools`, `activeAgents`가 있다.
+phase는 `running`, `tools`, `subagents`, `awaiting_input`, `awaiting_progress`,
+`cancelling`이다. 2분 무출력은 새 진행 소식 대기 안내이며 실패 판정이나 종료 조건이 아니다.
+알 수 없는 event kind를 무시하는 기존 adapter와 호환된다. `closed.text`는 작업 세션
+종료 이유이며 pipe 자체의 disconnect와 구분한다. UI는 앞서 받은 오류를 일반 종료 문구로 덮지 않는다.
+CLI는 credential의 private 디렉터리에 `lifecycle.jsonl`과 회전 파일 하나를 기록한다.
+시각·session/turn ID·상태·경과 시간·실행 수만 기록하며 대화·도구 인자·인증 정보는 제외한다.
+RPC는 기본 5초, chat.open은 adapter에서
 20초 제한이다. 최대 in-flight 요청 16개, frame 1 MiB/output queue 2 MiB 제한을 유지한다.
 
 추가 오류: -32010 OMP/connection 실패, -32011 session already open/opening,
@@ -341,6 +361,30 @@ negotiated workspace.read.v1/workspace.edit.v1; it is unavailable on read-only c
 | designer.decide | proposalId, approved:boolean | accepted:true |
 
 Controls use an explicit allowlist in `omp-controls.ts`, not arbitrary OMP passthrough.
+`model_roles` is a Core-handled control for an idle native session. Empty fields return
+the OMP role/model catalogue, effective/global assignments, scope and revision.
+`{revision,changes:{role:selector}}` saves only changed roles through OMP's config CLI.
+An empty selector removes the global assignment; `@role` selects an existing role alias.
+Concrete selectors may append only efforts returned by that model's `thinking` catalogue.
+Role kind mismatches, alias cycles, invalid fields and stale revisions are rejected.
+Global values are merged without copying project-only values into global configuration.
+Project/environment overrides may remain effective; current chat selection is separate.
+`login` is a Core-handled control with exactly `{providerId:string}`; `cancel_login`
+accepts empty fields. They require negotiated controls and an idle native session.
+Login runs in a disposable `omp --mode rpc-ui --no-session` child and returns
+`{started:true}` after startup/provider validation, without waiting for OAuth completion.
+`chat.event` frames of type `login_status` carry state `pending`, `completed`, `failed`
+or `cancelled`. Authentication `extension_ui_request` frames carry `login:true` and
+namespaced IDs; answer through `omp.respond`. Cancellation terminates the auth child,
+not the conversation. Authentication frames/answers are not saved to session history.
+The account tab renders URLs/instructions and non-secret code/redirect inputs. OMP
+providers requiring secret or pre-authorization input cannot use RPC authentication.
+Completion requests fresh provider/model/state data. `/login` opens the account tab.
+On Windows, `login_terminal` is a Core-handled control with empty fields. It requires
+an idle native OMP session and opens the configured native executable as `omp login`
+in a visible PowerShell terminal. It accepts no shell text, provider argument, or
+credentials from the adapter; authentication stays in OMP. Success means the terminal
+was launched, not that authentication completed. Query `get_login_providers` afterward.
 Model/effort discovery and selection are connected to the original UI. Additional allowlisted
 controls are transport support, not a claim that every original UI action is connected.
 Private get_state paths/system prompts are excluded. Unknown IDs, duplicate answers, non-option
@@ -408,7 +452,7 @@ All following methods require the current connection-owned `sessionId`; unexpect
 
 | Method | Additional params | Result |
 |---|---|---|
-| `chat.preferences` | optional `values` | validated `values`, `ompExecutable`, `ompProfile`; omit values for read |
+| `chat.preferences` | optional `values` | validated `values`, `ompExecutable`, `ompProfile`, `piagentVersion` (actual Core package version); omit values for read |
 | `btw.ask` | `text`, optional `topicId` | `accepted`, `topicId`; processing continues in independent child |
 | `btw.list` | optional `offset` | `t:btwList`, stable main `session`, `items`, `append`, optional `nextOffset` |
 | `btw.cancel` | `topicId` | `stopped:true` after child is joined |
@@ -471,3 +515,20 @@ Snapshots contain full private OMP JSONL (64 MiB max), up to 50 message points, 
 UTF-8 files. New/deleted/binary/untracked/non-Git/additional roots and unsaved buffers are explicitly excluded.
 MCP toggles return extension state only after the slash-command turn and chained snapshot writes finish,
 then verify the requested state; prompt admission is not a configuration-save acknowledgement.
+
+## OMP execution management extension (omp.controls.v1)
+
+`omp.control feature_catalog {}` returns version, referenceVersion, verifiedContract, contractVersion and
+PiAgent-enabled execution commands. verifiedContract identifies the reviewed upstream RPC version,
+not installed-IDE acceptance or a successful probe of every command.
+`model_roles` adds scope global|project and preset_save|preset_apply|preset_delete operations with name/revision.
+`changes` and preset operations are mutually exclusive. Project scope writes only workspace .omp/config.yml roles;
+presets are saved/deleted globally, applied to selected scope. External changes invalidate revision.
+`feature_settings {}` returns discovered non-secret boolean allowlist entries, revision and scope.
+Save takes `{key,value:boolean,revision}` and uses OMP global config CLI. Higher precedence may shadow the write.
+Execution commands add compact {customInstructions?}, set_steering_mode/set_follow_up_mode {mode:all|one-at-a-time},
+set_interrupt_mode {mode:immediate|wait}. Native compact returns `{accepted:true,operationId}` immediately.
+`chat.event kind:omp_event frame:{type:control_operation,operationId,command:compact,state:running|completed|failed,message?}`
+reports the result. Events may precede acknowledgement. Running maintenance excludes prompts/other controls;
+chat.close retires the owning process; 5-minute compaction timeout retires it too. Late events cannot affect new sessions.
+Subagent snapshots are bounded and omit raw progress/private paths. All commands retain owner session checks.

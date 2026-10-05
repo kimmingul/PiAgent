@@ -63,7 +63,7 @@ test('Named Pipe UI methods reach Core, workspace listing excludes secrets and e
  const root=await mkdtemp(join(tmpdir(),'piagent-ui-rpc-')),authFile=join(root,'private','token');let daemon,client;
  try{await writeFile(join(root,'Main.cs'),'class Main {}');await writeFile(join(root,'.env'),'SECRET');await mkdir(join(root,'node_modules'));await writeFile(join(root,'node_modules','Hidden.js'),'hidden');daemon=await startDaemon({pipeName:'piagent-ui-'+randomUUID(),secure:{authFile},workspaceRoot:root,omp:{executable:process.execPath,executableArgs:[fixture],cwd:root}});client=await PipeClient.connect(daemon.path,{authFile});const hello=await client.request('adapter.hello',{protocolVersions:[1],capabilities:['chat.v1','chat.sessions.v1','omp.controls.v1','chat.preferences.v1','chat.btw.v1','workspace.read.v1','chat.approval.v1'],adapter:{kind:'test-ide',version:'test',ideVersion:'test',instanceId:randomUUID()}});assert.ok(hello.result);
  const session=(await client.request('chat.open')).result;assert.equal(session.btwEnabled,true);assert.equal(session.checkpointsEnabled,false);const params={sessionId:session.sessionId};const files=(await client.request('workspace.files',params)).result.items;assert.ok(files.includes('Main.cs'));assert.ok(!files.some(v=>v.includes('.env')||v.includes('node_modules')));
- const prefs=(await client.request('chat.preferences',params)).result;assert.equal(prefs.values.language,'auto');assert.equal((await client.request('chat.preferences',{...params,values:{...prefs.values,language:'ko'}})).result.values.language,'ko');
+ const prefs=(await client.request('chat.preferences',params)).result;assert.equal(prefs.piagentVersion,JSON.parse(await readFile(new URL('../packages/piagent-core/package.json',import.meta.url),'utf8')).version);assert.equal(prefs.values.language,'auto');assert.equal((await client.request('chat.preferences',{...params,values:{...prefs.values,language:'ko'}})).result.values.language,'ko');
  const exported=(await client.request('chat.export',params)).result.path;assert.match(await readFile(exported,'utf8'),/Fixture export/);assert.ok(exported.startsWith(join(root,'private')));
  const command=(await client.request('omp.control',{...params,command:'get_available_commands'})).result;assert.ok(command.commands.some(v=>v.name==='fixture-command'));
  const frames=[];client.on('chat.event',frame=>frames.push(frame));const side=await client.request('btw.ask',{...params,text:'side'});assert.ok(side.result.accepted);await wait(()=>frames.some(v=>v.frame?.event?.topic?.turns.at(-1).state==='done'));assert.equal((await client.request('btw.list',params)).result.items.length,1);assert.ok((await client.request('btw.ask',{...params,text:'side',path:'arbitrary'})).error);
@@ -104,6 +104,45 @@ test('settings wait for save acknowledgement and failure is surfaced without suc
  controller.receive({type:'session',sessionId:'s',preferencesEnabled:true});controller.action({t:'settings'});controller.receive({type:'preferences',values:{fontSize:13}});save({fontSize:17});assert.equal(results.length,0);
  controller.receive({type:'operationError',action:'preferences',message:'disk full'});assert.deepEqual(results.at(-1),{ok:false,message:'disk full'});save({fontSize:17});controller.receive({type:'preferences',values:{fontSize:17}});assert.equal(results.at(-1).ok,true);
  controller.receive({type:'session',sessionId:'new',preferencesEnabled:true});save({fontSize:19});assert.equal(results.at(-1).ok,false);
+});
+test('login provider results stay in settings instead of replacing the sheet',()=>{
+ const sent=[],shown=[],providers=[];const controller=new Controller(frame=>sent.push(frame),{emit:frame=>shown.push(frame),list(){},capabilities(){},accountStatus:items=>providers.push(items)});
+ controller.receive({type:'session',sessionId:'s',ompControlsEnabled:true});controller.action({t:'accountStatus'});
+ assert.equal(sent.at(-1).command,'get_login_providers');controller.receive({type:'ompControl',command:'get_login_providers',ownerSessionId:'s',data:{providers:[{id:'test',authenticated:true}]}});
+ assert.deepEqual(providers.at(-1),[{id:'test',authenticated:true}]);assert.equal(shown.some(frame=>frame.t==='sheet'),false);
+ controller.receive({type:'ompControl',command:'get_login_providers',ownerSessionId:'old',data:{providers:[]}});assert.equal(providers.length,1);
+});
+test('login provider failures and unavailable connections reach the account panel',()=>{
+ const results=[];const controller=new Controller(()=>{},{emit(){},list(){},capabilities(){},accountStatus:(items,error)=>results.push({items,error})});
+ controller.action({t:'accountStatus'});assert.match(results.at(-1).error,/Core/);
+ controller.receive({type:'session',sessionId:'s',ompControlsEnabled:true});controller.receive({type:'operationError',action:'ompControl',command:'get_login_providers',message:'provider failure'});assert.equal(results.at(-1).error,'provider failure');
+ controller.receive({type:'disconnected'});assert.match(results.at(-1).error,/연결/);
+});
+test('login commands open account settings and provider buttons request UI authentication',()=>{
+ for(const text of ['/login','/LOGIN']){const f=ui();f.controller.action({t:'submit',id:'login',text});assert.equal(f.sent.at(-1).action,'preferences');assert.equal(f.sent.some(frame=>frame.action==='prompt'),false);assert.equal(f.shown.at(-1).ok,true);}
+ const f=ui();f.controller.action({t:'accountLogin',providerId:'fixture'});assert.equal(f.sent.at(-1).command,'login');assert.deepEqual(f.sent.at(-1).fields,{providerId:'fixture'});
+ f.controller.action({t:'cancelLogin'});assert.equal(f.sent.at(-1).command,'cancel_login');
+});
+test('login terminal script quotes configured paths and accepts no wrapper arguments',async()=>{
+ const {loginTerminalScript}=await import('../packages/piagent-core/dist/login-terminal.js');
+ const options={executable:"D:\\tool's\\omp.exe",cwd:"D:\\project's\\work"};const script=loginTerminalScript(options);
+ const encoded=script.match(/'-EncodedCommand','([^']+)'/)[1];const decoded=Buffer.from(encoded,'base64').toString('utf16le');assert.ok(decoded.includes("& 'D:\\tool''s\\omp.exe' login"));assert.ok(decoded.includes("Set-Location -LiteralPath 'D:\\project''s\\work'"));
+ assert.throws(()=>loginTerminalScript({...options,executableArgs:['user-controlled']}));assert.throws(()=>loginTerminalScript({...options,executable:'omp.cmd'}));
+});
+test('Named Pipe login returns before OAuth input, routes answers and leaves conversation usable',{skip:process.platform!=='win32',timeout:20000},async()=>{
+ const root=await mkdtemp(join(tmpdir(),'piagent-login-rpc-')),authFile=join(root,'private','token');let daemon,client;const frames=[];
+ try{
+  await promisify(execFile)('git',['init'],{cwd:root,windowsHide:true});await writeFile(join(root,'Fixture.txt'),'fixture');await promisify(execFile)('git',['add','Fixture.txt'],{cwd:root,windowsHide:true});await promisify(execFile)('git',['-c','user.name=Test','-c','user.email=test@localhost','commit','-m','Fixture'],{cwd:root,windowsHide:true});daemon=await startDaemon({pipeName:'piagent-login-'+randomUUID(),secure:{authFile},workspaceRoot:root,allowWrites:true,omp:{executable:process.execPath,executableArgs:[fixture],cwd:root,profile:'native'}});
+  client=await PipeClient.connect(daemon.path,{authFile});await client.request('adapter.hello',{protocolVersions:[1],capabilities:['chat.v1','chat.sessions.v1','omp.controls.v1','workspace.read.v1','workspace.edit.v1','chat.approval.v1'],adapter:{kind:'test-ide',version:'test',ideVersion:'test',instanceId:randomUUID()}});
+  const opened=await client.request('chat.open');assert.ok(opened.result,JSON.stringify(opened));const params={sessionId:opened.result.sessionId};client.on('chat.event',frame=>frames.push(frame));
+  const started=await client.request('omp.control',{...params,command:'login',fields:{providerId:'fixture'}});assert.equal(started.result.started,true);
+  await wait(()=>frames.some(frame=>frame.frame?.login&&frame.frame?.method==='input'));const id=frames.find(frame=>frame.frame?.method==='input').frame.id;
+  assert.ok((await client.request('chat.prompt',{...params,message:'blocked'})).error);
+  assert.equal((await client.request('omp.respond',{...params,requestId:id,answer:{value:'fixture-code'}})).result.answered,true);
+  await wait(()=>frames.some(frame=>frame.frame?.state==='completed'));
+  assert.ok((await client.request('omp.respond',{...params,requestId:id,answer:{value:'late'}})).error);
+  assert.equal((await client.request('chat.prompt',{...params,message:'local'})).result.accepted,true);
+ }finally{client?.close();await daemon?.close();await rm(root,{recursive:true,force:true});}
 });
 test('separate PreferencesStore instances serialize saves for the same private directory',async()=>{
  const root=await mkdtemp(join(tmpdir(),'piagent-prefs-race-'));try{const a=new PreferencesStore(root),b=new PreferencesStore(root),values=await a.read();await Promise.all([a.save({...values,fontSize:16}),b.save({...values,fontSize:19})]);assert.equal((await a.read()).fontSize,19);}finally{await rm(root,{recursive:true,force:true});}

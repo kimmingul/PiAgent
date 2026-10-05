@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 const release = resolve(process.argv[2]);
-const { startDaemon, PipeClient } = await import(pathToFileURL(join(release, 'core/node_modules/@piagent/daemon/dist/index.js')));
+const core=process.argv[3]==='--core'?release:join(release,'core');
+const expectedVersion=JSON.parse(await readFile(join(core,'package.json'),'utf8')).version;
+const { startDaemon, PipeClient } = await import(pathToFileURL(join(core, 'node_modules/@piagent/daemon/dist/index.js')));
 const temp = await mkdtemp(join(tmpdir(), 'piagent-bundle-test-'));
 const authFile = join(temp, 'private', 'token');
 let daemon, client;
@@ -17,6 +19,7 @@ try {
     adapter: {kind:'bundle-test', version:'0.9.0', ideVersion:'installer', instanceId:randomUUID(), capabilities:[]}
   });
   assert.equal(hello.error, undefined); assert.equal(hello.result.protocolVersion, 1);
+  assert.equal(hello.result.core.version,expectedVersion);
   const ping = await client.request('core.ping', {nonce:'설치 검증 🚀'});
   assert.deepEqual(ping.result, {pong:true, nonce:'설치 검증 🚀'});
   console.log(`PASS bundled Node ${process.version} ${process.arch}: authenticated handshake / capability negotiation / ping`);

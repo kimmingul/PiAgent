@@ -57,7 +57,7 @@ export class Timeline {
     const id=randomUUID(),revision=hash(JSON.stringify([id,point.id,point.contextHash,proposal?.revision,branch]));
     return {id,seq:point.seq,branch,revision,expires:Date.now()+300000,point,current,...(proposal?{proposal}: {})};
   }
-  view(preview:TimelinePreview):Record<string,unknown>{const files=preview.proposal?proposalView(preview.proposal):{files:[],diff:''};return {...files,checkedPaths:(preview.current?.files??[]).map(file=>file.path),messageRestoreId:preview.id,seq:preview.seq,branch:preview.branch,revision:preview.revision,prompt:preview.point.prompt,scope:preview.point.fileScope,reason:'Restore conversation to before this message. Preserve original conversation. '+preview.point.fileScope};}
+  view(preview:TimelinePreview):Record<string,unknown>{const files=preview.proposal?proposalView(preview.proposal):{files:[],diff:''};return {...files,checkedPaths:(preview.current?.files??[]).map(file=>file.path),messageRestoreId:preview.id,seq:preview.seq,branch:preview.branch,revision:preview.revision,prompt:preview.point.prompt,scope:preview.point.fileScope,reason:timelineNotice(preview.seq,preview.branch,false,!!preview.current)};}
   async clone(preview:TimelinePreview):Promise<string>{
     const point=await this.load(preview.seq);if(point.id!==preview.point.id||point.contextHash!==preview.point.contextHash)throw new Error('Checkpoint changed after preview');
     const target=await this.lease.store.acquire();try{
@@ -70,4 +70,10 @@ export class Timeline {
       await target.store.bind(target.record,context);await target.save();return target.record.savedSessionId;
     }finally{await target.release();}
   }
+}
+
+export function timelineNotice(seq:number,branch:boolean,completed:boolean,files:boolean):string {
+  const action=branch?'별도 대화를 분기':'대화를 복원';
+  const scope=files?'지원되는 기존 Git 추적 UTF-8 파일도 해당 시점으로 되돌립니다. 새 파일·삭제·바이너리·미추적 파일·IDE 미저장 버퍼는 제외됩니다.':'대화만 대상으로 하며 파일 복원은 포함하지 않습니다.';
+  return `${seq}번 메시지 직전에서 ${action}${completed?'했습니다.':'합니다.'} 원본 대화는 보존됩니다. ${scope}${completed?' 메시지는 입력 초안으로 돌아오며 자동 전송되지 않습니다.':''}`;
 }

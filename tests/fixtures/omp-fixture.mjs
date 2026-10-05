@@ -27,6 +27,9 @@ lines.on('line', line => {
   }
   if (command.exit) process.exit(9);
   if (command.hang) return;
+  if(scenario==='compact-errors'&&command.type==='compact'){
+    emit({type:'response',id:command.id,command:command.type,success:false,error:command.nonce});return;
+  }
   setTimeout(() => emit({ type: 'response', id: command.id,
     command: command.mismatch ? 'wrong' : command.type, success: !command.fail,
     data: { cwd: process.cwd(), argv: process.argv.slice(3), nonce: command.nonce ?? null } }), command.type === 'get_state' ? 20 : 1);

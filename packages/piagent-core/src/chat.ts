@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { OmpProcess } from '@piagent/omp';
 import type { OmpOptions } from '@piagent/omp';
-import { isObject } from '@piagent/protocol';
+import { isObject, CORE_VERSION } from '@piagent/protocol';
 import { contextPrompt } from './context.js';
 import { WorkspaceReader, workspaceTools } from './workspace.js';
 import { pathToFileURL } from 'node:url';
@@ -9,7 +9,9 @@ import { WorkspaceChanges, editTool, batchEditTool,type TurnSnapshot } from './c
 import { Approvals } from './approvals.js';
 import { SessionStore, SessionLease } from './sessions.js';
 import { UsageService } from './usage.js';
-import {control} from './omp-controls.js';
+import {control,validateControl} from './omp-controls.js';
+import {ompFeatures} from './omp-features.js';
+import {ompSettings} from './omp-settings.js';
 import {Interactions} from './interactions.js';
 import {uiEvent} from './omp-events.js';
 import {DesignerBridge,designerTools,designerPrompt} from './designer.js';
@@ -20,9 +22,13 @@ import {BtwService} from './btw.js';
 import {PreferencesStore} from './preferences.js';
 import {Plans} from './plans.js';
 import {images,type Image} from './attachments.js';
-import {Timeline,type TimelinePreview} from './timeline.js';
+import {launchLoginTerminal} from './login-terminal.js';
+import {Login} from './login.js';
+import {modelRoles} from './model-roles.js';
+import {Timeline,timelineNotice,type TimelinePreview} from './timeline.js';
 import {setTimeout as delay} from 'node:timers/promises';
-export interface ChatServices { sessions?:SessionStore; usage?:UsageService; }
+import {TurnProgress} from './turn-progress.js';
+export interface ChatServices { sessions?:SessionStore; usage?:UsageService; lifecycle?:(event:Record<string,unknown>)=>void; }
 export const WORKSPACE_BIND_CAPABILITY='workspace.bind.v1';
 export const APPROVAL_MODE_CAPABILITY='chat.approval.v1';
 export type WorkspaceBinding={workspace:WorkspaceReader;changes?:WorkspaceChanges;sessions:SessionStore};
@@ -33,7 +39,7 @@ export class ChatError extends Error {
 }
 export interface ChatEvent {
   sessionId: string; turnId: string | null; sequence: number;
-  kind: 'omp_event' | 'started' | 'delta' | 'completed' | 'cancelled' | 'error' | 'warning' | 'closed' | 'tool_started' | 'tool_completed' | 'approval_requested' | 'approval_resolved';
+  kind: 'activity' | 'omp_event' | 'started' | 'delta' | 'completed' | 'cancelled' | 'error' | 'warning' | 'closed' | 'tool_started' | 'tool_completed' | 'approval_requested' | 'approval_resolved';
   text?: string;
   approval?: Record<string, unknown>;
   frame?: Record<string,unknown>;
@@ -50,6 +56,11 @@ export class ChatSession {
   private retiring: Promise<void> | undefined;
   private sequence = 0;
   private timer: NodeJS.Timeout | undefined;
+  private progress: TurnProgress | undefined;
+  private progressTimer: NodeJS.Timeout | undefined;
+  private closeReason: string | undefined;
+  private lastProgressPhase = '';
+  private lastProgressLog = 0;
   private workspaceEnabled = false;
   private writesEnabled = false;
   private batchEnabled=false;
@@ -62,6 +73,8 @@ export class ChatSession {
   private readonly tools = new Map<string, AbortController>();
   private readonly seenTools = new Set<string>();
   private interactions:Interactions|undefined;
+  private login:Login|undefined;
+  private controlOperation:string|undefined;
   private btw:BtwService|undefined;
   private timeline:Timeline|undefined;
   private timelinePending=false;
@@ -133,9 +146,13 @@ export class ChatSession {
       ] });
       this.omp = omp;
       if(controlsNegotiated)this.interactions=new Interactions(omp,frame=>this.sendOmp(frame));
-      omp.on('frame', (frame: Record<string, unknown>) => this.onFrame(frame));
+      omp.on('frame', (frame: Record<string, unknown>) => { if(this.omp===omp)this.onFrame(frame); });
       omp.on('exit', ({ expected }: { expected: boolean }) => {
-        if (!expected && this.omp === omp) { this.finish('error', 'OMP disconnected'); void this.closeSession(); }
+        if (!expected && this.omp === omp) {
+          this.closeReason='OMP 프로세스가 예기치 않게 종료되었습니다. 저장된 대화를 다시 열어 이어갈 수 있습니다.';
+          if(this.turn)this.finish('error',this.closeReason);else this.emit('warning',this.closeReason);
+          void this.closeSession();
+        }
       });
       try {
         await omp.start();
@@ -155,7 +172,7 @@ export class ChatSession {
         this.approvals = this.writesEnabled&&this.changes ? new Approvals(this.changes, (kind, approval) => this.emit(kind, undefined, approval)) : undefined;
         if (this.workspaceEnabled) await omp.request('set_host_tools', { tools: [...workspaceTools, ...(this.approvals ? [editTool] : []),...(this.batchEnabled&&this.approvals?[batchEditTool]:[]),...(this.designer.enabled?designerTools.filter(tool=>this.writesEnabled||tool.name==='ide_designer_inspect'):[])].map(tool => ({...tool, loadMode: 'essential'})) });
         if (this.disposed) throw new Error('Connection closed during startup');
-        this.id = randomUUID(); this.sequence = 0;
+        this.id = randomUUID(); this.sequence = 0; this.closeReason=undefined;
         if(this.lease&&controlsNegotiated)this.btw=new BtwService(join(this.lease.store.root,'btw'),this.options,event=>this.sendOmp({type:'ui_event',event}));
         this.timeline=this.lease&&controlsNegotiated&&timelineNegotiated?new Timeline(this.lease,this.changes):undefined;this.messagePreview=undefined;
         return { messageRestoreEnabled:!!this.timeline,sessionId: this.id, approvalMode:this.approvalMode, approvalModes:['always-ask','write','yolo','plan'], ompProfile:native?'native':'restricted', ompControlsEnabled:controlsNegotiated, toolsEnabled: this.workspaceEnabled, usageEnabled:usageNegotiated&&this.supportsUsage, sessionsEnabled:sessionsNegotiated&&this.supportsSessions,
@@ -201,14 +218,14 @@ export class ChatSession {
           if(preview.proposal)await changes!.apply(preview.proposal,new AbortController().signal);
           await this.timeline?.settled(changes?await changes.beginTurn():undefined).catch(error=>this.emit('warning',error instanceof Error?error.message:'Restore baseline could not be saved'));
         }catch(error){await this.closeSession();const restored=await this.handle('chat.open',{savedSessionId:original,approvalMode:mode},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,true);return {...restored,restoreError:error instanceof Error?error.message:'Restore failed; original conversation reopened'};}
-        return {...opened,restoredDraft:preview.point.prompt,restoreNotice:'Restored before message '+preview.seq+'. Original conversation preserved. '+preview.point.fileScope};
+        return {...opened,restoredDraft:preview.point.prompt,restoreNotice:timelineNotice(preview.seq,preview.branch,true,!!preview.current)};
       }finally{this.restoringMessage=false;this.messagePreview=undefined;}
     }
     if(method==='chat.preferences') {
       if(!this.lease)throw new ChatError(-32005,'Private preferences unavailable');
       if(Object.keys(params).some(key=>!['sessionId','values'].includes(key)))throw new ChatError(-32602,'Invalid preferences params');
       const store=new PreferencesStore(this.lease.store.root);
-      return {values:'values' in params?await store.save(params['values']):await store.read(),ompExecutable:this.options.executable,ompProfile:this.options.profile};
+      return {values:'values' in params?await store.save(params['values']):await store.read(),ompExecutable:this.options.executable,ompProfile:this.options.profile,piagentVersion:CORE_VERSION};
     }
     if(method.startsWith('btw.')) {
       if(!controlsNegotiated||!this.btw||!this.lease)throw new ChatError(-32005,'BTW unavailable');
@@ -278,12 +295,43 @@ export class ChatSession {
     if(method==='omp.control') {
       if(!controlsNegotiated)throw new ChatError(-32005,'OMP controls capability not negotiated');
       if(Object.keys(params).some(key=>!['sessionId','command','fields'].includes(key)))throw new ChatError(-32602,'Invalid params');
+      if(params['command']==='feature_catalog') {
+        const fields=params['fields']??{};if(!isObject(fields)||Object.keys(fields).length)throw new ChatError(-32602,'Feature catalogue accepts no fields');
+        return ompFeatures(this.options);
+      }
+      if(this.controlOperation)throw new ChatError(-32013,'OMP maintenance operation is running');
+      if(params['command']==='feature_settings'){
+        if(this.turn||this.login?.active||this.options.profile!=='native')throw new ChatError(-32005,'OMP settings require an idle native session');const fields=params['fields']??{};if(!isObject(fields))throw new ChatError(-32602,'Invalid settings fields');return ompSettings(this.options,fields);
+      }
+      if(params['command']==='compact') {
+        if(this.options.profile!=='native'||this.login?.active)throw new ChatError(-32005,'Compaction requires an idle native session');
+        const fields=params['fields']??{};validateControl('compact',fields,!!this.turn);const omp=this.omp,id=randomUUID();this.controlOperation=id;
+        this.sendOmp({type:'control_operation',operationId:id,command:'compact',state:'running'});
+        void control(omp,'compact',fields,false).then(()=>{if(this.omp===omp&&this.controlOperation===id)this.sendOmp({type:'control_operation',operationId:id,command:'compact',state:'completed'});},error=>{if(this.omp===omp&&this.controlOperation===id){this.sendOmp({type:'control_operation',operationId:id,command:'compact',state:'failed',message:error instanceof Error?error.message:'Compaction failed'});if(error instanceof Error&&error.message.includes('timeout'))void this.closeSession();}}).finally(()=>{if(this.controlOperation===id)this.controlOperation=undefined;});
+        return {accepted:true,operationId:id};
+      }
+      if(params['command']==='model_roles'){
+        if(this.turn||this.login?.active||this.options.profile!=='native')throw new ChatError(-32005,'Model roles require an idle native OMP session');
+        const fields=params['fields']??{};if(!isObject(fields))throw new ChatError(-32602,'Invalid role fields');return modelRoles(this.options,fields);
+      }
+      if(params['command']==='login'||params['command']==='cancel_login') {
+        if(this.turn||this.options.profile!=='native')throw new ChatError(-32005,'Login requires an idle native OMP session');
+        const fields=params['fields']??{};if(!isObject(fields)||Object.keys(fields).some(key=>key!=='providerId')||(params['command']==='cancel_login'&&Object.keys(fields).length))throw new ChatError(-32602,'Invalid login fields');
+        this.login??=new Login(this.options,frame=>this.sendOmp(frame));
+        return params['command']==='login'?this.login.start(fields['providerId']):this.login.cancel();
+      }
+      if(params['command']==='login_terminal') {
+        if(this.turn||this.options.profile!=='native')throw new ChatError(-32005,'Login requires an idle native OMP session');
+        if(params['fields']!==undefined&&(!isObject(params['fields'])||Object.keys(params['fields']).length))throw new ChatError(-32602,'Login accepts no fields');
+        return launchLoginTerminal(this.options);
+      }
       if(['steer','follow_up'].includes(String(params['command']))&&!this.turn)throw new ChatError(-32013,'Queued messages require an active main turn');
       return control(this.omp,params['command'],params['fields']??{},!!this.turn);
     }
     if(method==='omp.respond') {
       if(!controlsNegotiated||!this.interactions)throw new ChatError(-32005,'OMP interactions unavailable');
       if(Object.keys(params).some(key=>!['sessionId','requestId','answer'].includes(key)))throw new ChatError(-32602,'Invalid params');
+      if(this.login?.owns(params['requestId']))return this.login.respond(params['requestId'],params['answer']);
       return this.interactions.respond(params['requestId'],params['answer']);
     }
     const keys = method === 'chat.prompt' ? ['sessionId', 'message', 'context','attachments'] : method === 'chat.cancel' ? ['sessionId', 'turnId']
@@ -317,7 +365,10 @@ export class ChatSession {
         this.cancelTools();
         const omp = this.omp, turn = this.turn;
         const retire = (): void => {
-          if (this.omp === omp && this.turn === turn && this.cancelling) void this.closeSession(false);
+          if (this.omp === omp && this.turn === turn && this.cancelling) {
+            this.closeReason='중지 요청에 OMP가 응답하지 않아 작업 세션을 종료했습니다. 저장된 대화를 다시 열 수 있습니다.';
+            void this.closeSession(false);
+          }
         };
         clearTimeout(this.timer);
         this.timer = setTimeout(retire, 5_000);
@@ -328,6 +379,8 @@ export class ChatSession {
       return { requested: true };
     }
     if (method !== 'chat.prompt') throw new ChatError(-32601, 'Method not found');
+    if(this.controlOperation)throw new ChatError(-32013,'OMP maintenance operation is running');
+    if(this.login?.active)throw new ChatError(-32005,'Finish or cancel login before submitting a prompt');
     const message = params['message'];
     if (typeof message !== 'string' || !message.trim() || Buffer.byteLength(message) > 64 * 1024 || ((this.options.profile!=='native'||this.approvalMode==='plan')&&message.trimStart().startsWith('/')))
       throw new ChatError(-32602, 'Expected plain text (1–65536 UTF-8 bytes); slash commands are disabled');
@@ -348,7 +401,7 @@ export class ChatSession {
       catch { throw new ChatError(-32602, 'Invalid selection context'); }
     }
     if(!message.trimStart().startsWith('/'))prompt=designerPrompt(prompt,this.designer.enabled,this.designer.writesEnabled);
-    turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.seenTools.clear();
+    turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.closeReason=undefined; this.seenTools.clear();
     this.turnStarted=Date.now();
     if(this.changes&&this.writesEnabled)try{this.turnSnapshot=await this.changes.beginTurn();}catch(error){this.turnSnapshot=undefined;this.emit('warning',error instanceof Error?error.message:'Turn checkpoint unavailable');}
     if(this.lease&&this.btw&&this.lease.record.ompFile) {
@@ -364,9 +417,12 @@ export class ChatSession {
     try{await this.lease?.save();}catch{this.turn=undefined;throw new ChatError(-32010,'Session persistence failed before prompt');}
     if(this.disposed||this.retiring){this.turn=undefined;throw new ChatError(-32010,'Connection is closing');}
     this.emit('started');if(messageSeq)this.sendOmp({type:'ui_event',event:{t:'checkpoint',seq:messageSeq}});
-    this.timer = setTimeout(() => {
-      this.finish('error', 'Turn deadline exceeded'); void this.closeSession();
-    }, 600_000);
+    // A turn may run for hours, including silent tools, subagents and approval waits.
+    // Only explicit cancellation and actual protocol/process failures retire it.
+    this.progress = new TurnProgress();
+    this.lastProgressPhase='';this.lastProgressLog=0;
+    this.progressTimer = setInterval(() => this.reportProgress(), 15_000);
+    this.progressTimer.unref();
     } finally {this.admitting=false;if(this.promptSetup===setup)this.promptSetup=undefined;prepared();}
     try {
       const response = await this.omp.request('prompt', { message: prompt,...(attachedImages.length?{images:attachedImages}:{}) });
@@ -375,11 +431,12 @@ export class ChatSession {
     } catch (error) {
       this.finish('error', error instanceof Error ? error.message : 'Prompt failed');
       // A timed-out acknowledgement might still have started a turn. Retire the process.
-      await this.closeSession(); throw new ChatError(-32010, 'OMP prompt failed');
+      await this.closeSession(); throw new ChatError(-32010, this.closeReason??'OMP 요청을 시작하지 못했습니다. 다시 연결해 주세요.');
     }
   }
 
   private onFrame(frame: Record<string, unknown>): void {
+    this.progress?.observe(frame);
     if(this.interactions){const projected=uiEvent(frame);if(projected){this.flushAnswer();this.lease?.appendEvent(projected);this.sendOmp({type:'ui_event',event:projected});}}
     if(frame['type']==='extension_ui_request'&&this.interactions) {
       try{if(!this.id&&['select','confirm','input','editor'].includes(String(frame['method']))) {
@@ -465,9 +522,23 @@ export class ChatSession {
     if(!this.id||this.disposed)return;
     this.send({sessionId:this.id,turnId:this.turn??null,sequence:++this.sequence,kind:'omp_event',frame});
   }
+  private reportProgress(): void {
+    if(!this.turn||!this.progress||this.finishing||this.retiring)return;
+    const activity=this.progress.snapshot(!!this.interactions?.waiting||!!this.approvals?.waiting||this.designer.waiting,this.tools.size,this.cancelling);
+    const labels:Record<string,string>={running:'작업 진행 중',tools:'도구 실행 중',subagents:'하위 에이전트 작업 중',awaiting_input:'승인·입력 대기 중',awaiting_progress:'새 진행 소식을 기다리는 중 · 자동 중단하지 않습니다',cancelling:'중지 요청 처리 중'};
+    this.send({sessionId:this.id!,turnId:this.turn,sequence:++this.sequence,kind:'activity',text:labels[activity.phase]!,frame:activity});
+    if(activity.phase!==this.lastProgressPhase||Date.now()-this.lastProgressLog>=60000){
+      this.diagnose('activity',activity);this.lastProgressPhase=activity.phase;this.lastProgressLog=Date.now();
+    }
+  }
+  private diagnose(kind:string,activity?:Record<string,unknown>):void {
+    try{this.services.lifecycle?.({kind,sessionId:this.id,turnId:this.turn??null,
+      elapsedMs:this.turn?Math.max(0,Date.now()-this.turnStarted):0,...activity});}catch{/* Logging must never interrupt a turn. */}
+  }
   private flushAnswer():void {const text=this.answer.slice(this.flushedAnswer);if(text)this.lease?.append('assistant',text);this.flushedAnswer=this.answer.length;}
   private emit(kind: ChatEvent['kind'], text?: string, approval?: Record<string, unknown>,toolId?:string): void {
     if (!this.id || this.disposed) return;
+    if(['started','completed','cancelled','error','closed'].includes(kind))this.diagnose(kind);
     if(kind==='delta'&&text&&this.answer.length<2_000_000)this.answer+=text.slice(0,2_000_000-this.answer.length);
     if(kind==='tool_started'||kind==='tool_completed'){this.flushAnswer();this.lease?.appendEvent(kind==='tool_started'?{t:'toolStart',id:toolId,name:text}:{t:'toolEnd',id:toolId,ok:text!=='Workspace request rejected',result:text});}
     this.send({ sessionId: this.id, turnId: this.turn ?? null, sequence: ++this.sequence, kind,
@@ -475,6 +546,16 @@ export class ChatSession {
   }
   private finish(kind: 'completed' | 'cancelled' | 'error', text?: string): void {
     if (!this.turn) return;
+    if(kind==='error'&&text){
+      const messages:Record<string,string>={
+        'OMP request timeout':'OMP 요청 확인 응답이 시간 내에 도착하지 않았습니다. 중복 실행을 막기 위해 작업 세션을 종료합니다.',
+        'OMP prompt failed':'OMP가 요청을 시작하지 못했습니다. 저장된 대화를 다시 열어 주세요.',
+        'OMP requires an unsupported interaction':'OMP가 지원되지 않는 상호작용을 요청하여 작업 세션을 종료했습니다.',
+        'Workspace tool transport failed':'작업영역 도구와의 통신에 실패했습니다.',
+        'Invalid or duplicate host tool call':'잘못되었거나 중복된 IDE 도구 요청을 받아 작업 세션을 종료했습니다.',
+      };text=messages[text]??text;
+    }
+    if(kind==='error')this.closeReason=text??'OMP 작업 중 오류가 발생했습니다.';
     if(this.turnSnapshot&&this.changes&&!this.finishing) {
       const snapshot=this.turnSnapshot;this.turnSnapshot=undefined;this.finishing=true;
       this.planSaving=this.changes.observeTurn(snapshot).then(result=>{if(result['recorded'])this.emit('warning','이 응답 중 바뀐 Git 추적 UTF-8 파일을 변경 기록에 저장했습니다. 새 파일·삭제·바이너리·범위 밖 파일은 포함되지 않습니다. 복원 전 diff를 확인해 주세요.');}).catch(error=>this.emit('warning',error instanceof Error?error.message:'Turn checkpoint could not be recorded')).finally(()=>{this.finishing=false;this.planSaving=undefined;this.finish(kind,text);});return;
@@ -492,7 +573,8 @@ export class ChatSession {
     this.cancelTools();
     this.flushAnswer();this.answer='';this.flushedAnswer=0;this.lease?.append('status',kind+(text?': '+text:''),{started:this.turnStarted,ended:Date.now(),stopped:kind!=='completed'});
     if(this.lease)void this.lease.save().catch(()=>this.emit('warning','Session persistence failed; current OMP remains active'));
-    clearTimeout(this.timer); this.emit(kind, text); this.turn = undefined; this.cancelling = false;
+    clearTimeout(this.timer); clearInterval(this.progressTimer); this.progressTimer=undefined; this.progress=undefined;
+    this.emit(kind, text); this.turn = undefined; this.cancelling = false;
   }
   private closeSession(requestAbort = true): Promise<void> {
     if(this.retiring)return this.retiring;
@@ -500,6 +582,7 @@ export class ChatSession {
       if(this.promptSetup)await this.promptSetup;
       if(this.planSaving)await this.planSaving;
       const omp=this.omp;
+      await this.login?.cancel();this.login=undefined;
       if(this.turn&&omp?.state==='ready'){
         this.cancelling=true;this.cancelTools();
         if(requestAbort){
@@ -510,9 +593,10 @@ export class ChatSession {
         }
       }
       this.finish('cancelled');if(this.planSaving)await this.planSaving;
-      this.omp=undefined;const btw=this.btw;this.btw=undefined;
+      this.omp=undefined;this.controlOperation=undefined;const btw=this.btw;this.btw=undefined;
       this.interactions?.clear();this.interactions=undefined;this.designer.close();
-      this.emit('closed');this.id=undefined;const lease=this.lease;this.lease=undefined;
+      clearInterval(this.progressTimer);this.progressTimer=undefined;this.progress=undefined;
+      this.emit('closed',this.closeReason??(this.cancelling?'중지 요청으로 작업 세션을 종료했습니다.':'작업 세션이 종료되었습니다. 설정에서 다시 연결할 수 있습니다.'));this.id=undefined;const lease=this.lease;this.lease=undefined;
       await Promise.all([omp?.stop(),btw?.close()]);
       for(const path of this.snapshots.splice(0))await unlink(path).catch(()=>{});this.contextSnapshot=undefined;
       await lease?.release();

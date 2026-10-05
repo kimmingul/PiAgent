@@ -3,7 +3,7 @@ program ChatSmoke;
 uses System.SysUtils, System.JSON, Winapi.Windows, PiAgent.ChatWorker in '../src/PiAgent.ChatWorker.pas',
   PiAgent.CoreRuntime in '../src/PiAgent.CoreRuntime.pas',
   PiAgent.PipeClient in '../src/PiAgent.PipeClient.pas';
-var Worker: TPiChatWorker; Id: string; Frame,Data,Review,Decision: TJSONObject; Started: UInt64;
+var Worker: TPiChatWorker; Id,Rebind: string; Frame,Data,Review,Decision: TJSONObject; Started: UInt64;
 function WaitType(const Expected: string): TJSONObject;
 var Text,Kind: string;
 begin
@@ -53,6 +53,17 @@ begin
     Worker.Enqueue('{"action":"btw","id":"side","text":"question"}');Frame := WaitType('btwAccepted');Frame.Free;
     Worker.Enqueue('{"action":"btwList"}');Frame := WaitType('btwList');if Frame.GetValue('items')=nil then raise Exception.Create('BTW list missing');Frame.Free;
     Worker.Enqueue('{"action":"usage"}'); Frame := WaitType('usage'); Frame.Free;
+    Rebind := GetEnvironmentVariable('PIAGENT_REBIND_WORKSPACE_URI');
+    if Rebind <> '' then begin
+      // Switch with an old-project approval pending: it must cancel rather than retain stale work.
+      Worker.Enqueue('{"action":"prompt","message":"propose-batch"}');Frame := WaitType('approval_requested');Frame.Free;
+      Decision := TJSONObject.Create.AddPair('action','connect').AddPair('workspaceUri',Rebind);try Worker.Enqueue(Decision.ToJSON);finally Decision.Free;end;
+      Frame := WaitType('session');try if not SameText(Frame.GetValue<string>('workspaceUri',''),Rebind) then raise Exception.Create('Rebind workspace mismatch');finally Frame.Free;end;
+      Worker.Enqueue('{"action":"reset"}');Frame := WaitType('session');try if not SameText(Frame.GetValue<string>('workspaceUri',''),Rebind) then raise Exception.Create('New session used stale workspace');finally Frame.Free;end;
+      Worker.Enqueue('{"action":"disconnectWorkspace"}');Frame := WaitType('workspaceDisconnected');Frame.Free;
+      Decision := TJSONObject.Create.AddPair('action','connect').AddPair('workspaceUri',GetEnvironmentVariable('PIAGENT_WORKSPACE_URI'));try Worker.Enqueue(Decision.ToJSON);finally Decision.Free;end;
+      Frame := WaitType('session');Frame.Free;
+    end;
     WriteLn('{"applied":true,"restored":true,"resumed":true,"usage":true}');
   except on E: Exception do begin WriteLn(E.Message); ExitCode := 1; end; end;
   Worker.Free;

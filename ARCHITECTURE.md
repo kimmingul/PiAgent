@@ -1,5 +1,16 @@
 # PiAgent architecture
 
+현재 상태: 2026-10-06, PiAgent 0.9.14. Node/TypeScript Core, IDE adapter, 공유 WebView 경계를 유지한다.
+현재는 초기 vertical slice를 넘어 native OMP 실행 제어·역할/설정·BTW·메시지 timeline·GUI harness까지
+구현했다. 아래 버전별 설명은 확장 이력이며 초기 restricted profile 제약을 native profile에 적용하지 않는다.
+전체/미구현 범위는 [OMP 진행표](docs/OMP-FEATURE-IMPLEMENTATION.md)를 따른다.
+
+인증된 pipe 연결은 frame 사이 idle만으로 종료하지 않는다. ChatSession은 전체 턴의 고정 10분
+deadline 대신 단계별 진행 상태를 관찰하며 ACK/개별 작업/취소 제한은 유지한다.
+daemon의 bounded lifecycle 로그는 인증 경로의 부모에 기록하며 prompt/token/도구 인자를 기록하지 않는다.
+설치 adapter는 Core를 자동 시작/재사용하고 프로젝트별 OMP cwd와 session namespace를 분리한다.
+[장시간 lifecycle 검증](docs/LONG-RUNNING-TURN-FIX.md).
+
 2026-10-04 workspace update: the authenticated adapter can negotiate
 `workspace.bind.v1` and bind each closed chat to its currently open solution directory.
 OMP cwd, workspace reader/change services and private session storage use that
@@ -292,3 +303,9 @@ New conversation / saved sessions 진입점으로 PiAgent lease와 workspace를 
 RAD는 디스크 복원 후 IDE thread에서 버퍼를 재검사하고 연관 모듈을 ToolsAPI Refresh로 갱신한다.
 Node bootstrap은 Named Pipe를 연결했다 끊는 probe 대신 WaitNamedPipe를 사용해 최초 인증 연결을 방해하지 않는다.
 구현 범위, 검증 근거와 아직 미완료인 acceptance는 [chat UI implementation](docs/CHAT-UI-IMPLEMENTATION.md)을 따른다.
+
+OMP 관리 기능은 IDE-neutral Core의 명시적인 RPC/CLI allowlist를 사용한다. 전역 config 저장은 OMP CLI,
+프로젝트 modelRoles는 bound workspace의 YAML을 보존하는 전용 writer가 처리한다.
+수동 compaction은 비동기 operation 이벤트로 진행하며 RAD worker를 장시간 차단하지 않는다.
+관리 화면은 기존 설정 탭 안에 배치하고 host action을 transcript에서 해석하지 않는다.
+확장 단계와 아직 미완료인 Goal/세션/worktree/설치 검증은 [OMP 기능 진행표](docs/OMP-FEATURE-IMPLEMENTATION.md)에 기록한다.

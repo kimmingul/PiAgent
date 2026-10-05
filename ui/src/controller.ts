@@ -12,9 +12,18 @@ export interface View {
   interaction?(frame:Frame,answer:(value:Frame)=>void):void;
   settings?(frame:Frame,save:(value:Frame)=>void):void;
   settingsResult?(ok:boolean,message?:string):void;
+  accountStatus?(providers:Frame[],error?:string):void;
+  accountEvent?(frame:Frame,answer:(value:Frame)=>void):void;
+  clearAccount?():void;
+  rolesResult?(frame:Frame,error?:string):void;
+  clearRoles?():void;
+  executionResult?(command:string,data:Frame,fields?:Frame,error?:string):void;
+  executionEvent?(frame:Frame):void;
+  clearExecution?():void;
   sheet?(title:string,text:string,next?:()=>void):void;
 }
 export class Controller {
+  private lastTurnError = '';
   private connected = false;
   private busy = false;
   private switching = false;
@@ -39,6 +48,10 @@ export class Controller {
   private usageReport=false;
   private settingsOpen=false;
   private settingsSaving=false;
+  private loginBusy=false;
+  private accountTab=false;
+  private readonly executionRequests=new Set<string>();
+  private readonly completedOperations=new Set<string>();
   private readonly btwSubmissions=new Set<unknown>();
   private readonly queueSubmissions=new Map<unknown,{text:string;queue:string}>();
   private queue:Frame={};
@@ -49,12 +62,12 @@ export class Controller {
   private emit(t: string, data: Frame = {}): void { this.view.emit({t, ...data}); }
   private notice(text: string): void { this.emit('notice', {level: 'info', text}); }
   private status(state = '연결됨', error = false): void {
-    this.emit('status', {connected: this.connected, busy: this.busy || this.switching || this.controlPending || !!this.review,
+    this.emit('status', {connected: this.connected, busy: this.busy || this.switching || this.controlPending || !!this.review || this.loginBusy,
       state, error, activity: state, model: this.model, thinking:this.thinking, title: this.title, cwd: this.workspace, queueEnabled: this.busy&&!!this.turn&&!this.switching&&!this.review&&!this.controlPending&&this.features['ompProfile']==='native'&&this.features['ompControlsEnabled']===true,
       project: decodeURIComponent(this.workspace.replace(/\/$/,'').split(/[\\/]/).filter(Boolean).at(-1)??''), approval: this.approvalMode, context: this.context});
-    this.view.capabilities({...this.features,connected:this.connected,busy:this.busy||this.switching||this.controlPending||!!this.review});
+    this.view.capabilities({...this.features,connected:this.connected,busy:this.busy||this.switching||this.controlPending||!!this.review||this.loginBusy});
   }
-  private idle(): boolean { return this.connected && !this.busy && !this.switching && !this.controlPending && !this.review; }
+  private idle(): boolean { return this.connected && !this.busy && !this.switching && !this.controlPending && !this.review && !this.loginBusy; }
   private refresh(state=true): void {
     if (this.features['usageEnabled']) this.post({action: 'usage'});
     if(state&&this.features['ompControlsEnabled'])this.post({action:'ompControl',command:'get_state'});
@@ -62,7 +75,22 @@ export class Controller {
   action(msg: Frame): void {
     if(!knownAction(msg['t'])){this.notice('현재 연결에서 지원하지 않는 기능입니다.');return;}
     switch (msg['t']) {
-      case 'accountStatus':if(this.connected&&this.features['ompControlsEnabled'])this.post({action:'ompControl',command:'get_login_providers'});break;
+      case 'accountStatus':if(this.connected&&this.features['ompControlsEnabled'])this.post({action:'ompControl',command:'get_login_providers'});else this.view.accountStatus?.([],'Core 연결과 OMP 지원 상태를 확인해 주세요.');break;
+      case 'accountLogin':
+        if(typeof msg['providerId']!=='string'){this.accountTab=true;this.action({t:'settings'});break;}
+        if(this.idle()&&this.features['ompControlsEnabled']&&this.features['ompProfile']==='native'){this.loginBusy=true;this.post({action:'ompControl',command:'login',fields:{providerId:msg['providerId']}});}
+        else this.view.accountEvent?.({type:'login_status',state:'failed',message:'현재 응답을 마친 뒤 연결된 native OMP에서 로그인해 주세요.'},()=>{});break;
+      case 'cancelLogin':if(this.connected&&this.loginBusy)this.post({action:'ompControl',command:'cancel_login'});break;
+      case 'modelRoles':if(this.idle()&&this.features['ompControlsEnabled']&&this.features['ompProfile']==='native')this.post({action:'ompControl',command:'model_roles',fields:Object.fromEntries(['revision','changes','scope','op','name'].filter(key=>key in msg).map(key=>[key,msg[key]]))});else this.view.rolesResult?.({},'현재 응답·로그인을 마친 뒤 연결된 native OMP에서 설정하세요.');break;
+      case 'executionControl':{
+        const command=String(msg['command']);
+        const allowed=['feature_catalog','feature_settings','get_state','get_subagents','get_subagent_messages','cancel_subagent','steer_subagent','set_fast_mode','set_auto_compaction','set_auto_retry','set_cache_warming','set_steering_mode','set_follow_up_mode','set_interrupt_mode','compact','abort_retry'];
+        const live=['get_subagents','get_subagent_messages','cancel_subagent','steer_subagent','abort_retry'];
+        if(!allowed.includes(command)||!this.connected||!this.features['ompControlsEnabled']||this.features['ompProfile']!=='native'||(!this.idle()&&!live.includes(command))){this.view.executionResult?.(command,{}, {},'현재 응답을 마친 뒤 native OMP 연결에서 실행하세요.');break;}
+        if(this.executionRequests.size){this.view.executionResult?.(command,{}, {},'이전 실행 제어 요청을 기다려 주세요.');break;}
+        this.executionRequests.add(command);if(command==='compact'){this.controlPending=true;this.status('컨텍스트 압축 중…');}
+        this.post({action:'ompControl',command,fields:object(msg['fields'])});break;
+      }
       case 'btw':
         if(!this.connected||this.switching||!this.features['btwEnabled']){if(msg['composer'])this.emit('submitted',{id:msg['id'],ok:false});this.notice('연결된 BTW를 이용해 주세요.');break;}
         if(msg['composer'])this.btwSubmissions.add(msg['id']);
@@ -100,6 +128,15 @@ export class Controller {
       case 'usage': if (this.idle()) this.refresh(); break;
       case 'submit': {
         const text = String(msg['text'] ?? '');
+        const compact = /^\/compact(?:\s+([\s\S]*))?$/i.exec(text.trim());
+        if(compact&&this.features['ompProfile']==='native'){
+          if(!this.idle()||this.submission||!this.features['ompControlsEnabled']||this.executionRequests.size||new TextEncoder().encode(text).length>65536||msg['withSelection']||Array.isArray(msg['attachments'])&&msg['attachments'].length){
+            this.emit('submitted',{id:msg['id'],ok:false});this.notice('현재 응답·승인을 마친 뒤 첨부·선택 영역 없이 압축 명령을 실행해 주세요.');return;
+          }
+          const customInstructions=compact[1]?.trim();
+          this.action({t:'executionControl',command:'compact',fields:customInstructions?{customInstructions}:{}});
+          this.emit('submitted',{id:msg['id'],ok:this.executionRequests.has('compact')});return;
+        }
         if(this.connected&&this.busy&&!this.review&&this.features['ompProfile']==='native'&&this.features['ompControlsEnabled']&&!this.submission&&text.trim()&&new TextEncoder().encode(text).length<=65536) {
           if(msg['withSelection']||Array.isArray(msg['attachments'])&&msg['attachments'].length){this.emit('submitted',{id:msg['id'],ok:false});this.notice('첨부·선택 영역 메시지는 현재 응답을 마친 뒤 보내 주세요.');break;}
           const queue=msg['followUp']?'followUp':'steering';
@@ -109,7 +146,7 @@ export class Controller {
         if (!this.idle() || this.submission || !text.trim() || new TextEncoder().encode(text).length > 65536) {
           this.emit('submitted', {id: msg['id'], ok: false}); this.notice('현재 응답·승인을 마친 뒤 64 KiB 이하의 메시지를 보내 주세요.'); return;
         }
-        if (text.trim().startsWith('/') && (this.features['ompProfile']!=='native'||['/new','/sessions','/usage','/restore','/selection'].includes(text.trim()))) {
+        if (text.trim().startsWith('/') && (this.features['ompProfile']!=='native'||/^\/login$/i.test(text.trim())||['/new','/sessions','/usage','/restore','/selection'].includes(text.trim()))) {
           const accepted = this.command(text.trim()); this.emit('submitted', {id: msg['id'], ok: accepted}); return;
         }
         this.submission = msg; this.busy = true; this.status('응답 대기 중…');
@@ -141,6 +178,7 @@ export class Controller {
     }
   }
   private command(text: string): boolean {
+    if(/^\/login$/i.test(text.trim())){this.action({t:'accountLogin'});return true;}
     switch (text) {
       case '/new': this.action({t: 'newSession'}); return true;
       case '/sessions': this.action({t: 'sessions'}); return true;
@@ -163,8 +201,16 @@ export class Controller {
     if (this.review) this.emit('approvalResult', {id: this.review.id, ok}); this.review = undefined;
   }
   receive(frame: Frame): void {
+    if(frame['type']==='event'&&!this.connected&&this.switching)return;
     if(frame['type']!=='session'&&typeof frame['ownerSessionId']==='string'&&frame['ownerSessionId']!==this.session)return;
     switch (frame['type']) {
+      case 'workspaceChanging':
+        this.connected=false;this.switching=true;this.busy=false;this.turn='';this.resolve(false);
+        if(this.submission)this.emit('submitted',{id:this.submission['id'],ok:false});this.submission=undefined;
+        this.view.clearInteractions?.();this.emit('files',{items:null});this.emit('context',{});
+        this.workspace=String(frame['workspaceUri']??'');this.status(this.workspace?'프로젝트 다시 연결 중…':'열린 프로젝트가 없습니다.');break;
+      case 'workspaceDisconnected':
+        this.connected=false;this.switching=this.busy=false;this.status('프로젝트를 열면 자동으로 연결합니다.');break;
       case 'messageRestorePreview':this.showReview(object(frame['data']),true,false);break;
       case 'folderAdded':this.notice('OMP 작업영역에 폴더를 추가했습니다: '+String(frame['path']??''));break;
       case 'buildResult':this.notice(frame['success']?'빌드 완료':'빌드 실패 · IDE 오류 목록을 확인해 주세요.');break;
@@ -176,12 +222,13 @@ export class Controller {
         this.preferences=object(frame['values']);
         this.emit('preferences',{values:frame['values']});
         if(this.settingsSaving){this.settingsSaving=false;this.view.settingsResult?.(true);}
-        if(this.settingsOpen){this.settingsOpen=false;const owner=this.session;this.view.settings?.(frame,values=>{if(owner!==this.session||!this.connected){this.view.settingsResult?.(false,'대화가 변경되었습니다. 설정을 다시 열어 주세요.');return;}if(this.settingsSaving)return;this.settingsSaving=true;this.post({action:'preferences',values});});}break;
+        if(this.settingsOpen){this.settingsOpen=false;const owner=this.session;this.view.settings?.({...frame,accountTab:this.accountTab},values=>{if(owner!==this.session||!this.connected){this.view.settingsResult?.(false,'대화가 변경되었습니다. 설정을 다시 열어 주세요.');return;}if(this.settingsSaving)return;this.settingsSaving=true;this.post({action:'preferences',values});});this.accountTab=false;}break;
       case 'copied':this.emit('copyResult',{id:frame['id'],ok:true});this.notice('복사했습니다.');break;
       case 'attachments':this.emit('attachments',{items:frame['items']??[]});break;
       case 'extensions':this.emit('extensions',frame);break;
       case 'ompControl': {
         const command=frame['command'],data=object(frame['data']),fields=object(frame['fields']);
+        if(this.executionRequests.delete(String(command))){if(!(command==='compact'&&this.completedOperations.has(String(data['operationId']))))this.view.executionResult?.(String(command),data,fields);if(!['get_state','get_available_models','get_available_thinking_levels'].includes(String(command)))break;}
         if(command==='get_available_models') {this.models=rows(data['models']).map(m=>`${String(m['provider'])}/${String(m['id'])}`);this.catalog();}
         else if(command==='get_available_thinking_levels') {this.levels=Array.isArray(data['levels'])?data['levels']:[];this.catalog();}
         else if(command==='get_state') {const model=object(data['model']);this.model=[model['provider'],model['id']].filter(Boolean).join('/');this.thinking=String(data['thinkingLevel']??'');this.emit('todos',{items:rows(data['todoPhases']).flatMap(phase=>rows(phase['tasks']).map(task=>({...task,phase:phase['name']})))});this.queue=object(data['queuedMessages']);if(Object.keys(this.queue).length)this.emit('queue',this.queue);this.status();}
@@ -192,7 +239,9 @@ export class Controller {
           const next=typeof data['nextByte']==='number'&&Number(data['nextByte'])>Number(fields['fromByte']??0)?()=>this.post({action:'ompControl',command:'get_subagent_messages',fields:{subagentId:fields['subagentId'],fromByte:data['nextByte']}}):undefined;
           if(this.view.sheet)this.view.sheet('하위 에이전트 기록',text,next);else this.emit('sheet',{title:'하위 에이전트 기록',text});
         }
-        else if(command==='get_login_providers')this.emit('sheet',{title:'OMP 로그인 제공자',text:rows(data['providers']).map(provider=>`- ${String(provider['name']??provider['id'])}: ${provider['authenticated']?'로그인됨':provider['available']?'로그인 가능':'사용 불가'}`).join('\n')||'조회된 제공자가 없습니다.'});
+        else if(command==='get_login_providers')this.view.accountStatus?.(rows(data['providers']));
+        else if(command==='model_roles')this.view.rolesResult?.(data);
+        else if(command==='login_terminal'){this.notice('OMP 로그인 터미널을 열었습니다. 로그인 후 계정 탭에서 제공자 상태를 다시 조회하세요.');this.view.accountStatus?.([],'OMP 로그인 터미널에서 인증을 진행한 뒤 로그인 제공자 상태를 다시 조회하세요.');}
         else if(command==='set_model'||command==='set_thinking_level') {
           this.controlPending=false;this.status();
           this.post({action:'ompControl',command:'get_state'});
@@ -201,6 +250,10 @@ export class Controller {
         break;
       }
       case 'session':
+        this.lastTurnError='';
+        this.executionRequests.clear();this.completedOperations.clear();this.view.clearExecution?.();
+        this.view.clearRoles?.();
+        this.loginBusy=false;this.view.clearAccount?.();
         this.settingsOpen=false;if(this.settingsSaving)this.view.settingsResult?.(false,'대화가 변경되었습니다.');this.settingsSaving=false;
         this.cancelAfterStart=false;
         if(this.submission)this.emit('submitted',{id:this.submission['id'],ok:false});
@@ -246,6 +299,11 @@ export class Controller {
         this.status(); break;
       }
       case 'error': case 'operationError':
+        if(frame['command']==='model_roles')this.view.rolesResult?.({},String(frame['message']));
+        if(this.executionRequests.delete(String(frame['command']))){this.view.executionResult?.(String(frame['command']),{}, {},String(frame['message']));if(frame['command']==='compact')this.controlPending=false;}
+        if(frame['command']==='login'||frame['command']==='cancel_login'){this.loginBusy=false;this.view.accountEvent?.({type:'login_status',state:'failed',message:frame['message']},()=>{});}
+        if(frame['command']==='get_login_providers')this.view.accountStatus?.([],String(frame['message']));
+        if(frame['command']==='login_terminal')this.view.accountStatus?.([],String(frame['message']));
         if(frame['action']==='proceedPlan')this.emit('planResult',{ok:false,text:String(frame['message'])});
         if(frame['action']==='preferences'){this.settingsOpen=false;this.settingsSaving=false;this.view.settingsResult?.(false,String(frame['message']));}
         if(frame['action']==='listFiles')this.emit('files',{items:[],error:true});
@@ -259,6 +317,9 @@ export class Controller {
         if (this.review&&(!frame['action']||['decideChange','designerDecide','restoreChange','restoreMessage'].includes(String(frame['action'])))) { const {data, restore} = this.review; this.resolve(false); this.turnApproved=false; this.showReview(data, restore,false); }
         this.status(String(frame['message']), true); break;
       case 'disconnected':
+        this.executionRequests.clear();this.completedOperations.clear();this.view.executionResult?.('get_state',{}, {},'Core 연결이 종료되었습니다. 다시 연결한 뒤 조회해 주세요.');
+        this.loginBusy=false;this.view.clearAccount?.();
+        this.view.accountStatus?.([],'Core 연결이 종료되었습니다. 다시 연결한 뒤 조회해 주세요.');
         this.settingsOpen=false;if(this.settingsSaving)this.view.settingsResult?.(false,'연결이 종료되었습니다.');this.settingsSaving=false;
         this.cancelAfterStart=false;
         this.view.clearInteractions?.();
@@ -274,6 +335,17 @@ export class Controller {
     this.sequence = data['sequence']; const kind = data['kind'];
     if(kind==='omp_event') {
       const frame=object(data['frame']);
+      if(frame['type']==='login_status'){
+        this.loginBusy=frame['state']==='pending';this.view.accountEvent?.(frame,()=>{});this.status(this.loginBusy?'로그인 진행 중…':'연결됨');
+        if(frame['state']==='completed'){this.post({action:'ompControl',command:'get_login_providers'});this.post({action:'ompControl',command:'get_available_models'});this.post({action:'ompControl',command:'get_state'});}return;
+      }
+      if(frame['type']==='control_operation'){
+        this.controlPending=frame['state']==='running';if(!this.controlPending){this.completedOperations.add(String(frame['operationId']));if(this.completedOperations.size>32)this.completedOperations.delete(this.completedOperations.values().next().value!);}
+        if(frame['state']==='failed')this.notice(String(frame['message']??'컨텍스트 압축을 완료하지 못했습니다.'));
+        else if(frame['state']==='completed')this.notice('컨텍스트를 압축했습니다.');
+        this.view.executionEvent?.(frame);this.status(this.controlPending?'컨텍스트 압축 중…':'연결됨');if(!this.controlPending)this.refresh();return;
+      }
+      if(frame['type']==='extension_ui_request'&&frame['login']===true){this.view.accountEvent?.(frame,answer=>this.post({action:'ompRespond',requestId:frame['id'],answer}));return;}
       if(frame['type']==='designer_approval'){this.showReview({...frame,designer:true},false);return;}
       if(frame['type']==='designer_resolved'){this.resolve(frame['approved']===true);this.status('응답 중…');return;}
       if(frame['type']==='ui_event'){const event=object(frame['event']);if(event['t']==='queue')this.queue=event;if(event['t']==='commands'){this.commands(event['items']);return;}this.view.emit(event);if(event['t']==='toolEnd'&&this.features['ompControlsEnabled'])this.post({action:'ompControl',command:'get_state'});return;}
@@ -289,8 +361,12 @@ export class Controller {
       return;
     }
     if (kind === 'warning') { this.notice(String(data['text'])); return; }
-    if (kind === 'closed') { this.view.clearInteractions?.(); this.connected = this.busy = false; this.turn = ''; this.resolve(false); this.status(this.switching ? '대화 준비 중…' : '연결 종료'); return; }
+    if (kind === 'closed') {
+      this.view.clearInteractions?.(); this.connected = this.busy = false; this.turn = ''; this.controlPending=false;this.resolve(false);
+      this.status(this.switching ? '대화 준비 중…' : String(data['text']??(this.lastTurnError||'작업 세션이 종료되었습니다. 설정에서 다시 연결할 수 있습니다.')),!!this.lastTurnError); return;
+    }
     if (kind === 'started') {
+      this.lastTurnError='';
       this.started=Date.now();
       this.turn = String(data['turnId']); this.busy = true; this.turnApproved=false;
       if (this.submission) { this.title ||= String(this.submission['text']).slice(0, 80); this.emit('user', {text: this.submission['text'],attachments:this.submission['attachments'],ts:this.started}); this.emit('submitted', {id: this.submission['id'], ok: true}); this.submission = undefined; }
@@ -298,12 +374,18 @@ export class Controller {
     }
     if (!this.turn || data['turnId'] !== this.turn) return;
     switch (kind) {
+      case 'activity': {
+        const activity=object(data['frame']),elapsed=Number(activity['elapsedMs']);
+        const duration=Number.isFinite(elapsed)&&elapsed>=0?` · ${Math.floor(elapsed/60000)}분 ${Math.floor(elapsed/1000)%60}초`:'';
+        this.status(String(data['text']??'작업 진행 중')+duration);break;
+      }
       case 'delta': this.emit('assistantDelta', {text: String(data['text'] ?? '')}); break;
       case 'tool_started': this.tool = String(data['toolId']??`${this.turn}-${this.sequence}`); this.emit('toolStart', {id: this.tool, name: data['text']}); break;
       case 'tool_completed': this.emit('toolEnd', {id: data['toolId']??this.tool, ok: data['text'] !== 'Workspace request rejected', result: data['text']}); break;
       case 'approval_requested': this.showReview(object(data['approval']), false); break;
       case 'approval_resolved': { const result = object(data['approval']); this.resolve(result['approved'] === true); if (result['warning']) this.notice(String(result['warning'])); this.status('응답 중…'); break; }
       case 'completed': case 'cancelled': case 'error':
+        if(kind==='error'){this.lastTurnError=String(data['text']??'작업 오류가 발생했습니다.');this.notice(this.lastTurnError);}
         if(kind==='completed'&&this.preferences['notifications'])this.post({action:'notify'});
         this.emit('assistantEnd'); this.emit('turnEnd',{started:this.started,ended:Date.now(),stopped:kind!=='completed'}); this.busy = false; this.turn = ''; this.resolve(false);
         this.status(kind === 'completed' ? '응답 완료' : kind === 'cancelled' ? '취소됨' : String(data['text']), kind === 'error');

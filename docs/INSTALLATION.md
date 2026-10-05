@@ -1,4 +1,27 @@
-# Windows 설치 (0.8.1)
+# Windows 설치 (0.9.14)
+
+문서 갱신일: 2026-10-06 KST. 기본 배포는 서명된 `dist/PiAgent-Setup-0.9.14.exe`다.
+설치 UI에서 Core, RAD13.2 32/64-bit, VS2022/2026와 미설치 OMP의 설치 여부를 선택한다.
+기존 설치에서 선택하지 않은 adapter는 유지되므로 선택 해제가 제거를 뜻하지 않는다.
+
+| 위치 | 내용 |
+|---|---|
+| `%LOCALAPPDATA%\Programs\PiAgent\releases\<release>` | Core, private Node/.NET runtime, adapter 및 UI 산출물 |
+| `%LOCALAPPDATA%\Programs\PiAgent\install-receipt.json` | 현재 release와 IDE 등록/복구 정보 |
+| 현재 release의 `core/settings.json` | OMP 경로, pipe, workspace, profile 및 실행 설정 |
+| `%USERPROFILE%\.piagent\security\<pipe>` | 인증 파일, workspace별 저장 세션, lifecycle 진단 기록 |
+
+ARM64에서는 native ARM64 runtime을 설치한다. BPL은 IDE bitness에 맞춘 Win32/Win64이며 ARM64 BPL은 아니다.
+통합 설치된 VS/RAD adapter는 채팅 창을 열 때 Core를 자동 실행하거나 재사용한다.
+VS는 Tools → PiAgent: Open Chat, RAD는 View/Tools → PiAgent에서 연다.
+상세 선택·제거·업그레이드 동작은 [UNIFIED-INSTALLER.md](UNIFIED-INSTALLER.md)를 따른다.
+
+이 PC의 현재 receipt는 `0.9.14-20261005095258` release와 VS2022/2026, RAD32/64 등록을 기록한다.
+최신 실사용 검증 대상은 VS2026/RAD13.2 64-bit이며 다른 IDE 등록을 검증 PASS로 해석하지 않는다.
+
+## 수동 archive 설치 (이전 배포 방식)
+
+아래 0.8.1 archive 예제는 기존 수동 설치의 유지·복구용이다. 통합 설치 runtime 경로와 혼용하지 않는다.
 
 통합 설치파일은 [UNIFIED-INSTALLER.md](UNIFIED-INSTALLER.md)를 참고한다.
 VSIX 0.9.3부터 모든 adapter의 인증 경로는 `PIAGENT_AUTH_FILE` 명시 값,
@@ -51,7 +74,7 @@ RAD [별도 registry profile](https://docwiki.embarcadero.com/RADStudio/Athens/e
 현재 실사용 검증 대상은 VS2026과 RAD13.2이며 VS2022 검증은 최종 완성 직전으로 보류한다.
 
 기본 이외의 pipe를 사용하면 IDE를 시작하기 전에 PIAGENT_PIPE_NAME을 설정한다.
-IDE에는 Core 자동 실행 기능이 없으므로 daemon을 먼저 실행한다.
+수동 archive만 배포한 환경에서는 daemon을 먼저 실행한다. 통합 설치본의 adapter는 자동 실행을 지원한다.
 
 업그레이드는 새 버전 설치 후 이전 Core를 정상 종료하고 새 launcher를 사용한다. VSIX는 새 파일로 교체하고,
 RAD에서는 IDE를 종료하거나 이전 BPL을 해제한 뒤 새 BPL을 등록한다. 실행 중인 BPL을 덮어쓰지 않는다.
@@ -66,6 +89,6 @@ checkpoint는 보존한다. VSIX/BPL 등록 해제는 각 IDE의 extension/packa
 검증된 실제 host와 테스트 범위는 VALIDATION.md에 기록한다.
 
 0.9.0 GUI harness 검증본은 `harness-validation/runtime/0.9.0`, pipe `piagent-harness09`에 설치한다.
-이번 RAD 배포는 Win64만 포함하며 build-adapters.ps1 기본값도 Win64이다. Core의 x64/ARM64
+당시 harness 배포는 Win64만 포함했다. 현재 build-adapters.ps1 기본값은 Win64이고 통합 설치 빌드는 두 bitness를 포함한다. Core의 x64/ARM64
 지원과 RAD BPL의 IDE bitness는 별개이다. 프레임워크별 skill/catalog는 Core release에 포함되므로
 별도 전역 skill 설치 없이 inspect 결과를 통해 OMP에 전달된다. 자세한 범위는 GUI-HARNESS.md 참고.

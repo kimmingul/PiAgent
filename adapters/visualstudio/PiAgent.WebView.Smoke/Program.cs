@@ -41,7 +41,22 @@ internal static class Program
                     core().Navigate("https://piagent.local/chat.html");
                 } else core().NavigateToString("<html><body><textarea id='draft'></textarea><script>window.marker=42;document.getElementById('draft').value='도킹 전 초안';</script></body></html>");
                 if (!await navigation.Task) throw new Exception("Navigation failed");
-                if (uiIndex >= 0) await UiSmoke.Run(core());
+                if (uiIndex >= 0) await UiSmoke.Run(core(),async()=> {
+                    var previewIndex=Array.IndexOf(args,"--settings-preview");
+                    for(int layout=0;layout<3;layout++) {
+                        window.Width=layout==0?880:340;window.Height=760;
+                        if(fixedView!=null)fixedView.ZoomFactor=layout==2?2:layout==1?1.5:1;
+                        else oldView!.ZoomFactor=layout==2?2:layout==1?1.5:1;
+                        await FlushLayout();await Task.Delay(120);
+                        var fits=await core().ExecuteScriptAsync("(()=>{const f=document.querySelector('.settings-footer').getBoundingClientRect(),c=document.querySelector('.settings-content').getBoundingClientRect(),tabs=[...document.querySelectorAll('.settings-tab')].map(t=>t.getBoundingClientRect());return f.bottom<=innerHeight+1&&f.left>=0&&f.right<=innerWidth+1&&c.height>=60&&document.querySelector('.piagent-settings').scrollWidth<=innerWidth&&tabs.every(t=>Math.abs(t.top-tabs[0].top)<1)})()");
+                        if(fits!="true")throw new Exception("Settings layout clips controls at layout "+layout+": "+await core().ExecuteScriptAsync("JSON.stringify({width:innerWidth,height:innerHeight,footer:document.querySelector('.settings-footer').getBoundingClientRect(),content:document.querySelector('.settings-content').getBoundingClientRect()})"));
+                        Console.WriteLine("PASS settings layout "+layout+": horizontal tabs, scrollable content, footer within viewport");
+                        if(previewIndex>=0){var folder=Path.GetFullPath(args[previewIndex+1]);Directory.CreateDirectory(folder);using(var output=File.Create(Path.Combine(folder,"settings-"+layout+".png")))await core().CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,output);}
+                        if(previewIndex>=0){await core().ExecuteScriptAsync("document.getElementById('settings-tab-1').click()");await FlushLayout();var folder=Path.GetFullPath(args[previewIndex+1]);using(var output=File.Create(Path.Combine(folder,"account-"+layout+".png")))await core().CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,output);await core().ExecuteScriptAsync("document.getElementById('settings-tab-0').click()");}
+                    }
+                    if(fixedView!=null)fixedView.ZoomFactor=1;else oldView!.ZoomFactor=1;
+                    window.Width=500;window.Height=400;await FlushLayout();
+                });
                 var browserId = core().BrowserProcessId;
                 for (var index = 0; index < 4; index++)
                 {

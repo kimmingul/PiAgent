@@ -1,5 +1,8 @@
 # RAD Studio adapter
 
+현재 0.9.14, 문서 갱신 2026-10-06. 실사용 검증은 RAD13.2 **64-bit**를 대상으로 한다.
+Win32는 빌드/패키징과 transport 검증을 구분하며 최신 32-bit IDE UI 실사용은 미검증이다.
+
 Delphi design-time BPL은 **View → PiAgent** 또는 **Tools → PiAgent**에서 Vcl.Edge
 WebView2 채팅 창을 연다. VS와 같은 TypeScript UI로 채팅, 승인·복원, 저장 대화 재개 및 사용량을 표시한다.
 hello 전에 Core/adapter 상호 HMAC 인증을 수행하며 credential은 WebView에 전달하지 않는다.
@@ -22,8 +25,8 @@ IDE metadata의 ideVersion은 현재 Delphi compiler version이다.
 루트에서 `scripts/build-adapters.ps1`을 실행한다. `-BdsRoot`로 설치본을 지정할 수 있다.
 requires는 rtl, vcl, vcledge, designide이며 이 PC의 RAD Studio 13.2/Delphi 37.0 결과는 다음과 같다.
 
-- bin/Win32/0.7.0/PiAgent370.bpl + WebView2Loader.dll + ui/
-- bin/Win64/0.7.0/PiAgent370.bpl + WebView2Loader.dll + ui/
+- bin/Win32/0.9.14/PiAgent370.bpl + WebView2Loader.dll + ui/
+- bin/Win64/0.9.14/PiAgent370.bpl + WebView2Loader.dll + ui/
 - 각 디렉터리의 PipeSmoke.exe / ChatSmoke.exe 테스트 harness
 
 현재 사용자에게 설치된 WebView2 Runtime을 사용한다. loader는 package 폴더의 절대 경로로 로드한다.
@@ -37,7 +40,7 @@ IDE와 같은 bitness의 BPL만 Component → Install Packages에서 설치한�
 4. 저장된 대화에서 재개하고 사용량·비용을 펼쳐 확인한다.
 
 다른 endpoint는 IDE 실행 전에 PIAGENT_PIPE_NAME으로 지정한다(기본 piagent-dev).
-자동 Core 실행과 선택 코드 캡처는 제공하지 않는다. 설치·실행·제거는
+통합 설치본은 Core 자동 실행/재사용을 지원하며 선택 코드 캡처는 `/selection`으로 요청한다. 설치·실행·제거는
 [INSTALLATION.md](../../docs/INSTALLATION.md)를 따른다. RADAgent source/package/설정은 수정하지 않는다.
 
 ## Validation

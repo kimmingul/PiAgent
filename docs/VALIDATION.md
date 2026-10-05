@@ -1,5 +1,25 @@
 # PiAgent validation history
 
+## 최신 상태 (2026-10-06)
+
+제품 버전 0.9.14. 설치 receipt의 현재 release는 `0.9.14-20261005095258`이다.
+VS2022/2026와 RAD32/64 등록이 기록되어 있으나 최신 실사용 검증은 VS2026/RAD13.2 64-bit를 우선한다.
+설치 등록, 자동 회귀, fixture/mock bridge, 실제 모델·IDE 결과를 서로 구분한다.
+
+- 장시간 수정 자동 회귀 118/118, 실제 Named Pipe fixture 631초와 WebView2 PASS 57개.
+- 설치 VS2026의 NanumPDF 개발 턴: 2026-10-05 18:58:30–21:35:54 KST,
+  약 2시간 37분 후 UI 최종 응답 및 Core `completed` 기록으로 종료 확인.
+- RAD13.2 64-bit 서명 UI의 로드/연결과 프로젝트 바인딩 확인은 장시간 NanumPDF 검증과 별개다.
+- VS2022 최신 전수 검증, RAD32 UI, 물리 x64와 기존 PARTIAL/MANUAL 항목은 남아 있다.
+  모든 기능 실사용 승인으로 승격하지 않는다.
+
+[장시간 수정 및 실제 관찰](LONG-RUNNING-TURN-FIX.md) ·
+[설치 acceptance](INSTALLED-ACCEPTANCE-0.9.14.md) · [결함 수정](ACCEPTANCE-FIXES-0.9.14.md).
+
+아래 테스트 수치와 FAIL은 해당 시점의 이력이며 후속 수정으로 원본 기록을 덮어쓰지 않는다.
+
+2026-10-05 설치 0.9.14 전수 기능 점검 및 실제 VS2026/RAD13.2 64-bit 검증: [설치본 acceptance 결과](INSTALLED-ACCEPTANCE-0.9.14.md). 자동 회귀 105/105, 설치 Core + native OMP 25/25 통과. 실제 IDE 결과와 mock WebView harness, 미검증·수동 항목을 구분했다. 전체 실사용 승인은 보류한다.
+
 ## RADAgent UI restoration / VSIX 0.7.3 (2026-10-04)
 
 - Reused the local RADAgent HTML structure, six CSS files, renderer modules, translations and provider icons.
@@ -585,3 +605,44 @@ This repeat validates VCL; it does not add FMX live coverage or native AMD64 har
 - See RELEASE-0.9.9.md and MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md for remaining limitations.
 - Signed setup passed expected Authenticode certificate and RFC3161 timestamp validation,
   complete embedded payload verification, ARM64/x64 runtime handshake/ping and installer safety tests.
+
+## 2026-10-05 settings layout correction (0.9.10)
+
+- Dedicated settings CSS preserves the reference chat styles. Horizontal keyboard-accessible tabs,
+  theme-aware controls, scrollable content and footer actions replace unstyled popup rows.
+- Core reports its package version. Developer identity: 김민걸 (Min-Gul Kim), mgkim@jbnu.ac.kr.
+  On compact views the footer retains the version; Advanced contains the full developer information.
+- Full regression 89/89, including the version returned over the authenticated preferences RPC.
+- Real WebView2 passed 100/150/200% zoom with wide/narrow viewports, footer containment and usable
+  scrollable content; save-success acknowledgement, save failure and cancel-without-saving passed.
+- Screenshot inspection: `artifacts/settings-ui-preview/settings-{0,1,2}.png`; runtime log in the same folder.
+- This verification uses an isolated WebView harness, not a claim that the running IDE has been upgraded.
+
+## 2026-10-05 OMP management expansion (development working tree)
+
+105/105 automated tests passed, including project role/preset scope, YAML preservation/link rejection,
+schema allowlisting, private-path filtering, and authenticated pipe compaction admission/lifecycle.
+The final bounded snapshot/disconnection adjustment passed all 7 new targeted tests again.
+WebView2 validated the new Advanced management UI without replacing settings tabs; 100/150/200% layout,
+12 docking/tab/hide transitions and JavaScript/CSP checks passed.
+VSIX and RAD Win64 builds passed without code signing; both contain the compiled execution UI.
+Installed OMP 18.6.1 version/settings discovery passed without changing user settings.
+Installed IDE upgrades and native feature acceptance remain pending. Full scope/status:
+[OMP implementation](OMP-FEATURE-IMPLEMENTATION.md).
+
+## 2026-10-05 installed acceptance defect corrections
+
+Six defects from INSTALLED-ACCEPTANCE-0.9.14.md were corrected in source. Regression 111/111,
+real Delphi Win64 worker/pipe integration 1/1, and real WebView2 58 PASS outputs completed.
+Signed VSIX/RAD Win64 adapter builds and packaged Core handshake/version/capability/ping under
+Node 24.21.0 ARM64 passed. The WebView harness uses a mock host; it is not installed IDE acceptance.
+Signed candidate installed as `0.9.14-acceptance-20261005025432` after the user closed both IDEs.
+Live RAD FMX/VCL switching rebound before the first prompt; VCL first response returned 42.
+Both IDE settings layouts and VS branch preview passed. Running installed Core version/preferences/ping
+and safe native compaction failure reason passed. Other PARTIAL/MANUAL cases remain separate.
+An additional native `/compact` composer path correction passed regression 112/112 and WebView2 58 PASS
+outputs. After the user reconnected the USB certificate, re-signing and installation completed as
+`0.9.14-acceptance-20261005051004`. Live VS2026 and RAD13.2 Win64 chat both displayed the safe Korean
+short-session compaction reason and recovered to an idle, usable composer. Installed adapter hashes and
+signatures passed; ARM64 Node authentication/handshake/ping and running installed Core probes passed.
+See [acceptance fixes](ACCEPTANCE-FIXES-0.9.14.md) for evidence, candidate and remaining checks.

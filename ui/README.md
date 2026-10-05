@@ -1,5 +1,11 @@
 # RADAgent UI compatibility
 
+Current documentation: 2026-10-06, PiAgent 0.9.14. Settings retain five areas and show the generated
+package version and developer Kim Min-Gul (김민걸, mgkim@jbnu.ac.kr). Account/provider/login views
+remain inside settings; native credentials are OMP-owned. Long-running turns display activity and
+preserve the actual termination reason without a fixed ten-minute turn limit.
+See [current validation](../docs/VALIDATION.md) for distinctions between mock WebView checks and live IDE use.
+
 PiAgent reuses the HTML structure, CSS, renderer modules and provider icons from the local
 `D:\source\RADAgent\src\chat` reference snapshot (2026-10-04). That downloaded reference has
 no Git metadata. `reference-files.json` records the source SHA-256 values. RADAgent is never modified.
@@ -46,7 +52,16 @@ The bridge replays current status/capability gates after preference translations
 
 ## Verification
 
+Settings use a scoped `settings.css` and retain the original five areas. Horizontal accessible tabs,
+scrolling content and footer actions are checked in real WebView2 at 100/150/200% zoom. Core supplies
+the package version; the developer identity is shown in the footer and Advanced, with a compact footer
+on small viewports. Original reference CSS bytes remain untouched.
+
 `npm test` tests bridge state transitions and asset completeness. Build PiAgent.WebView.Smoke
 and run `--ui <extracted-VSIX-ui-folder>` to test the actual bundled page in WebView2, including
 CSP, Markdown, safe text rendering, original approval cards and 12 docking transitions.
 Both VSIX and RAD Studio BPL packaging include the full UI asset tree plus compiled bridge/controller/interactions/settings/contracts.
+OMP 실행 관리는 기존 고급 탭 안에서 기능·상태 조회, Fast/압축/재시도/캐시/queue 모드,
+하위 에이전트 기록·지시·중단 및 발견된 boolean 기능 설정을 제공한다.
+모델 역할 탭은 전역·프로젝트 scope와 전역 프리셋 관리를 제공한다.
+구현·미구현 범위와 검증은 `docs/OMP-FEATURE-IMPLEMENTATION.md`를 따른다.

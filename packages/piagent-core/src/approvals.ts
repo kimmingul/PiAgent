@@ -3,6 +3,7 @@ import type { Proposal } from './changes.js';
 
 /** Approval authority is the owning adapter RPC; OMP receives only the proposal tool. */
 export class Approvals {
+  get waiting(): boolean { return !!this.pending && !this.pending.applying; }
   private pending: { proposal: Proposal; signal: AbortSignal; applying: boolean; settle: (result: Record<string, unknown>) => void } | undefined;
   constructor(private readonly changes: WorkspaceChanges, private readonly emit: (kind: 'approval_requested' | 'approval_resolved', data: Record<string, unknown>) => void) {}
   async propose(args: unknown, signal: AbortSignal, batch=false): Promise<Record<string, unknown>> {

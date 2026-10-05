@@ -105,10 +105,16 @@ begin
     FRequestSession := FSession;
     // Selection is captured on the IDE thread; clearSelection is acknowledged here for smoke clients.
     if Action = 'clearSelection' then Exit;
+    if Action = 'disconnectWorkspace' then begin
+      if (FClient <> nil) and (FSession <> '') then begin Reply := Rpc('chat.close',TJSONObject.Create.AddPair('sessionId',FSession)); Reply.Free; end;
+      FSession := ''; FTurn := ''; FWorkspace := ''; FreeAndNil(FClient);
+      Post(TJSONObject.Create.AddPair('type','workspaceDisconnected')); Exit;
+    end;
     if Action = 'connect' then begin
-      if FTurn <> '' then raise Exception.Create('Finish or cancel the current turn before changing project');
       if FClient <> nil then begin
-        if SameText(FWorkspace,Msg.GetValue<string>('workspaceUri','')) then Exit;
+        if SameText(FWorkspace,Msg.GetValue<string>('workspaceUri','')) and (FSession <> '') then begin
+          Post(TJSONObject.Create.AddPair('type','operationError').AddPair('action','connect').AddPair('message','이미 같은 프로젝트에 연결되어 있습니다.')); Exit;
+        end;
         if FSession <> '' then begin Reply := Rpc('chat.close',TJSONObject.Create.AddPair('sessionId',FSession));Reply.Free;end;
         FWorkspace := Msg.GetValue<string>('workspaceUri','');if FWorkspace = '' then raise Exception.Create('Workspace unavailable');OpenSession;Exit;
       end;

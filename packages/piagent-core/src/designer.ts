@@ -24,6 +24,7 @@ export const designerTools=[{
 type Pending={resolve:(value:Record<string,unknown>)=>void;reject:(error:Error)=>void;cleanup:()=>void};
 /** SDK-free request broker; the adapter alone discovers and manipulates its designer. */
 export class DesignerBridge {
+  get waiting(): boolean { return this.approvals.size > 0; }
   enabled=false;
   writesEnabled=false;
   private pending=new Map<string,Pending>();

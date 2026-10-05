@@ -42,9 +42,10 @@ for(const platform of (process.env.PIAGENT_RAD_TEST_PLATFORMS??'Win64').split(',
  try{
   const git=async(...args)=>execute('git',['-c','user.name=PiAgent Test','-c','user.email=test@localhost',...args],{cwd:root,windowsHide:true});
   await git('init');await writeFile(join(root,'Example.cs'),'first\r\n');await writeFile(join(root,'Second.cs'),'second\n');await git('add','.');await git('commit','-m','Fixture');
-  const name='piagent-rad-chat-'+randomUUID(),authFile=join(root,'private','token');
+   const second=join(root,'second-project');await mkdir(second);await execute('git',['init',second],{windowsHide:true});await execute('git',['-C',second,'-c','user.name=Test','-c','user.email=test@localhost','commit','--allow-empty','-m','Second fixture'],{windowsHide:true});
+   const name='piagent-rad-chat-'+randomUUID(),authFile=join(root,'private','token');
   daemon=await startDaemon({pipeName:name,secure:{authFile},workspaceRoot:root,allowWrites:true,omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
-  const result=await execute(file(`adapters/radstudio/bin/${platform}/${releaseVersion}/ChatSmoke.exe`),[],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_PIPE_NAME:name,PIAGENT_AUTH_FILE:authFile,PIAGENT_WORKSPACE_URI:pathToFileURL(root).href}});
+   const result=await execute(file(`adapters/radstudio/bin/${platform}/${releaseVersion}/ChatSmoke.exe`),[],{windowsHide:true,timeout:25000,env:{...process.env,PIAGENT_PIPE_NAME:name,PIAGENT_AUTH_FILE:authFile,PIAGENT_WORKSPACE_URI:pathToFileURL(root).href,PIAGENT_REBIND_WORKSPACE_URI:pathToFileURL(second).href}});
   assert.deepEqual(JSON.parse(result.stdout.trim()),{applied:true,restored:true,resumed:true,usage:true});assert.equal((await git('diff')).stdout.trim(),'');
  }finally{await daemon?.close();await rm(root,{recursive:true,force:true});}
 });

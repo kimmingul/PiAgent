@@ -25,6 +25,10 @@ internal sealed class ChatWebView : HwndHost
     private bool disposed;
 
     public CoreWebView2? CoreWebView2 => controller?.CoreWebView2;
+    public double ZoomFactor {
+        get => controller?.ZoomFactor ?? 1;
+        set { if(controller==null)throw new InvalidOperationException("WebView is not initialized");controller.ZoomFactor=value; }
+    }
     public Uri? Source { set { if (value != null) CoreWebView2!.Navigate(value.AbsoluteUri); } }
 
     public ChatWebView()

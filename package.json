@@ -1,6 +1,6 @@
 {
   "name": "piagent",
-  "version": "0.9.9",
+  "version": "0.9.14",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -10,8 +10,8 @@
     "node": ">=24.21.0 <25"
   },
   "scripts": {
-    "build": "tsc -b",
-    "typecheck": "tsc -b",
+    "build": "node scripts/generate-version.mjs && tsc -b",
+    "typecheck": "npm run build",
     "test": "npm run build && npm run build:transport && node --test --test-concurrency=1 tests/*.test.mjs",
     "test:adapters": "npm run build && npm run build:transport && node --test --test-concurrency=1 tests/adapters.integration.mjs",
     "start": "node packages/piagent-daemon/dist/cli.js",
