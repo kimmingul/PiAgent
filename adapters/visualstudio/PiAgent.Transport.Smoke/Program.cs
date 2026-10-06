@@ -15,6 +15,22 @@ using var cancellation = new CancellationTokenSource();
 var mode = args.Length > 2 ? args[2] : "normal";
 if (mode == "credential") { Console.WriteLine(client.AuthenticationCredentialPath); return; }
 if (mode == "bootstrap") { cancellation.CancelAfter(30000);await CoreRuntime.EnsureRunningAsync(name,cancellation.Token);Console.WriteLine("Core bootstrap connected");return; }
+if(mode=="suspend"){
+    cancellation.CancelAfter(15000);await client.InitializeAsync("visual-studio",version,"suspend-smoke",cancellation.Token);
+    var ping=client.PingAsync("sleep-fixture",cancellation.Token);await Task.Delay(500);client.SuspendRequestTimeouts(true);
+    await Task.Delay(6000);client.SuspendRequestTimeouts(false);await ping;
+    Console.WriteLine("{\"survivedSuspension\":true}");return;
+}
+if (mode == "slow-ack") {
+    cancellation.CancelAfter(20000);
+    await client.InitializeAsync("visual-studio",version,"slow-ack",cancellation.Token,chat:true);
+    var opened=await client.RequestAsync("chat.open",new JObject(),cancellation.Token);
+    var watch=System.Diagnostics.Stopwatch.StartNew();
+    var reply=await client.RequestAsync("chat.prompt",new JObject {["sessionId"]=opened["sessionId"],["message"]="slow-ack"},cancellation.Token);
+    await client.PingAsync("still-connected",cancellation.Token);
+    await client.RequestAsync("chat.close",new JObject {["sessionId"]=opened["sessionId"]},cancellation.Token);
+    Console.WriteLine(new JObject {["accepted"]=reply["accepted"],["elapsedMs"]=watch.ElapsedMilliseconds,["connected"]=true}.ToString(Formatting.None));return;
+}
 if (mode == "controls")
 {
     cancellation.CancelAfter(60000);

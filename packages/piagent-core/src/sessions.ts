@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink, rmdir } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isObject } from '@piagent/protocol';
@@ -16,6 +16,7 @@ export interface SavedSession {
   needsFork?:boolean;
   messagePoints?:{seq:number;id:string}[];
   parent?:{savedSessionId:string;message:number;mode:'branch'|'restore'};
+  hasHistory?:boolean;
 }
 /** Storage is scoped by the daemon to one workspace and private credential directory. */
 export class SessionStore {
@@ -23,6 +24,19 @@ export class SessionStore {
   async initialize(): Promise<void> {
     await mkdir(this.root, {recursive:true});
     await this.directory(this.root);
+  }
+  async last():Promise<string|undefined>{
+    const file=join(this.root,'last-session');
+    try{const stat=await lstat(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.size>80)throw new Error('Invalid last session pointer');
+      const id=(await readFile(file,'utf8')).trim();await this.load(id);return id;
+    }catch(error){if(isObject(error)&&error['code']==='ENOENT')return (await this.list()).find(item=>item['resumable'])?.['savedSessionId'] as string|undefined;throw error;}
+  }
+  async remember(id:string):Promise<void>{
+    this.path(id);await this.directory(this.root);
+    const target=join(this.root,'last-session'),stat=await lstat(target).catch(()=>undefined);
+    if(stat&&(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1))throw new Error('Invalid last session pointer');
+    const temporary=join(this.root,'last-'+randomUUID());const file=await open(temporary,'wx');
+    try{await file.writeFile(id);await file.close();await rename(temporary,target);}finally{await file.close().catch(()=>{});await unlink(temporary).catch(()=>{});}
   }
   private async directory(path: string): Promise<void> {
     const value=await lstat(path);
@@ -53,8 +67,51 @@ export class SessionStore {
     const names=(await readdir(this.root)).filter(name=>uuid.test(name));
     if (names.length>1000) throw new Error('Saved session limit reached');
     const values=await Promise.all(names.map(async name=>{ try{return await this.load(name);}catch{return undefined;} }));
-    return values.filter((value):value is SavedSession=>!!value).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,50)
-      .map(({savedSessionId,title,updatedAt,createdAt,ompFile})=>({savedSessionId,title,updatedAt,createdAt,resumable:!!ompFile}));
+    return Promise.all(values.filter((value):value is SavedSession=>!!value).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,50)
+      .map(async record=>{const {savedSessionId,title,updatedAt,createdAt,ompFile}=record;
+        const active=!!await lstat(join(this.path(savedSessionId),'active.lock')).catch(()=>undefined);
+        const empty=await this.emptyFiles(record).then(()=>true,()=>false);
+        return {savedSessionId,title,updatedAt,createdAt,resumable:!!ompFile,empty,active,deletable:empty&&!active};}));
+  }
+  /** Conservative allowlist: unknown files or history always prevent deletion. */
+  private async emptyFiles(record:SavedSession):Promise<string[]> {
+    if(record.hasHistory||record.transcript.length||record.parent||record.plan||record.messagePoints?.length||record.needsFork)throw new Error('대화 기록이 있는 세션은 삭제할 수 없습니다.');
+    const dir=this.path(record.savedSessionId);await this.directory(dir);const files=[join(dir,'session.json')];
+    for(const name of await readdir(dir)){
+      if(name==='session.json'||name==='active.lock')continue;
+      if(name!=='omp')throw new Error('추가 데이터가 있는 세션은 삭제할 수 없습니다.');
+      const omp=join(dir,name);await this.directory(omp);
+      for(const entry of await readdir(omp)){
+        const file=await this.verifyOmpFile(record.savedSessionId,entry);
+        for(const line of (await readFile(file,'utf8')).split('\n').filter(line=>line.trim())){
+          const value:unknown=JSON.parse(line);
+          if(!isObject(value)||!['session','model_change','thinking_level_change','session_info'].includes(String(value['type'])))throw new Error('OMP 대화 기록이 있는 세션은 삭제할 수 없습니다.');
+        }
+        files.push(file);
+      }
+    }
+    // BTW conversations are stored outside the main conversation directory.
+    const btw=join(this.root,'btw');
+    if(await lstat(btw).catch(()=>undefined)){
+      await this.directory(btw);const names=await readdir(btw);if(names.length>1000)throw new Error('BTW 저장소를 확인할 수 없습니다.');
+      for(const name of names.filter(name=>name.endsWith('.json'))){const file=join(btw,name),stat=await lstat(file);
+        if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.size>3*1024*1024)throw new Error('BTW 저장소를 확인할 수 없습니다.');
+        const value:unknown=JSON.parse(await readFile(file,'utf8'));if(isObject(value)&&value['mainSession']===record.savedSessionId)throw new Error('BTW 대화가 있는 세션은 삭제할 수 없습니다.');}
+    }
+    return files;
+  }
+  async deleteEmpty(id:unknown):Promise<void>{
+    const dir=this.path(id);await this.directory(dir);
+    let lock:FileHandle;try{lock=await open(join(dir,'active.lock'),'wx');}catch{throw new Error('사용 중인 세션은 삭제할 수 없습니다.');}
+    try{
+      const files=await this.emptyFiles(await this.load(id));
+      // Remove only verified regular files; never recursively delete arbitrary directories.
+      for(const file of files.slice(1))await unlink(file);
+      const omp=join(dir,'omp');if(await lstat(omp).catch(()=>undefined))await rmdir(omp);
+      await unlink(files[0]!);
+    }finally{await lock.close();await unlink(join(dir,'active.lock'));}
+    await rmdir(dir);
+    // last() falls back to another saved conversation when its target is absent.
   }
   async acquire(id?: unknown): Promise<SessionLease> {
     let record:SavedSession;
@@ -89,6 +146,7 @@ export class SessionStore {
   }
   async save(record:SavedSession):Promise<void> {
     record.version=2;
+    if(record.transcript.length)record.hasHistory=true;
     const dir=this.path(record.savedSessionId);await this.directory(dir);
     // Keep bounded displayed history; the full model conversation remains in OMP's JSONL.
     record.transcript=record.transcript.slice(-200);

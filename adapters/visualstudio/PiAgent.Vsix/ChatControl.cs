@@ -13,6 +13,7 @@ using Microsoft.VisualStudio.Threading;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Microsoft.Win32;
 using PiAgent.Transport;
 namespace PiAgent.Vsix;
 
@@ -35,15 +36,54 @@ public sealed class ChatControl : UserControl, IDisposable
     private EnvDTE.SolutionEvents? solutionEvents;
     private bool workspaceBinding, approvalModes;
     private bool initialized, connecting, pageReady, disposed;
+    private bool recovering, suspended;
+    private int recoveryEpoch;
     public ChatControl()
     {
         jobs = ThreadHelper.JoinableTaskFactory.Context.CreateCollection(); factory = ThreadHelper.JoinableTaskFactory.Context.CreateFactory(jobs); Content = browser; Loaded += OnLoaded;
+        SystemEvents.PowerModeChanged += PowerChanged;
         heartbeat.Tick += (sender, args) => factory.RunAsync(async () => {
             var active = client;
-            if (active == null || sessionId == null || disposed) return;
+            if (active == null || sessionId == null || disposed || suspended) return;
             try { await SynchronizeWorkspaceAsync(); await active.PingAsync("heartbeat", lifetime.Token); }
-            catch (Exception error) { if (ReferenceEquals(client, active)) Disconnect(error.Message); }
+            catch (Exception error) { if (ReferenceEquals(client, active)) { Disconnect(error.Message); await RecoverAsync(); } }
         }).FileAndForget("PiAgent/Heartbeat");
+    }
+    private void PowerChanged(object sender, PowerModeChangedEventArgs args)
+    {
+        var sleep = args.Mode == PowerModes.Suspend;
+        if (!sleep && args.Mode != PowerModes.Resume) return;
+        client?.SuspendRequestTimeouts(sleep);
+        factory.RunAsync(async () => {
+            await factory.SwitchToMainThreadAsync(lifetime.Token);
+            if (disposed) return;
+            suspended = sleep;
+            if (sleep) { heartbeat.Stop(); return; }
+            var active = client;
+            if (active != null && sessionId != null) {
+                try { await active.PingAsync("resume", lifetime.Token); heartbeat.Start(); return; }
+                catch (Exception error) { if (!ReferenceEquals(client, active)) return; Disconnect(error.Message); }
+            }
+            await RecoverAsync();
+        }).FileAndForget("PiAgent/PowerResume");
+    }
+    private async Task RecoverAsync()
+    {
+        await factory.SwitchToMainThreadAsync(lifetime.Token);
+        if (disposed || suspended || recovering || !pageReady) return;
+        string workspace;
+        try { workspace = CurrentWorkspaceUri(); } catch { return; }
+        var epoch = recoveryEpoch; recovering = true;
+        try {
+            foreach (var delay in new[] { 1000, 3000, 10000 }) {
+                await Task.Delay(delay, lifetime.Token); await factory.SwitchToMainThreadAsync(lifetime.Token);
+                if (disposed || suspended || epoch != recoveryEpoch || sessionId != null) return;
+                try { if (CurrentWorkspaceUri() != workspace) return; } catch { return; }
+                if (connecting) continue;
+                await ConnectAsync();
+                if (sessionId != null) return;
+            }
+        } finally { recovering = false; }
     }
     private void OnLoaded(object sender, RoutedEventArgs args) =>
         factory.RunAsync(InitializeBrowserAsync).FileAndForget("PiAgent/WebView");
@@ -187,6 +227,10 @@ public sealed class ChatControl : UserControl, IDisposable
                     if (client == null || turnId != null) return;
                     var sessions = await client.RequestAsync("sessions.list", new JObject(), lifetime.Token);
                     Post(new JObject { ["type"] = "sessions", ["sessions"] = sessions["sessions"] }); break;
+                case "deleteEmptySession":
+                    if (client == null || turnId != null || (bool?)message["confirmed"] != true) return;
+                    var deleted = await client.RequestAsync("sessions.deleteEmpty", new JObject { ["savedSessionId"] = message["savedSessionId"], ["confirmed"] = true }, lifetime.Token);
+                    Post(new JObject { ["type"] = "sessionDeleted", ["savedSessionId"] = deleted["savedSessionId"] }); break;
                 case "resumeSession":
                     if (client == null || sessionId == null || turnId != null || approval != null) return;
                     await client.RequestAsync("chat.close", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
@@ -218,6 +262,14 @@ public sealed class ChatControl : UserControl, IDisposable
                     if (decision == "approve") { await factory.SwitchToMainThreadAsync(lifetime.Token); EnsureTargetsSaved(approval); }
                     await client.RequestAsync("changes.decide", new JObject { ["sessionId"] = sessionId, ["proposalId"] = approval["proposalId"], ["revision"] = approval["revision"], ["decision"] = decision }, lifetime.Token); break;
                 case "listCheckpoints":
+                case "gitSetup":
+                    if(action=="gitSetup"){
+                        if(client==null||sessionId==null||turnId!=null)throw new IOException("Finish the current response before Git setup");
+                        var gitParams=new JObject {["sessionId"]=sessionId};
+                        foreach(var key in new[]{"op","previewId","revision","name","email"})if(message[key]!=null)gitParams[key]=message[key]!.DeepClone();
+                        var gitReply=await client.RequestAsync("chat.git",gitParams,lifetime.Token);
+                        if(ownerSession==sessionId)Post(new JObject {["type"]="gitSetup",["op"]=message["op"],["data"]=gitReply});break;
+                    }
                     if (client == null || sessionId == null || turnId != null) return;
                     var history = await client.RequestAsync("changes.list", new JObject { ["sessionId"] = sessionId }, lifetime.Token);
                     Post(new JObject { ["type"] = "checkpoints", ["items"] = history["checkpoints"],["ownerSessionId"]=ownerSession }); break;
@@ -304,23 +356,24 @@ public sealed class ChatControl : UserControl, IDisposable
             active.Disconnected += error => {
                 factory.RunAsync(async () => {
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
-                    if (!disposed && ReferenceEquals(client, active)) Disconnect(error.Message);
+                    if (!disposed && ReferenceEquals(client, active)) { Disconnect(error.Message); await RecoverAsync(); }
                 }).FileAndForget("PiAgent/ChatDisconnect");
             };
             var hello = await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true, selectionContext: true, writes: true, designers:true);
             workspaceBinding = (hello["capabilities"] as JArray)?.ToString().Contains("workspace.bind.v1") == true;
             approvalModes = (hello["capabilities"] as JArray)?.ToString().Contains("chat.approval.v1") == true;
-            await OpenAsync(); heartbeat.Start();
+            await OpenAsync(resumeLast:true); heartbeat.Start();
         }
         catch (Exception error) { Disconnect(error.Message); }
         finally { connecting = false; }
     }
-    private async Task OpenAsync(string? savedId = null)
+    private async Task OpenAsync(string? savedId = null,bool resumeLast=false)
     {
         await factory.SwitchToMainThreadAsync(lifetime.Token);
         var parameters = new JObject();
         if(workspaceBinding)parameters["workspaceUri"]=CurrentWorkspaceUri();
         if (savedId != null) parameters["savedSessionId"] = savedId;
+        else if(resumeLast)parameters["resumeLast"]=true;
         var result = await client!.RequestAsync("chat.open", parameters, lifetime.Token);
         AcceptSession(result);
     }
@@ -332,7 +385,7 @@ public sealed class ChatControl : UserControl, IDisposable
         selectionContext = null; Post(new JObject { ["type"] = "selection", ["context"] = null });
         result["type"] = "session"; result["selectionEnabled"] = true; result["attachmentsEnabled"] = true; if(!approvalModes)result.Remove("approvalModes"); Post(result);
     }
-    private void SolutionClosing() {if(!disposed)Disconnect("솔루션이 닫혔습니다. 새 솔루션을 열면 다시 연결합니다.");}
+    private void SolutionClosing() {recoveryEpoch++;if(!disposed)Disconnect("솔루션이 닫혔습니다. 새 솔루션을 열면 다시 연결합니다.");}
     private void SolutionOpened() {if(!disposed&&pageReady)factory.RunAsync(ConnectAsync).FileAndForget("PiAgent/SolutionOpened");}
     private string CurrentWorkspaceUri()
     {
@@ -348,7 +401,7 @@ public sealed class ChatControl : UserControl, IDisposable
         var current=CurrentWorkspaceUri();
         if(string.Equals(current,workspaceUri,StringComparison.OrdinalIgnoreCase))return;
         if(turnId!=null||approval!=null)throw new IOException("솔루션이 변경되었습니다. 현재 응답을 중지한 뒤 새 대화를 시작해 주세요.");
-        await client.RequestAsync("chat.close",new JObject {["sessionId"]=sessionId},lifetime.Token);sessionId=null;await OpenAsync();
+        await client.RequestAsync("chat.close",new JObject {["sessionId"]=sessionId},lifetime.Token);sessionId=null;await OpenAsync(resumeLast:true);
     }
     private void Post(JObject message)
     {
@@ -366,6 +419,7 @@ public sealed class ChatControl : UserControl, IDisposable
     {
         ThreadHelper.ThrowIfNotOnUIThread();
         if (disposed) return; disposed = true; heartbeat.Stop(); lifetime.Cancel();
+        SystemEvents.PowerModeChanged -= PowerChanged;
         if(solutionEvents!=null){solutionEvents.Opened-=SolutionOpened;solutionEvents.BeforeClosing-=SolutionClosing;}
         var previous = client; client = null; previous?.Dispose(); browser.Dispose(); jobs.JoinTillEmptyAsync().FileAndForget("PiAgent/ChatShutdown");
     }

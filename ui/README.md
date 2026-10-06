@@ -1,5 +1,12 @@
 # RADAgent UI compatibility
 
+0.9.15 user-requested changes: activity.js/activity.css add a native details/summary fold for the
+task list while retaining its original colors and renderer. Original provenance hashes remain in
+reference-files.json; these two adapted files join the documented integration exceptions.
+Git bootstrap uses a compact dismissible banner and the existing sheet. Git preview and first
+commit require explicit user confirmation. IDE reconnect resumes the last workspace session;
+New conversation still creates a fresh one.
+
 Current documentation: 2026-10-06, PiAgent 0.9.14. Settings retain five areas and show the generated
 package version and developer Kim Min-Gul (김민걸, mgkim@jbnu.ac.kr). Account/provider/login views
 remain inside settings; native credentials are OMP-owned. Long-running turns display activity and

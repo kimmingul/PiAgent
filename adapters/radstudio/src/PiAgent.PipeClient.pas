@@ -153,7 +153,7 @@ var Request, Reply: TJSONObject; Bytes: TBytes; Header: array[0..3] of Byte;
   Id: string; Length: Cardinal;
 begin
   FDeadline := GetTickCount64 + 5000;
-  if MatchText(Method,['chat.open','chat.setApproval','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','chat.previewMessageRestore','chat.restoreMessage','chat.extensions','changes.decide','changes.restore','chat.usage','sessions.list','omp.control']) then FDeadline := GetTickCount64 + 60000;
+  if MatchText(Method,['chat.prompt','chat.close','chat.git','chat.open','chat.setApproval','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','chat.previewMessageRestore','chat.restoreMessage','chat.extensions','changes.decide','changes.restore','chat.usage','sessions.list','sessions.deleteEmpty','omp.control']) then FDeadline := GetTickCount64 + 60000;
   Inc(FSequence);
   Id := 'delphi-' + IntToStr(FSequence);
   Request := TJSONObject.Create;
@@ -217,8 +217,8 @@ end;
 function TPiPipeClient.Request(const Method: string; Params: TJSONObject): TJSONObject;
 begin
   if not FReady then begin Params.Free; raise Exception.Create('Handshake required'); end;
-  if not MatchText(Method,['chat.open','chat.setApproval','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','chat.previewMessageRestore','chat.restoreMessage','chat.extensions','chat.prompt','chat.cancel','chat.close','changes.decide','changes.list',
-    'changes.previewRestore','changes.restore','sessions.list','chat.usage','designer.reply','designer.decide','omp.respond','omp.control']) then
+  if not MatchText(Method,['chat.prompt','chat.close','chat.git','chat.open','chat.setApproval','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','chat.previewMessageRestore','chat.restoreMessage','chat.extensions','chat.prompt','chat.cancel','chat.close','changes.decide','changes.list',
+    'changes.previewRestore','changes.restore','sessions.list','sessions.deleteEmpty','chat.usage','designer.reply','designer.decide','omp.respond','omp.control']) then
     begin Params.Free; raise Exception.Create('Method unavailable'); end;
   Result := Call(Method,Params);
 end;

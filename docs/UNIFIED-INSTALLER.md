@@ -1,11 +1,12 @@
 # PiAgent unified Windows installer
 
-Documentation updated: 2026-10-06, product 0.9.14. This PC's current receipt points to
-`0.9.14-20261005095258` and records VS2022/2026 and RAD32/64 registrations.
+Documentation updated: 2026-10-06, public signed product 0.9.16, installed local unsigned preview 0.9.15.
+This PC's current receipt points to `0.9.15-20261006023248` and records VS2022/2026 and RAD32/64 registrations.
+The local preview is `dist/PiAgent-Setup-0.9.15-unsigned-preview.exe`; see [local installation](LOCAL-PREVIEW-0.9.15.md).
 Registration is separate from live validation: current acceptance prioritizes VS2026/RAD13.2 64-bit.
 The signed setup includes the idle/long-turn fixes; [validation history](VALIDATION.md) records remaining limits.
 
-Output: `dist/PiAgent-Setup-0.9.14.exe`. A single self-contained setup supports Windows
+Output: `dist/PiAgent-Setup-0.9.16.exe`. A single self-contained setup supports Windows
 x64 and ARM64. The setup executable uses Windows x64 compatibility on ARM64; installed
 Node.js, .NET and OMP use the host's native architecture. No system PATH or runtime is replaced.
 

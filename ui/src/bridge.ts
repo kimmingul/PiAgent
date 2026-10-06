@@ -4,6 +4,7 @@ import {settings,settingsResult,applyPreferences} from './settings.js';
 import {accountStatus,accountEvent,clearAccount} from './account.js';
 import {rolesResult,clearRoles} from './roles.js';
 import {executionResult,executionEvent,clearExecution} from './execution.js';
+import {gitStatus,gitPanel} from './git.js';
 interface Host { postMessage(frame: Frame): void; addEventListener(type: string, listener: (event: MessageEvent) => void): void; }
 const hostWindow = window as unknown as {chrome: {webview: Host}; piagentPost: (frame: Frame) => void; __agentHost: (frame: Frame) => void};
 const element = (id: string): HTMLElement => document.getElementById(id)!;
@@ -17,6 +18,7 @@ const applyCapabilities=(frame:Frame):void=>{
 const controller = new Controller(frame => hostWindow.chrome.webview.postMessage(frame), {
   interaction, clearInteractions,
   settingsResult,
+  gitStatus:(data,enabled)=>gitStatus(data,enabled,msg=>controller.action(msg)),gitPanel,
   accountStatus,
   accountEvent,clearAccount,
   rolesResult,clearRoles,
@@ -30,7 +32,19 @@ const controller = new Controller(frame => hostWindow.chrome.webview.postMessage
     if (!items.length) body.textContent = '저장된 항목이 없습니다.';
     for (const item of items) {
       const button = document.createElement('button'); button.className = 'icon-btn popup-item'; button.textContent = item.label; button.disabled = !!item.disabled;
-      button.addEventListener('click', () => { element('sheet').hidden = true; item.run(); }); body.appendChild(button);
+      button.addEventListener('click', () => { element('sheet').hidden = true; item.run(); });
+      if(!item.remove){body.appendChild(button);continue;}
+      const row=document.createElement('div');row.className='session-list-row';row.append(button);
+      const remove=document.createElement('button');remove.className='icon-btn';remove.textContent='삭제';remove.setAttribute('aria-label',`${item.label} 삭제`);row.append(remove);
+      remove.onclick=()=>{
+        const prompt=document.createElement('div');prompt.className='session-delete-confirm';
+        const text=document.createElement('span');text.textContent='빈 세션을 삭제할까요? 이 작업은 되돌릴 수 없습니다.';
+        const yes=document.createElement('button');yes.className='icon-btn';yes.textContent='삭제 확인';
+        const no=document.createElement('button');no.className='icon-btn';no.textContent='취소';
+        yes.onclick=()=>{yes.disabled=no.disabled=true;item.remove?.();};
+        no.onclick=()=>{prompt.remove();row.hidden=false;remove.focus();};
+        prompt.append(text,yes,no);row.after(prompt);row.hidden=true;no.focus();
+      };body.append(row);
     }
     body.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
   },

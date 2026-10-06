@@ -317,7 +317,8 @@ Unknown optional capabilities are ignored; required capabilities retain the hell
 
 | Method | Params | Result |
 | --- | --- | --- |
-| sessions.list | empty object | sessions: [{savedSessionId,title,createdAt,updatedAt,resumable}] |
+| sessions.list | empty object | sessions: [{savedSessionId,title,createdAt,updatedAt,resumable,empty,active,deletable}] |
+| sessions.deleteEmpty | savedSessionId, confirmed: true | deleted: true, savedSessionId |
 | chat.open | optional savedSessionId (UUID v4) | sessionId, sessionsEnabled, usageEnabled; savedSessionId/transcript when durable |
 | chat.usage | owning sessionId | provider,model,currency:USD,cost,premiumRequests,tokens,context,providerLimits, optional limitsError |
 
@@ -326,6 +327,18 @@ Resume recreates a child and switches to the saved OMP JSONL; it does not replay
 Only one connection can lease a saved session at a time. The store is scoped to this daemon's workspace and
 private credential parent. Timestamps are epoch milliseconds. Transcript entries use role:user/assistant/status,
 text:string. Maximum displayed history is 200 entries/256 KiB of serialized JSON.
+Empty-session deletion requires `chat.sessions.v1` and explicit `confirmed:true`. The Core obtains
+the target lease lock and rechecks emptiness; active/stale-locked sessions, retained or previously
+truncated history, OMP message records, BTW topics, plans/lineage/checkpoints and unknown files are
+protected. Only verified store-owned regular files are removed; links and arbitrary recursive deletion
+are forbidden. `empty`, `active` and `deletable` are advisory list snapshots, never deletion authority.
+The UI refreshes the list after deletion. Automatic resume skips a deleted last-session target.
+
+Adapters allow 60 seconds for `chat.prompt` preparation/acknowledgement (distinct from the unbounded
+agent turn). Core preparation captures the Git index in one query. VS pauses pending request deadlines
+during Windows Suspend and resets them on Resume, validates the pipe with ping, then retries connection
+up to three times if needed. Recovery resumes the same workspace's saved conversation without replaying
+any prompt. Solution change/closure and adapter disposal invalidate pending recovery.
 Capability violations use -32005; unknown owner session -32012; persistence/lease/OMP failures -32010.
 Background transcript persistence failures emit chat.event kind:warning with text. This event is scoped to
 sessionId/sequence and does not terminate or clear an active turn. Synchronous prompt persistence failures
@@ -395,6 +408,22 @@ expire after at most five minutes; adapters remove cards on cancel/session close
 Interactive frames retain OMP `extension_ui_request` type/method/id and bounded data (256 KiB).
 `ui_event` wraps a normalized original RADAgent renderer event. Native turn completion follows
 session_settled/prompt_result, not an intermediate agent_end that may yield to background work.
+An individual native assistant `message_end` with `stopReason=error` is provisional:
+OMP can automatically retry it. Core retains turn ownership and persists subsequent tools,
+text and the final response until settlement. Retry exhaustion retains the provider error;
+`auto_retry_end` alone does not end the turn. Restricted-mode errors still terminate immediately.
+
+`chat.open` accepts optional boolean `resumeLast` when `chat.sessions.v1` is negotiated;
+it is mutually exclusive with `savedSessionId`. It resumes the last selected workspace-scoped
+conversation without resending a prompt. Explicit New conversation omits the flag.
+
+`chat.git {sessionId, op:status|preview|apply}` requires workspace read and OMP controls.
+Preview/apply additionally require writable native mode outside plan mode, and an idle session.
+Apply requires the connection-owned `previewId`, `revision`, commit author `name` and `email`.
+The preview returns included paths, excluded candidates and .gitignore before/after. Core
+revalidates before mutation and never configures a remote or pushes. Successful apply returns
+`checkpointsEnabled:true`. Opening a non-Git/unborn workspace returns `gitStatus` and
+`gitSetupEnabled`; lack of Git disables checkpoints rather than chat.
 OMP stdin remains single-frame JSONL. Stdout v2 rpc_chunk sequences must be contiguous, ordered,
 valid base64 and UTF-8, and no larger than 64 MiB; raw large frames are not forwarded to IDEs.
 

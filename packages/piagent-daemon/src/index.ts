@@ -1,3 +1,4 @@
+import {GitSetup} from '@piagent/core';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname,join } from 'node:path';
@@ -37,7 +38,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
   if(options.omp?.profile==='native'&&(!options.secure||!options.workspaceRoot||!options.allowWrites))throw new Error('Native OMP requires authenticated transport, an explicit workspace and --allow-writes');
   const workspace = options.workspaceRoot ? await WorkspaceReader.create(options.workspaceRoot) : undefined;
   if (options.allowWrites && (!options.secure || !workspace)) throw new Error('Writes require secure transport and an explicit workspace');
-  const changes = options.allowWrites ? await WorkspaceChanges.create(workspace!) : undefined;
+  const changes = options.allowWrites && (await new GitSetup(workspace!.root).status())['state']==='ready' ? await WorkspaceChanges.create(workspace!) : undefined;
   const changesByRoot=new Map<string,WorkspaceChanges>();
   if(changes&&workspace)changesByRoot.set(workspace.root.toLowerCase(),changes);
   let sessionBase:string|undefined;
@@ -48,7 +49,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<{
     let edits=changesByRoot.get(bound.root.toLowerCase());
     if(options.allowWrites&&!edits){
       const git=await lstat(join(bound.root,'.git')).catch(error=>{if(error.code==='ENOENT')return undefined;throw error;});
-      if(git?.isDirectory()&&!git.isSymbolicLink()){edits=await WorkspaceChanges.create(bound);changesByRoot.set(bound.root.toLowerCase(),edits);}
+      if(git?.isDirectory()&&!git.isSymbolicLink()&&(await new GitSetup(bound.root).status())['state']==='ready'){edits=await WorkspaceChanges.create(bound);changesByRoot.set(bound.root.toLowerCase(),edits);}
     }
     if(!sessionBase)throw new Error('Private session storage unavailable');
     const saved=new SessionStore(join(sessionBase,createHash('sha256').update(bound.root.toLowerCase()).digest('hex')));await saved.initialize();

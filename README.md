@@ -1,10 +1,10 @@
 # PiAgent
 
-현재 버전 **0.9.14** · 문서 갱신일 **2026-10-06 KST**.
+현재 개발 버전 **0.9.16** · 공개 사전 릴리즈 **0.9.16** · 문서 갱신일 **2026-10-06 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent-site/) ·
-[0.9.14 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.14).
+[0.9.16 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.16).
 소스와 릴리즈 저장소는 비공개이므로 다운로드에는 저장소 접근 권한이 필요하다.
 
 Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 Delphi BPL은
@@ -13,7 +13,10 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-서명된 통합 설치파일은 `dist/PiAgent-Setup-0.9.14.exe`다. Core와 RAD13.2 32/64-bit,
+공개 서명 설치파일은 `dist/PiAgent-Setup-0.9.16.exe`다. 이 PC에는 사용자 요청에 따라
+`dist/PiAgent-Setup-0.9.15-unsigned-preview.exe`를 설치했다. 새 릴리즈 빌드는 실행 중인 IDE를
+자동 교체하지 않는다. 설치 전 IDE를 종료하고 새 설치파일을 실행한다.
+Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
 [설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.md).
 
@@ -23,15 +26,21 @@ VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다
 - 사용자별 루트는 `%LOCALAPPDATA%\Programs\PiAgent`, release별 runtime을 사용한다.
   ARM64 Windows에서는 ARM64 Node/.NET/OMP를 사용하고 setup은 x64 호환 실행이다.
 
-이 PC의 receipt는 `0.9.14-20261005095258` release를 가리키며 VS2022/2026와 RAD32/64
+이 PC의 receipt는 `0.9.15-20261006023248` release를 가리키며 VS2022/2026와 RAD32/64
 등록을 기록한다. 설치 기록은 실사용 검증 완료를 뜻하지 않는다. 현재 우선 실사용 검증 대상은
 **VS2026와 RAD13.2 64-bit**다. VS2022 최종 검증과 RAD32 UI 검증은 완료로 주장하지 않는다.
 
 ## 현재 기능과 검증
 
+0.9.16은 전송 준비 요청의 VS/RAD 시간 제한을 60초로 맞추고 Git 스냅샷을 일괄 조회한다.
+VS는 절전 중 요청 시간을 멈추고 복귀 시 연결을 확인·복구한다. 메시지는 자동 재전송하지 않는다.
+[수정 및 검증](docs/RELEASE-0.9.16.md).
+
 스트리밍 채팅·취소·BTW·설정·UI 로그인·모델/effort·OMP 역할/프리셋, 첨부/선택 코드,
 workspace 자동완성·MCP/플러그인·내보내기, 저장 세션 재개·메시지 분기/복원,
 다중 파일 승인/checkpoint 복원·사용량, 실행 제어·하위 에이전트 관리와 GUI harness를 제공한다.
+0.9.15 개발본은 대화 목록에서 사용하지 않는 빈 세션을 확인 후 삭제할 수 있다.
+대화 기록이나 BTW·분기·복원 데이터가 있거나 사용 중인 세션은 보호한다.
 기능은 OMP profile, capability와 IDE별 지원 범위에 따라 활성화된다.
 [UI 구현](docs/CHAT-UI-IMPLEMENTATION.md) · [GUI harness](docs/GUI-HARNESS.md).
 
@@ -46,6 +55,14 @@ Native 도구나 추가 폴더의 모든 변경을 PiAgent checkpoint가 복원�
 실제 최종 응답과 Core `completed` 기록을 확인했다. 이는 장시간 실행 검증이며 모든 기능의 전수
 실사용 검증 완료를 의미하지 않는다. [장시간 작업 기록](docs/LONG-RUNNING-TURN-FIX.md).
 기존 [acceptance](docs/INSTALLED-ACCEPTANCE-0.9.14.md)의 PARTIAL/MANUAL 항목은 남아 있다.
+
+0.9.15는 native OMP의 개별 provider 오류를 최종 실패로 조기 처리하던 문제를 수정한다.
+자동 재시도 후 도구·최종 답변·저장 transcript를 유지하고 최종 settlement에서 종료한다.
+[재시도 진단과 수정](docs/PROVIDER-RETRY-DIAGNOSIS-20261006.md). 이 PC의 실행 중인 설치본은
+위 receipt의 미서명 0.9.15로 교체했다. [로컬 설치 검증](docs/LOCAL-PREVIEW-0.9.15.md).
+
+0.9.15 개발본은 작업목록 접기, 로컬 Git 미리보기·확인 첫 커밋, 프로젝트별 마지막 대화 자동
+재개도 포함한다. [로컬 Git/세션 재개](docs/LOCAL-GIT-AND-RESUME.md).
 
 ## 현재 개발 명령
 

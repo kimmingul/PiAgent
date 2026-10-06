@@ -10,12 +10,25 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDaemon, pipePath } from '@piagent/daemon';
+import {FrameDecoder,encodeFrame} from '@piagent/protocol';
 const execute = promisify(execFile);
 const file = path => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const csharp = file('adapters/visualstudio/PiAgent.Transport.Smoke/bin/Release/net10.0/PiAgent.Transport.Smoke.dll');
 const releaseVersion = JSON.parse(await readFile(file('package.json'), 'utf8')).version;
 const delphi = platform => file(`adapters/radstudio/bin/${platform}/${releaseVersion}/PipeSmoke.exe`);
 const windows = { skip: process.platform !== 'win32', timeout: 15_000 };
+test('suspended C# request deadlines do not disconnect a healthy peer',windows,async()=>{
+ const name='piagent-suspend-'+randomUUID();const sockets=new Set();const timers=[];
+ const server=createServer(socket=>{sockets.add(socket);socket.once('close',()=>sockets.delete(socket));const frames=new FrameDecoder();
+  socket.on('data',chunk=>frames.push(chunk,body=>{const frame=JSON.parse(body.toString());const reply=result=>socket.write(encodeFrame({jsonrpc:'2.0',id:frame.id,result}));
+   if(frame.method==='adapter.hello')reply({protocolVersion:1,capabilities:['core.ping']});
+   else timers.push(setTimeout(()=>{if(!socket.destroyed)reply({pong:true,nonce:frame.params.nonce});},7000));
+  }));});
+ await new Promise(resolve=>server.listen(pipePath(name),resolve));
+ const env={...process.env,PIAGENT_DEV_PIPE:'1'};delete env.PIAGENT_AUTH_FILE;
+ try{const result=JSON.parse((await execute('dotnet',[csharp,name,'2026','suspend'],{windowsHide:true,timeout:14000,env})).stdout.trim());assert.equal(result.survivedSuspension,true);}
+ finally{timers.forEach(clearTimeout);for(const socket of sockets)socket.destroy();await new Promise(resolve=>server.close(resolve));}
+});
 test('C# adapter routes workspace binding, all access modes and extension listing through the secure pipe',{...windows,timeout:30000},async()=>{
   const root=await mkdtemp(join(tmpdir(),'piagent-adapter-controls-')),workspace=join(root,'IDE-project'),authFile=join(root,'private','token');
   await mkdir(workspace);let daemon;
@@ -82,6 +95,14 @@ test('secure C# VS and Delphi Win32/Win64 authenticate before handshake and reje
   }
 });
 
+test('C# prompt acknowledgements slower than five seconds retain the connection', {...windows,timeout:25000},async()=>{
+ const root=await mkdtemp(join(tmpdir(),'piagent-slow-ack-'));let daemon;
+ const name='piagent-slow-'+randomUUID(),authFile=join(root,'private','token');
+ try{daemon=await startDaemon({pipeName:name,secure:{authFile},omp:{executable:process.execPath,executableArgs:[file('tests/fixtures/chat-omp.mjs')],cwd:root}});
+  const result=JSON.parse((await execute('dotnet',[csharp,name,'2026','slow-ack'],{windowsHide:true,timeout:20000,env:{...process.env,PIAGENT_AUTH_FILE:authFile}})).stdout.trim());
+  assert.equal(result.accepted,true);assert.equal(result.connected,true);assert.ok(result.elapsedMs>=6000);
+ }finally{await daemon?.close();await rm(root,{recursive:true,force:true});}
+});
 test('secure VS workspace chat preserves streaming, ping, cancellation and tool results', { ...windows, timeout: 25_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'piagent-adapter-security-'));
   const name = `piagent-secure-chat-${randomUUID()}`, authFile = join(root, 'private', 'token');

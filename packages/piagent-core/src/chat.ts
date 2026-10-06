@@ -28,6 +28,7 @@ import {modelRoles} from './model-roles.js';
 import {Timeline,timelineNotice,type TimelinePreview} from './timeline.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {TurnProgress} from './turn-progress.js';
+import {GitSetup} from './git-setup.js';
 export interface ChatServices { sessions?:SessionStore; usage?:UsageService; lifecycle?:(event:Record<string,unknown>)=>void; }
 export const WORKSPACE_BIND_CAPABILITY='workspace.bind.v1';
 export const APPROVAL_MODE_CAPABILITY='chat.approval.v1';
@@ -51,6 +52,9 @@ export class ChatSession {
   private id: string | undefined;
   private turn: string | undefined;
   private cancelling = false;
+  private providerError: string | undefined;
+  private gitSetup:GitSetup|undefined;
+  private gitBusy=false;
   private opening = false;
   private disposed = false;
   private retiring: Promise<void> | undefined;
@@ -101,6 +105,7 @@ export class ChatSession {
   get supportsUsage():boolean {return !!this.services.usage;}
 
   async handle(method: string, params: Record<string, unknown>, workspaceNegotiated = false, writesNegotiated = false, sessionsNegotiated=false, usageNegotiated=false, batchNegotiated=false, controlsNegotiated=false,designerNegotiated=false,timelineNegotiated=false,internalTransition=false): Promise<Record<string, unknown>> {
+    if(this.gitBusy)throw new ChatError(-32013,'Git setup is in progress');
     if(this.restoringMessage&&!internalTransition)throw new ChatError(-32013,'Message restore is in progress');
     if (this.disposed) throw new ChatError(-32010, 'Connection closed');
     if(method==='sessions.list') {
@@ -108,10 +113,17 @@ export class ChatSession {
       if(Object.keys(params).length)throw new ChatError(-32602,'Invalid params');
       return {sessions:await this.services.sessions.list()};
     }
+    if(method==='sessions.deleteEmpty'){
+      if(!sessionsNegotiated||!this.services.sessions)throw new ChatError(-32005,'Session capability not negotiated');
+      if(Object.keys(params).some(key=>!['savedSessionId','confirmed'].includes(key))||params['confirmed']!==true||typeof params['savedSessionId']!=='string')throw new ChatError(-32602,'Invalid confirmed deletion');
+      await this.services.sessions.deleteEmpty(params['savedSessionId']);
+      return {deleted:true,savedSessionId:params['savedSessionId']};
+    }
     if (method === 'chat.open') {
       await this.retiring;
       if (this.disposed) throw new ChatError(-32010, 'Connection closed');
-      if (Object.keys(params).some(key=>!['savedSessionId','workspaceUri','approvalMode'].includes(key))) throw new ChatError(-32602, 'Invalid params');
+      if (Object.keys(params).some(key=>!['savedSessionId','workspaceUri','approvalMode','resumeLast'].includes(key))) throw new ChatError(-32602, 'Invalid params');
+      if(params['resumeLast']!==undefined&&(typeof params['resumeLast']!=='boolean'||!sessionsNegotiated||params['savedSessionId']!==undefined))throw new ChatError(-32602,'Invalid automatic resume request');
       if(params['approvalMode']!==undefined&&!['always-ask','write','yolo','plan'].includes(String(params['approvalMode'])))throw new ChatError(-32602,'Invalid approval mode');
       if('savedSessionId' in params&&!sessionsNegotiated)throw new ChatError(-32005,'Session capability not negotiated');
       if (this.opening || this.omp) throw new ChatError(-32011, 'Session already open or opening');
@@ -124,7 +136,7 @@ export class ChatSession {
           this.options={...this.options,cwd:bound.workspace.root};
         }
       }catch(error){this.opening=false;throw error;}
-      try {this.lease=sessionsNegotiated&&this.services.sessions?await this.services.sessions.acquire(params['savedSessionId']):undefined;}
+      try {const selected=params['resumeLast']===true?await this.services.sessions?.last():params['savedSessionId'];this.lease=sessionsNegotiated&&this.services.sessions?await this.services.sessions.acquire(selected):undefined;}
       catch(error){this.opening=false;throw error;}
       const preferred=this.lease&&!params['savedSessionId']?await new PreferencesStore(this.lease.store.root).read():undefined;
       this.approvalMode=String(params['approvalMode']??this.lease?.record.approvalMode??preferred?.defaultApproval??'always-ask');
@@ -175,8 +187,12 @@ export class ChatSession {
         this.id = randomUUID(); this.sequence = 0; this.closeReason=undefined;
         if(this.lease&&controlsNegotiated)this.btw=new BtwService(join(this.lease.store.root,'btw'),this.options,event=>this.sendOmp({type:'ui_event',event}));
         this.timeline=this.lease&&controlsNegotiated&&timelineNegotiated?new Timeline(this.lease,this.changes):undefined;this.messagePreview=undefined;
+        this.gitSetup=this.workspace?new GitSetup(this.workspace.root):undefined;
+        const gitStatus=this.gitSetup?await this.gitSetup.status():undefined;
+        if(this.lease)await this.lease.store.remember(this.lease.record.savedSessionId);
         return { messageRestoreEnabled:!!this.timeline,sessionId: this.id, approvalMode:this.approvalMode, approvalModes:['always-ask','write','yolo','plan'], ompProfile:native?'native':'restricted', ompControlsEnabled:controlsNegotiated, toolsEnabled: this.workspaceEnabled, usageEnabled:usageNegotiated&&this.supportsUsage, sessionsEnabled:sessionsNegotiated&&this.supportsSessions,
           btwEnabled:!!this.btw,preferencesEnabled:!!this.lease,exportEnabled:controlsNegotiated,filesEnabled:this.workspaceEnabled,checkpointsEnabled:!!this.changes&&this.writesEnabled,
+          ...(gitStatus?{gitStatus,gitSetupEnabled:controlsNegotiated&&workspaceNegotiated&&writesNegotiated&&native}:{}),
           ...(this.lease?{savedSessionId:this.lease.record.savedSessionId,transcript:this.lease.record.transcript}:{}),
           ...(this.workspaceEnabled ? { workspaceUri: pathToFileURL(this.workspace!.root).href, readOnly: !this.writesEnabled, writeEnabled: this.writesEnabled } : {}) };
       } catch (error) {
@@ -188,6 +204,21 @@ export class ChatSession {
     }
     if (!this.id || !this.omp || this.opening || this.retiring || params['sessionId'] !== this.id)
       throw new ChatError(-32012, 'Unknown or unavailable session');
+    if(method==='chat.git'){
+      if(!this.gitSetup||!controlsNegotiated||!workspaceNegotiated)throw new ChatError(-32005,'Git setup unavailable');
+      if(this.turn||this.finishing||this.admitting||this.restoringMessage||this.controlOperation||this.login?.active)throw new ChatError(-32013,'Finish the current operation before Git setup');
+      const op=params['op'];if(!['status','preview','apply'].includes(String(op))||Object.keys(params).some(k=>!['sessionId','op','previewId','revision','name','email'].includes(k)))throw new ChatError(-32602,'Invalid Git setup parameters');
+      if(op!=='status'&&(!writesNegotiated||this.options.profile!=='native'||this.approvalMode==='plan'))throw new ChatError(-32005,'Git initialization requires writable native mode outside plan mode');
+      this.gitBusy=true;
+      try{
+        if(op==='status')return await this.gitSetup.status();
+        if(op==='preview')return await this.gitSetup.preview();
+        const result=await this.gitSetup.apply(params['previewId'],params['revision'],params['name'],params['email']);
+        this.changes=await WorkspaceChanges.create(this.workspace!);
+        this.timeline=this.lease&&timelineNegotiated?new Timeline(this.lease,this.changes):undefined;
+        return {...result,checkpointsEnabled:true};
+      }finally{this.gitBusy=false;}
+    }
     if(method==='chat.addFolder') {
       if(Object.keys(params).some(key=>!['sessionId','path'].includes(key))||typeof params['path']!=='string'||params['path'].length>4096||/[\r\n\0]/.test(params['path']))throw new ChatError(-32602,'Invalid folder');
       if(this.turn||this.options.profile!=='native'||this.approvalMode==='plan'||!controlsNegotiated)throw new ChatError(-32005,'Folder roots require idle native OMP outside plan mode');
@@ -401,7 +432,7 @@ export class ChatSession {
       catch { throw new ChatError(-32602, 'Invalid selection context'); }
     }
     if(!message.trimStart().startsWith('/'))prompt=designerPrompt(prompt,this.designer.enabled,this.designer.writesEnabled);
-    turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.closeReason=undefined; this.seenTools.clear();
+    turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.providerError=undefined; this.closeReason=undefined; this.seenTools.clear();
     this.turnStarted=Date.now();
     if(this.changes&&this.writesEnabled)try{this.turnSnapshot=await this.changes.beginTurn();}catch(error){this.turnSnapshot=undefined;this.emit('warning',error instanceof Error?error.message:'Turn checkpoint unavailable');}
     if(this.lease&&this.btw&&this.lease.record.ompFile) {
@@ -448,6 +479,10 @@ export class ChatSession {
     }
     if (!this.turn) return;
     const type = frame['type'];
+    if(type==='auto_retry_end') {
+      if(frame['success']===true)this.providerError=undefined;
+      else if(typeof frame['finalError']==='string')this.providerError=frame['finalError'].slice(0,2048);
+    }
     if (type === 'host_tool_call' && this.workspaceEnabled) { void this.runTool(frame); return; }
     const stream = frame['assistantMessageEvent'];
     if (type === 'message_update' && isObject(stream) && stream['type'] === 'text_delta' && typeof stream['delta'] === 'string') {
@@ -464,12 +499,21 @@ export class ChatSession {
     } else if (type === 'message_end' && isObject(frame['message'])
       && ['error', 'aborted'].includes(String(frame['message']['stopReason']))) {
       if (this.cancelling || frame['message']['stopReason'] === 'aborted') this.finish('cancelled');
-      else this.finish('error', typeof frame['message']['errorMessage'] === 'string'
-        ? frame['message']['errorMessage'].slice(0, 2048) : 'OMP model request failed');
+      else {
+        this.providerError=typeof frame['message']['errorMessage'] === 'string'
+          ? frame['message']['errorMessage'].slice(0, 2048) : 'OMP model request failed';
+        // Native OMP may automatically retry this individual assistant failure.
+        // Keep ownership until the session settles, including tools and transcript.
+        if(this.options.profile!=='native')this.finish('error',this.providerError);
+      }
+    } else if(type==='message_end'&&isObject(frame['message'])&&frame['message']['role']==='assistant') {
+      this.providerError=undefined;
     } else if ((this.options.profile==='native'&&(type==='session_settled'||(type==='prompt_result'&&frame['sessionSettled']!==false)))
       || (this.options.profile!=='native'&&type === 'agent_end' && frame['isTerminal'] !== false)
       || (type === 'prompt_result' && frame['agentInvoked'] === false)) {
-      this.finish(this.cancelling||frame['status']==='aborted' ? 'cancelled' : frame['status']==='error'?'error':'completed',isObject(frame['error'])?String(frame['error']['message']):undefined);
+      const error=isObject(frame['error'])&&typeof frame['error']['message']==='string'?frame['error']['message'].slice(0,2048):this.providerError;
+      const failed=frame['status']==='error'||(frame['status']===undefined&&error!==undefined);
+      this.finish(this.cancelling||frame['status']==='aborted' ? 'cancelled' : failed?'error':'completed',failed?error:undefined);
     } else if (type === 'extension_error' || type === 'host_tool_call'
       || (type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(String(frame['method'])))) {
       this.finish('error', type === 'extension_error' && typeof frame['error'] === 'string'
@@ -525,7 +569,7 @@ export class ChatSession {
   private reportProgress(): void {
     if(!this.turn||!this.progress||this.finishing||this.retiring)return;
     const activity=this.progress.snapshot(!!this.interactions?.waiting||!!this.approvals?.waiting||this.designer.waiting,this.tools.size,this.cancelling);
-    const labels:Record<string,string>={running:'작업 진행 중',tools:'도구 실행 중',subagents:'하위 에이전트 작업 중',awaiting_input:'승인·입력 대기 중',awaiting_progress:'새 진행 소식을 기다리는 중 · 자동 중단하지 않습니다',cancelling:'중지 요청 처리 중'};
+    const labels:Record<string,string>={running:'작업 진행 중',retrying:'모델 응답 자동 재시도 중',tools:'도구 실행 중',subagents:'하위 에이전트 작업 중',awaiting_input:'승인·입력 대기 중',awaiting_progress:'새 진행 소식을 기다리는 중 · 자동 중단하지 않습니다',cancelling:'중지 요청 처리 중'};
     this.send({sessionId:this.id!,turnId:this.turn,sequence:++this.sequence,kind:'activity',text:labels[activity.phase]!,frame:activity});
     if(activity.phase!==this.lastProgressPhase||Date.now()-this.lastProgressLog>=60000){
       this.diagnose('activity',activity);this.lastProgressPhase=activity.phase;this.lastProgressLog=Date.now();

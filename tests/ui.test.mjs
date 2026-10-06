@@ -103,7 +103,7 @@ test('reference CSS, icons and renderer modules retain the recorded source bytes
  const hashes=JSON.parse(await readFile(new URL('../ui/reference-files.json',import.meta.url),'utf8'));
  for(const [name,hash] of Object.entries(hashes)) {
   // Integration changes are documented in ui/README.md; retain original provenance hashes.
-  if(['chat.html','chat.js','composer.js','clicks.js','plusmenu.js','btw.js','checkpoints.js','approval.js','markdown.js'].includes(name)||name.startsWith('lang/'))continue;
+  if(['chat.html','chat.js','composer.js','clicks.js','plusmenu.js','btw.js','checkpoints.js','approval.js','markdown.js','activity.js','activity.css'].includes(name)||name.startsWith('lang/'))continue;
   const bytes=await readFile(new URL('../ui/src/'+name,import.meta.url));
   assert.equal(createHash('sha256').update(bytes).digest('hex'),hash,name);
  }

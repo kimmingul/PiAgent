@@ -13,7 +13,7 @@ type
     procedure Handle(const Json: string);
     procedure Notification(const Json: string);
     procedure Post(Obj: TJSONObject);
-    procedure OpenSession(const Saved: string = '');
+    procedure OpenSession(const Saved: string = ''; const ResumeLast: Boolean = False);
     function Rpc(const Method: string; Params: TJSONObject): TJSONObject;
   protected
     procedure Execute; override;
@@ -64,10 +64,11 @@ begin
 end;
 function TPiChatWorker.Rpc(const Method: string; Params: TJSONObject): TJSONObject;
 begin Result := FClient.Request(Method,Params); end;
-procedure TPiChatWorker.OpenSession(const Saved: string);
+procedure TPiChatWorker.OpenSession(const Saved: string; const ResumeLast: Boolean);
 var Params, Reply: TJSONObject;
 begin
   Params := TJSONObject.Create; if Saved <> '' then Params.AddPair('savedSessionId',Saved);
+  if (Saved = '') and ResumeLast then Params.AddPair('resumeLast',TJSONBool.Create(True));
   if FWorkspace <> '' then Params.AddPair('workspaceUri',FWorkspace);
   if (Saved <> '') and (FMode <> '') then Params.AddPair('approvalMode',FMode);
   Reply := Rpc('chat.open',Params);
@@ -116,19 +117,25 @@ begin
           Post(TJSONObject.Create.AddPair('type','operationError').AddPair('action','connect').AddPair('message','이미 같은 프로젝트에 연결되어 있습니다.')); Exit;
         end;
         if FSession <> '' then begin Reply := Rpc('chat.close',TJSONObject.Create.AddPair('sessionId',FSession));Reply.Free;end;
-        FWorkspace := Msg.GetValue<string>('workspaceUri','');if FWorkspace = '' then raise Exception.Create('Workspace unavailable');OpenSession;Exit;
+        FWorkspace := Msg.GetValue<string>('workspaceUri','');if FWorkspace = '' then raise Exception.Create('Workspace unavailable');OpenSession('',True);Exit;
       end;
       FWorkspace := Msg.GetValue<string>('workspaceUri','');
       if FWorkspace = '' then raise Exception.Create('Open a RAD Studio project before connecting');
       Name := GetEnvironmentVariable('PIAGENT_PIPE_NAME'); if Name = '' then Name := 'piagent-dev';
       EnsureInstalledCore(Name,FCancel);
       FClient := TPiPipeClient.Create(Name,FCancel); FClient.OnNotification := Notification;
-      FClient.Hello('RAD-Chat','rad-chat-' + IntToStr(GetCurrentProcessId),True); OpenSession; Exit;
+      FClient.Hello('RAD-Chat','rad-chat-' + IntToStr(GetCurrentProcessId),True); OpenSession('',True); Exit;
     end;
     if FClient = nil then raise Exception.Create('Session unavailable');
     if Action = 'listSessions' then begin
       Reply := Rpc('sessions.list',TJSONObject.Create);
       try Reply.AddPair('type','sessions'); Post(TJSONObject(Reply.Clone)); finally Reply.Free; end; Exit;
+    end;
+    if Action = 'deleteEmptySession' then begin
+      if FTurn <> '' then raise Exception.Create('Turn is busy');
+      if not Msg.GetValue<Boolean>('confirmed',False) then raise Exception.Create('Deletion confirmation required');
+      Reply := Rpc('sessions.deleteEmpty',TJSONObject.Create.AddPair('savedSessionId',Msg.GetValue<string>('savedSessionId','')).AddPair('confirmed',TJSONBool.Create(True)));
+      try Reply.AddPair('type','sessionDeleted');Post(TJSONObject(Reply.Clone));finally Reply.Free;end;Exit;
     end;
     if Action = 'resumeSession' then begin
       if FTurn <> '' then raise Exception.Create('Turn is busy');
@@ -199,6 +206,13 @@ begin
       if (FApproval = nil) or (Msg.GetValue<string>('proposalId','') <> FApproval.GetValue<string>('proposalId','')) then begin Params.Free; raise Exception.Create('Approval unavailable'); end;
       Params.AddPair('proposalId',FApproval.GetValue<string>('proposalId','')); Params.AddPair('revision',FApproval.GetValue<string>('revision',''));
       Params.AddPair('decision',Msg.GetValue<string>('decision','')); Reply := Rpc('changes.decide',Params); Reply.Free; Exit;
+    end;
+    if Action = 'gitSetup' then begin
+      if FTurn <> '' then begin Params.Free; raise Exception.Create('Finish current response before Git setup'); end;
+      for Name in ['op','previewId','revision','name','email'] do
+        if Msg.GetValue(Name) <> nil then Params.AddPair(Name,TJSONValue(Msg.GetValue(Name).Clone));
+      Reply := Rpc('chat.git',Params);
+      Post(TJSONObject.Create.AddPair('type','gitSetup').AddPair('op',Msg.GetValue<string>('op','')).AddPair('data',Reply));Exit;
     end;
     if Action = 'listCheckpoints' then begin
       Reply := Rpc('changes.list',Params);

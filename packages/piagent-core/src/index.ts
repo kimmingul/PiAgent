@@ -44,7 +44,7 @@ export class Session {
     let value: unknown;
     try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)) as unknown; }
     catch { return fallback; }
-    if (!isObject(value) || typeof value['method'] !== 'string' || !['chat.previewMessageRestore','chat.restoreMessage','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','designer.reply','designer.decide','omp.respond','omp.control','chat.extensions','chat.setApproval','chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore','sessions.list','chat.usage'].includes(value['method'])
+    if (!isObject(value) || typeof value['method'] !== 'string' || !['chat.git','chat.previewMessageRestore','chat.restoreMessage','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','designer.reply','designer.decide','omp.respond','omp.control','chat.extensions','chat.setApproval','chat.open', 'chat.prompt', 'chat.cancel', 'chat.close', 'changes.decide', 'changes.list', 'changes.previewRestore', 'changes.restore','sessions.list','sessions.deleteEmpty','chat.usage'].includes(value['method'])
       || !('id' in value) || !validId(value['id']) || fallback?.error?.code !== -32601) return fallback;
     const id = value['id'];
     if (!this.ready) return failure(id, -32002, 'Handshake required');
@@ -142,3 +142,5 @@ export class Session {
     });
   }
 }
+
+export {GitSetup} from './git-setup.js';

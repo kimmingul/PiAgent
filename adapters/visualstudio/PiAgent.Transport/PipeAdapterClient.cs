@@ -21,6 +21,13 @@ public sealed class PipeAdapterClient : IDisposable
     private readonly UTF8Encoding utf8 = new UTF8Encoding(false, true);
     private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JObject>> pending = new();
+    private readonly ConcurrentDictionary<string, Tuple<CancellationTokenSource,int>> deadlines = new();
+    private volatile bool suspended;
+    public void SuspendRequestTimeouts(bool value)
+    {
+        suspended = value;
+        foreach (var item in deadlines.Values) try { item.Item1.CancelAfter(value ? Timeout.Infinite : item.Item2); } catch (ObjectDisposedException) { }
+    }
     private bool ready;
     private readonly string pipeName;
     public event Action<JObject>? Notification;
@@ -112,9 +119,9 @@ public sealed class PipeAdapterClient : IDisposable
     }
     public Task<JObject> RequestAsync(string method, JObject parameters, CancellationToken cancellation)
     {
-        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "chat.setApproval", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "chat.usage" }.Contains(method))
+        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "chat.setApproval", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "sessions.deleteEmpty", "chat.git", "chat.usage" }.Contains(method))
             throw new InvalidOperationException("Unsupported request or handshake required");
-        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.open", "chat.usage", "chat.setApproval", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
+        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.prompt", "chat.close", "chat.git", "sessions.deleteEmpty", "chat.open", "chat.usage", "chat.setApproval", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
     }
     private async Task<JObject> CallAsync(string method, JObject parameters, CancellationToken cancellation, int timeout = 5000)
     {
@@ -123,8 +130,11 @@ public sealed class PipeAdapterClient : IDisposable
         var completion = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!pending.TryAdd(id, completion)) throw new InvalidOperationException();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation, lifetime.Token);
-        deadline.CancelAfter(timeout);
-        using var registration = deadline.Token.Register(() => Fail(new OperationCanceledException("Pipe request cancelled or timed out")));
+        deadlines[id] = Tuple.Create(deadline, timeout);
+        deadline.CancelAfter(suspended ? Timeout.Infinite : timeout);
+        using var registration = deadline.Token.Register(() => Fail(cancellation.IsCancellationRequested || lifetime.IsCancellationRequested
+            ? new OperationCanceledException("Pipe request cancelled: " + method)
+            : new TimeoutException("Pipe request timed out: " + method + " (" + timeout + " ms)")));
         try
         {
             var body = utf8.GetBytes(new JObject { ["jsonrpc"] = "2.0", ["id"] = id,
@@ -145,7 +155,7 @@ public sealed class PipeAdapterClient : IDisposable
             if (reply["error"] is JObject error) throw new IOException($"RPC {(int?)error["code"]}: {(string?)error["message"]}");
             return reply["result"] as JObject ?? throw new InvalidDataException("Expected object result");
         }
-        finally { pending.TryRemove(id, out _); }
+        finally { deadlines.TryRemove(id, out _); pending.TryRemove(id, out _); }
     }
     private async Task ReadLoopAsync()
     {

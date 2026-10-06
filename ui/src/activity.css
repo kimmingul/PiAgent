@@ -69,14 +69,15 @@
 
 #todo-panel {
   flex: 0 0 auto;
-  max-height: 32vh;
-  overflow-y: auto;
-  padding: 6px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--assistantBg);
   font-size: 12px;
 }
 #todo-panel[hidden] { display: none; }
+.todo-summary { padding: 6px 16px; cursor: pointer; color: var(--muted); font-weight: 600; }
+.todo-summary:hover { color: var(--fg); }
+.todo-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.todo-body { max-height: min(28vh, 240px); overflow-y: auto; padding: 0 16px 6px; }
 .todo-title { font-weight: 600; color: var(--muted); margin-bottom: 2px; }
 .todo-item { display: flex; gap: 6px; }
 .todo-item.completed { color: var(--muted); text-decoration: line-through; }

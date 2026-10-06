@@ -136,7 +136,7 @@ public static class InstallerEngine
                 throw new IOException("기존 설치 기록이 올바르지 않습니다.");
         }
         Directory.CreateDirectory(Root);
-        var release = Path.Combine(Root, "releases", "0.9.14-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
+        var release = Path.Combine(Root, "releases", "0.9.16-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
         var selectedVs = detected.VisualStudio.Where(v => (v.Major == 17 && selection.Vs22) || (v.Major == 18 && selection.Vs26)).ToList();
         var receipt = new Receipt(Product, Root, release, previous?.VisualStudio.ToList() ?? new(), previous?.RadKeys.ToList() ?? new(), previous?.PreviousRad.ToList() ?? new());
         try
@@ -185,7 +185,7 @@ public static class InstallerEngine
             if (omp != null) CreateShortcut("OMP 실행 (로그인 및 설정)", omp, "");
             CreateShortcut("PiAgent 제거", setup, "--uninstall");
             using var uninstall = Registry.CurrentUser.CreateSubKey(UninstallKey);
-            uninstall.SetValue("DisplayName", "PiAgent"); uninstall.SetValue("DisplayVersion", "0.9.14");
+            uninstall.SetValue("DisplayName", "PiAgent"); uninstall.SetValue("DisplayVersion", "0.9.16");
             uninstall.SetValue("Publisher", "Nanum Space Co., Ltd."); uninstall.SetValue("InstallLocation", Root);
             uninstall.SetValue("UninstallString", "\"" + setup + "\" --uninstall"); uninstall.SetValue("DisplayIcon", setup);
             uninstall.SetValue("NoModify", 1, RegistryValueKind.DWord); uninstall.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -218,7 +218,7 @@ public static class InstallerEngine
     private static string DownloadOmp()
     {
         using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("PiAgent-Setup/0.9.14");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("PiAgent-Setup/0.9.16");
         var text = http.GetStringAsync("https://api.github.com/repos/can1357/oh-my-pi/releases/latest").GetAwaiter().GetResult();
         using var data = JsonDocument.Parse(text);
         var name = "omp-windows-" + Architecture + ".exe";
@@ -255,7 +255,7 @@ public static class InstallerEngine
         }
         if (!receipt.RadKeys.Contains(keyName)) receipt.RadKeys.Add(keyName); SaveReceipt(receipt);
         foreach (var name in key.GetValueNames().Where(n => Path.GetFileName(n).Equals("PiAgent370.bpl", StringComparison.OrdinalIgnoreCase))) key.DeleteValue(name, false);
-        key.SetValue(path, "PiAgent 0.9.14");
+        key.SetValue(path, "PiAgent 0.9.16");
     }
     private static void SaveReceipt(Receipt receipt) => File.WriteAllText(Path.Combine(Root, "install-receipt.json"), JsonSerializer.Serialize(receipt, Json));
     private static void CreateShortcut(string name, string target, string arguments)

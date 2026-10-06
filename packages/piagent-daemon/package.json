@@ -1,6 +1,6 @@
 {
   "name": "@piagent/daemon",
-  "version": "0.9.14",
+  "version": "0.9.16",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,8 +10,8 @@
     }
   },
   "dependencies": {
-    "@piagent/protocol": "0.9.14",
-    "@piagent/core": "0.9.14",
-    "@piagent/omp": "0.9.14"
+    "@piagent/protocol": "0.9.16",
+    "@piagent/core": "0.9.16",
+    "@piagent/omp": "0.9.16"
   }
 }

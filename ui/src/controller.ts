@@ -6,12 +6,14 @@ export const rows = (value: unknown): Frame[] => Array.isArray(value) ? value.ma
 const localCommands=[{name:'new',description:'새 대화'},{name:'sessions',description:'저장된 대화'},{name:'usage',description:'사용량'},{name:'restore',description:'파일 변경 기록'},{name:'selection',description:'편집기 선택 영역'},{name:'btw',description:'별도 질문'}];
 export interface View {
   emit(frame: Frame): void;
-  list(title: string, items: {label: string; disabled?: boolean; run(): void}[]): void;
+  list(title: string, items: {label: string; disabled?: boolean; remove?:(()=>void)|undefined; run(): void}[]): void;
   capabilities(frame: Frame): void;
   clearInteractions?():void;
   interaction?(frame:Frame,answer:(value:Frame)=>void):void;
   settings?(frame:Frame,save:(value:Frame)=>void):void;
   settingsResult?(ok:boolean,message?:string):void;
+  gitStatus?(data:Frame,enabled:boolean):void;
+  gitPanel?(data:Frame,error?:string):void;
   accountStatus?(providers:Frame[],error?:string):void;
   accountEvent?(frame:Frame,answer:(value:Frame)=>void):void;
   clearAccount?():void;
@@ -75,6 +77,9 @@ export class Controller {
   action(msg: Frame): void {
     if(!knownAction(msg['t'])){this.notice('현재 연결에서 지원하지 않는 기능입니다.');return;}
     switch (msg['t']) {
+      case 'gitSetup':
+        if(this.idle()&&this.features['gitSetupEnabled']){this.controlPending=true;this.status();this.post({action:'gitSetup',...Object.fromEntries(['op','previewId','revision','name','email'].filter(k=>k in msg).map(k=>[k,msg[k]]))});}
+        else this.notice('현재 작업을 마친 뒤 쓰기 가능한 native 연결에서 Git을 설정해 주세요.');break;
       case 'accountStatus':if(this.connected&&this.features['ompControlsEnabled'])this.post({action:'ompControl',command:'get_login_providers'});else this.view.accountStatus?.([],'Core 연결과 OMP 지원 상태를 확인해 주세요.');break;
       case 'accountLogin':
         if(typeof msg['providerId']!=='string'){this.accountTab=true;this.action({t:'settings'});break;}
@@ -267,23 +272,37 @@ export class Controller {
         this.context = -1; this.title = String(rows(frame['transcript']).find(item => item['role'] === 'user')?.['text'] ?? '').slice(0, 80);
         this.emit('history', {items: frame['transcript'] ?? []}); this.status(); this.refresh(false); this.emit('focusInput');
         this.emit('files',{items:null});
+        this.view.gitStatus?.(object(frame['gitStatus']),frame['gitSetupEnabled']===true);
         if(this.features['btwEnabled'])this.post({action:'btwList'});
         if(this.features['preferencesEnabled'])this.post({action:'preferences'});
         if(this.features['ompControlsEnabled'])for(const command of ['get_available_models','get_available_thinking_levels','get_state','get_available_commands'])this.post({action:'ompControl',command});
         if(typeof frame['restoredDraft']==='string')this.emit('setInput',{text:frame['restoredDraft']});if(frame['restoreNotice'])this.notice(String(frame['restoreNotice']));if(frame['restoreError'])this.notice(String(frame['restoreError']));
         if(typeof frame['planPrompt']==='string')this.action({t:'submit',id:`plan-${Date.now()}`,text:frame['planPrompt']});
         break;
+      case 'gitSetup': {
+        this.controlPending=false;const data=object(frame['data']);
+        if(data['checkpointsEnabled'])this.features['checkpointsEnabled']=true;
+        if(frame['op']==='preview')this.view.gitPanel?.(data);
+        else {this.view.gitStatus?.(data,this.features['gitSetupEnabled']===true);this.view.gitPanel?.(data);}
+        this.status();break;
+      }
       case 'selection': {
         const ctx = object(frame['context']), selection = object(ctx['selection']);
         this.emit('context', {file: String(ctx['documentUri'] ?? '').split('/').at(-1), path: ctx['documentUri'],
           selection: ctx['selection'] ? `${String(selection['startLine'])}–${String(selection['endLine'])}` : ''}); break;
       }
       case 'sessions':
-        this.view.list('대화', rows(frame['sessions']).map(item => ({label: `${String(item['title'])} · ${new Date(Number(item['updatedAt'])).toLocaleString()}`,
+        this.view.list('대화', rows(frame['sessions']).map(item => ({label: `${String(item['title'])} · ${new Date(Number(item['updatedAt'])).toLocaleString()}${item['active']?' · 사용 중':item['empty']?' · 빈 세션':''}`,
+          remove:item['deletable']===true&&item['savedSessionId']!==this.features['savedSessionId']?()=>{
+            if(!this.idle())return;this.controlPending=true;this.status('빈 세션 삭제 중…');
+            this.post({action:'deleteEmptySession',savedSessionId:item['savedSessionId'],confirmed:true});
+          }:undefined,
           disabled: item['resumable'] !== true, run: () => {
             if (!this.idle()) return; this.switching = true; this.status('대화 재개 중…');
             this.post({action: 'resumeSession', savedSessionId: item['savedSessionId']});
           }}))); break;
+      case 'sessionDeleted':
+        this.controlPending=false;this.notice('빈 세션을 삭제했습니다.');this.status();this.post({action:'listSessions'});break;
       case 'checkpoints':
         this.view.list('파일 변경 기록', rows(frame['items']).map(item => ({label: `${rows(item['files']).map(f => f['path']).join(', ') || String(item['path'])} · ${String(item['state'])} · ${new Date(Number(item['createdAt'])).toLocaleString()}`,
           disabled: item['state'] !== 'applied', run: () => { if (this.idle()) this.post({action: 'previewRestore', checkpointId: item['checkpointId']}); }}))); break;
@@ -299,6 +318,8 @@ export class Controller {
         this.status(); break;
       }
       case 'error': case 'operationError':
+        if(frame['action']==='deleteEmptySession'){this.controlPending=false;this.post({action:'listSessions'});}
+        if(frame['action']==='gitSetup'){this.controlPending=false;this.view.gitPanel?.({},String(frame['message']));}
         if(frame['command']==='model_roles')this.view.rolesResult?.({},String(frame['message']));
         if(this.executionRequests.delete(String(frame['command']))){this.view.executionResult?.(String(frame['command']),{}, {},String(frame['message']));if(frame['command']==='compact')this.controlPending=false;}
         if(frame['command']==='login'||frame['command']==='cancel_login'){this.loginBusy=false;this.view.accountEvent?.({type:'login_status',state:'failed',message:frame['message']},()=>{});}
@@ -317,6 +338,7 @@ export class Controller {
         if (this.review&&(!frame['action']||['decideChange','designerDecide','restoreChange','restoreMessage'].includes(String(frame['action'])))) { const {data, restore} = this.review; this.resolve(false); this.turnApproved=false; this.showReview(data, restore,false); }
         this.status(String(frame['message']), true); break;
       case 'disconnected':
+        this.view.gitStatus?.({},false);
         this.executionRequests.clear();this.completedOperations.clear();this.view.executionResult?.('get_state',{}, {},'Core 연결이 종료되었습니다. 다시 연결한 뒤 조회해 주세요.');
         this.loginBusy=false;this.view.clearAccount?.();
         this.view.accountStatus?.([],'Core 연결이 종료되었습니다. 다시 연결한 뒤 조회해 주세요.');

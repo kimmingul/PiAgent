@@ -48,6 +48,7 @@ lines.on('line', line => {
   if (command.type === 'abort') {
     if (process.argv.includes('--ignore-abort')) return;
     timers.forEach(clearTimeout); timers = []; active = false;
+    if(process.argv.includes('--approval-mode'))emit({type:'session_settled',status:'aborted'});
     emit({ type: 'agent_end', isTerminal: true }); response({}); return;
   }
   if (command.type !== 'prompt') { response({}); return; }
@@ -55,7 +56,28 @@ lines.on('line', line => {
   if (command.message === 'ack-timeout') return;
   if (command.message === 'reject') { emit({ type: 'response', id: command.id, command: 'prompt', success: false }); active = false; return; }
   if (command.message === 'local') { response({ agentInvoked: false }); return; }
+  if (command.message === 'slow-ack') {setTimeout(()=>{response({});emit({type:'agent_end',isTerminal:true});},6500);return;}
   response({});
+  if(command.message.startsWith('retry-')) {
+    emit({type:'message_end',message:{role:'assistant',stopReason:'error',errorMessage:'Socket closed before response completed'}});
+    emit({type:'agent_end',isTerminal:true});
+    emit({type:'auto_retry_start',errorMessage:'Socket closed before response completed'});
+    if(command.message==='retry-wait')return;
+    timers.push(setTimeout(()=>{
+      if(command.message==='retry-crash'){process.exit(7);return;}
+      if(command.message==='retry-failure'){
+        emit({type:'auto_retry_end',success:false,finalError:'Provider retry exhausted'});
+        emit({type:'session_settled',status:'error'});return;
+      }
+      emit({type:'tool_execution_start',toolCallId:'retry-tool',toolName:'fixture'});
+      emit({type:'tool_execution_end',toolCallId:'retry-tool',toolName:'fixture',isError:false,result:{content:[{type:'text',text:'tool succeeded'}]}});
+      emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:'Recovered final answer'}});
+      emit({type:'message_end',message:{role:'assistant',stopReason:'stop'}});
+      emit({type:'auto_retry_end',success:true});
+      emit({type:'session_settled',status:'completed'});
+      emit({type:'prompt_result',status:'completed',sessionSettled:true});
+    },250));return;
+  }
   if(command.message.startsWith('/mcp ')) {
     timers.push(setTimeout(()=>{
       const [,action,id]=command.message.split(' '),path=join(process.cwd(),'.omp','mcp.json');

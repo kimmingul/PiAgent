@@ -152,10 +152,13 @@ export class WorkspaceChanges {
   async drain(): Promise<void> { await this.tail; }
   /** Observe native OMP/designer edits without attributing user edits or touching their index. */
   async beginTurn():Promise<TurnSnapshot> {
-    await this.drain();const paths=(await this.git(['ls-files','-z'])).toString('utf8').split('\0').filter(Boolean);
+    await this.drain();const entries=(await this.git(['ls-files','--stage','-z'])).toString('utf8').split('\0').filter(Boolean);
+    const paths=[...new Set(entries.map(entry=>entry.slice(entry.indexOf('\t')+1)))];
     if(paths.length>500)throw new Error('Turn checkpoint is limited to 500 tracked files');
+    const counts=new Map<string,number>();const regular=new Set<string>();
+    for(const entry of entries){const path=entry.slice(entry.indexOf('\t')+1);counts.set(path,(counts.get(path)??0)+1);if(/^100(?:644|755) [0-9a-f]+ 0\t/.test(entry))regular.add(path);}
     const files:TurnSnapshot['files']=[];let excluded=0,total=0;
-    for(const path of paths){try{await this.tracked(path);const snapshot=await this.reader.snapshot(path,signal());if(snapshot.bytes.length>32768||total+snapshot.bytes.length>8*1024*1024){excluded++;continue;}total+=snapshot.bytes.length;files.push({path,bytes:snapshot.bytes});}catch{excluded++;}}
+    for(const path of paths){try{if(counts.get(path)!==1||!regular.has(path))throw new Error('Unsupported index entry');const snapshot=await this.reader.snapshot(path,signal());if(snapshot.bytes.length>32768||total+snapshot.bytes.length>8*1024*1024){excluded++;continue;}total+=snapshot.bytes.length;files.push({path,bytes:snapshot.bytes});}catch{excluded++;}}
     const checkpointIds=(await readdir(this.directory)).filter(name=>name.endsWith('.json')).map(name=>name.slice(0,-5));
     return {files,excluded,checkpointIds};
   }

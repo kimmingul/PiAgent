@@ -8,6 +8,8 @@
   const drafts = new Map();
   const subagents = new Map();
   let todoPanel = null;
+  let todoSummary = null;
+  let todoBody = null;
   let pendingFrame = false;
   const dirty = new Set();
 
@@ -149,29 +151,37 @@
 
   function todos(items) {
     if (!todoPanel) {
-      todoPanel = el('div');
+      todoPanel = el('details');
       todoPanel.id = 'todo-panel';
+      todoPanel.open = true;
+      try { todoPanel.open = global.localStorage.getItem('piagent.todos.collapsed') !== 'true'; } catch (_) { /* Storage can be unavailable in an IDE WebView. */ }
+      todoSummary = el('summary', 'todo-summary');
+      todoBody = el('div', 'todo-body');
+      todoPanel.append(todoSummary, todoBody);
+      todoPanel.addEventListener('toggle', () => {
+        try { global.localStorage.setItem('piagent.todos.collapsed', String(!todoPanel.open)); } catch (_) { /* Folding still works without persistence. */ }
+      });
       document.body.insertBefore(todoPanel, document.getElementById('log'));
     }
-    todoPanel.innerHTML = '';
+    todoBody.replaceChildren();
     if (!Array.isArray(items) || items.length === 0) {
       todoPanel.hidden = true;
       return;
     }
     const doneCount = items.filter(i => i.status === 'completed').length;
-    todoPanel.appendChild(el('div', 'todo-title', T('page.activity.todoTitle', doneCount, items.length)));
+    todoSummary.textContent = T('page.activity.todoTitle', doneCount, items.length);
     let phase = null;
     for (const item of items) {
       if (item.phase && item.phase !== phase) {
         phase = item.phase;
-        todoPanel.appendChild(el('div', 'todo-title', phase));
+        todoBody.appendChild(el('div', 'todo-title', phase));
       }
       const mark = item.status === 'completed' ? '☑' : item.status === 'in_progress' ? '▶' :
         item.status === 'abandoned' ? '☒' : '☐';
       const row = el('div', 'todo-item ' + (item.status || ''));
       row.appendChild(el('span', '', mark));
       row.appendChild(el('span', '', item.content || ''));
-      todoPanel.appendChild(row);
+      todoBody.appendChild(row);
     }
     todoPanel.hidden = false;
   }

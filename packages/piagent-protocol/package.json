@@ -1,6 +1,6 @@
 {
   "name": "@piagent/protocol",
-  "version": "0.9.14",
+  "version": "0.9.16",
   "private": true,
   "type": "module",
   "exports": {

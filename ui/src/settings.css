@@ -62,3 +62,11 @@ body:has(#sheet:not([hidden])) #scroll-bottom-btn { display:none !important; }
 .settings-agent-log { white-space:pre-wrap; overflow-wrap:anywhere; max-height:280px; overflow:auto; }
 .settings-role-row select { min-width:0; width:100%; font:inherit; padding:6px; color:var(--fg); background:var(--codeBg); border:1px solid var(--border); color-scheme:dark; }
 @media(max-width:300px){.settings-role-row{grid-template-columns:minmax(0,1fr);}}
+
+.git-setup-banner {flex:0 0 auto;padding:6px 16px;border-bottom:1px solid var(--border);font-size:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.git-setup-banner[hidden]{display:none}.git-setup-banner span{flex:1}.git-preview-files{max-height:24vh;overflow:auto;white-space:pre-wrap}
+
+.session-list-row { display:flex; align-items:center; gap:8px; }
+.session-list-row[hidden] { display:none; }
+.session-list-row > .popup-item { flex:1; min-width:0; text-align:left; overflow-wrap:anywhere; }
+.session-delete-confirm { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px; }
+.session-delete-confirm > span { flex-basis:100%; }
