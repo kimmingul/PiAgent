@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ChunkDecoder} from '../packages/piagent-omp/dist/chunks.js';
 import {DesignerBridge,designerPrompt} from '../packages/piagent-core/dist/designer.js';
-import {Interactions} from '../packages/piagent-core/dist/interactions.js';
+import {Interactions,designerApprovalContext} from '../packages/piagent-core/dist/interactions.js';
 import {control} from '../packages/piagent-core/dist/omp-controls.js';
 
 function chunks(value) {
@@ -60,6 +60,47 @@ test('Designer read-only, denied, stale and cancelled requests never produce suc
     else {assert.equal((await result).applied,false);assert.equal(frames.filter(frame=>frame.operation==='setProperty').length,0);}
   }
   bridge.close();
+});
+
+test('dirty and read-only native designers explain recovery without issuing approvals or edits',async()=>{
+  for(const [code,reason] of [['unsaved_changes','Save the target module in RAD Studio, then inspect and approve again.'],['source_read_only','RAD Studio reports that the target source is read-only.']]) {
+    const frames=[],bridge=new DesignerBridge(frame=>frames.push(frame));bridge.enabled=true;bridge.writesEnabled=true;
+    try {
+      const outcome=bridge.execute('ide_designer_set_property',args,new AbortController().signal).then(()=>null,error=>error);
+      bridge.reply(frames[0].id,{...snapshot,canSetProperty:false,writeBlockCode:code,writeBlockReason:reason});
+      assert.equal((await outcome).message,reason);
+      assert.deepEqual(frames.map(frame=>frame.operation),['inspect']);
+    } finally {bridge.close();}
+  }
+});
+
+test('inspection exposes host read-only reason even when the native designer permits writes',async()=>{
+  const frames=[],bridge=new DesignerBridge(frame=>frames.push(frame));bridge.enabled=true;
+  bridge.writeBlockReason='The session is in plan mode.';
+  try {
+    const inspected=bridge.execute('ide_designer_inspect',{},new AbortController().signal);
+    bridge.reply(frames[0].id,snapshot);
+    const result=await inspected;assert.equal(result.canSetProperty,true);
+    assert.deepEqual(result.hostAccess,{canWrite:false,reason:bridge.writeBlockReason});
+    await assert.rejects(bridge.execute('ide_designer_set_property',args,new AbortController().signal),/plan mode/);
+    assert.equal(frames.length,1);
+  } finally {bridge.close();}
+});
+
+test('designer outer-gate explanations preserve OMP decisions and never approve automatically',async()=>{
+  const sent=[],frames=[],interactions=new Interactions({uiResponse:async(id,value)=>sent.push({id,value})},frame=>frames.push(frame));
+  try {
+    for(const name of ['ide_designer_inspect','ide_designer_set_property','ide_designer_set_reference','ide_designer_reparent']) {
+      const frame={type:'extension_ui_request',method:'select',id:name,title:`Allow tool: ${name}`,options:['Approve','Deny']};
+      interactions.accept(frame);
+      assert.deepEqual(frames.at(-1).options,frame.options);assert.equal(frames.at(-1).id,name);
+      assert.match(frames.at(-1).message,/관리자 권한과는 관계가 없습니다/);
+      assert.equal(sent.length,0);
+    }
+    await interactions.respond('ide_designer_inspect',{value:'Deny'});
+    assert.deepEqual(sent,[{id:'ide_designer_inspect',value:{value:'Deny'}}]);
+    for(const frame of [{method:'select',title:'Allow tool: bash'},{method:'input',title:'Allow tool: ide_designer_inspect'},{method:'select',title:'Unexpected ide_designer_inspect'}])assert.equal(designerApprovalContext(frame),frame);
+  } finally {interactions.clear();}
 });
 test('OMP interaction answers are scoped, validated, single-use and bounded',async()=>{
   const sent=[],frames=[],interactions=new Interactions({uiResponse:async(id,value)=>sent.push({id,value})},frame=>frames.push(frame));

@@ -1,5 +1,10 @@
 # Native GUI harness 1.0 / PiAgent 0.9.0
 
+0.9.18 update: inspection reports `hostAccess.canWrite` and native `writeBlockCode` /
+`writeBlockReason`. Unsupported, dirty, read-only or unavailable-service RAD snapshots
+advertise no writable scalar properties, references or parent operations.
+See [RAD diagnostics](RAD-DESIGNER-DIAGNOSTICS.md). Catalog coverage does not expand the tool surface.
+
 ## Runtime connection
 
 `packages/piagent-core/harness/manifest.json` routes an adapter's actual framework ID to one of five

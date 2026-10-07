@@ -1,5 +1,10 @@
 # OMP / IDE designer compatibility
 
+Current update: 2026-10-08, PiAgent 0.9.18. The default RAD13.2 x64 profile now loads the
+signed 0.9.18 BPL; duplicate older registrations were removed by the unified installer.
+See [RAD diagnostics](RAD-DESIGNER-DIAGNOSTICS.md) and [current validation](RELEASE-0.9.18.md).
+The 0.8.1 paths and OMP baseline below are historical, not the current installation.
+
 Implementation and interactive validation, 2026-10-04. This is **not full OMP/designer parity**.
 VS2026 now has VSIX 0.8.1; RAD 13.2 has BPL 0.8.1 in the isolated PiAgentValidation08 profile.
 RADAgent is reference-only; its files were not edited.

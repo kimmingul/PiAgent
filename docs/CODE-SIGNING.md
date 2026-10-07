@@ -5,7 +5,7 @@ Nanum Space certificate in CurrentUser/My, thumbprint
 `3CE49DE1124F325082FA90BDE4944756D1626251`. Connect the SafeNet USB token.
 Signing failures stop the build; an unsigned release is never reported as successful.
 
-Latest verification: the [0.9.17 release](RELEASE-0.9.17.md), built on 2026-10-08 KST,
+Latest verification: the [0.9.18 release](RELEASE-0.9.18.md), built on 2026-10-08 KST,
 passed setup, VSIX/embedded assemblies, Win32/Win64 BPL and PipeHost signature/timestamp checks.
 The completed installer also passed embedded payload hashes and ARM64/x64 runtime verification.
 

@@ -1,12 +1,13 @@
 # PiAgent unified Windows installer
 
-Documentation updated: 2026-10-08, signed product 0.9.17.
-This PC's recovery-test receipt points to `0.9.16-session-recovery-20261007125243` and records VS2022/2026 and RAD32/64 registrations.
+Documentation updated: 2026-10-08, signed product 0.9.18.
+This PC's RAD validation receipt points to `0.9.18-20261007162727` and records VS2022/2026 and RAD32/64 registrations.
+Core and RAD32/64 were upgraded; old duplicate RAD BPL registrations were consolidated.
 The local Core fix is documented in [session recovery](SESSION-RECOVERY-FIX.md); release publication does not install the new setup automatically.
 Registration is separate from live validation: current acceptance prioritizes VS2026/RAD13.2 64-bit.
 The signed setup includes the idle/long-turn fixes; [validation history](VALIDATION.md) records remaining limits.
 
-Output: `dist/PiAgent-Setup-0.9.17.exe`. A single self-contained setup supports Windows
+Output: `dist/PiAgent-Setup-0.9.18.exe`. A single self-contained setup supports Windows
 x64 and ARM64. The setup executable uses Windows x64 compatibility on ARM64; installed
 Node.js, .NET and OMP use the host's native architecture. No system PATH or runtime is replaced.
 
@@ -45,7 +46,7 @@ prerequisite; existing installations on this PC already have it. Git is required
 workspace writes. Initial Core settings are read-only, with no workspace and no login autorun.
 
 Per-user destination: `%LOCALAPPDATA%/Programs/PiAgent`. No administrator rights are requested.
-Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. VSIX 0.9.17 and the RAD
+Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. VSIX 0.9.18 and the RAD
 adapter automatically start the installed Core when opening chat
 (RAD View/Tools > PiAgent, VS Tools > PiAgent: Open Chat). Configure workspace
 and write permissions in the installed `core/settings.json` only when needed.

@@ -1,6 +1,20 @@
 import {isObject} from '@piagent/protocol';
 import type {OmpProcess} from '@piagent/omp';
 
+/** Explain OMP's outer tool gate without changing its options or approval policy. */
+export function designerApprovalContext(frame:Record<string,unknown>):Record<string,unknown> {
+  if(!['select','confirm'].includes(String(frame['method'])))return frame;
+  const descriptions:Record<string,string>={
+    ide_designer_inspect:'폼 디자이너 조회 승인: 현재 프로젝트의 열린 폼과 컴포넌트 속성을 읽습니다. 폼을 변경하거나 저장하지 않습니다.',
+    ide_designer_set_property:'폼 속성 변경 도구 실행 승인: 이어서 PiAgent가 대상 폼, 속성과 변경 전후 값을 확인합니다. IDE 변경은 선택한 승인 방식에 따라 별도로 처리됩니다.',
+    ide_designer_set_reference:'컴포넌트 참조 연결 도구 실행 승인: 이어서 PiAgent가 대상과 연결 변경 내용을 확인합니다. IDE 변경은 선택한 승인 방식에 따라 별도로 처리됩니다.',
+    ide_designer_reparent:'컴포넌트 배치 이동 도구 실행 승인: 이어서 PiAgent가 대상과 부모 변경 내용을 확인합니다. IDE 변경은 선택한 승인 방식에 따라 별도로 처리됩니다.'
+  };
+  const name=String(frame['title']??'').replace(/^Allow tool: /,'');
+  if(frame['title']!==`Allow tool: ${name}`||!descriptions[name])return frame;
+  return {...frame,message:[descriptions[name],'이 요청은 OMP 도구 승인입니다. 거절·취소하면 도구가 실행되지 않으며 관리자 권한과는 관계가 없습니다.',typeof frame['message']==='string'?frame['message']:''].filter(Boolean).join('\n')};
+}
+
 /** Correlate only live requests from this OMP child. Never infer approval from button labels. */
 export class Interactions {
   get waiting(): boolean { return this.pending.size > 0; }
@@ -8,6 +22,7 @@ export class Interactions {
   constructor(private readonly omp:OmpProcess,private readonly emit:(frame:Record<string,unknown>)=>void) {}
   accept(frame:Record<string,unknown>):void {
     if(Buffer.byteLength(JSON.stringify(frame))>256*1024)throw new Error('OMP interaction exceeds limit');
+    frame=designerApprovalContext(frame);
     const method=frame['method'],id=frame['id'];
     if(method==='cancel') {this.remove(String(frame['targetId']));this.emit(frame);return;}
     if(!['select','confirm','input','editor'].includes(String(method))) {

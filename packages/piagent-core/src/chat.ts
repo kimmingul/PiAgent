@@ -187,6 +187,10 @@ export class ChatSession {
         this.batchEnabled=this.writesEnabled&&batchNegotiated;
         this.designer.enabled=designerNegotiated&&this.workspaceEnabled;
         this.designer.writesEnabled=this.writesEnabled;
+        this.designer.writeBlockReason=this.approvalMode==='plan'
+          ? 'The session is in plan mode. Designer inspection is available, but changes require leaving plan mode through the user access-mode control.'
+          : !writesNegotiated ? 'Workspace writes were not negotiated for this connection. Reconnect using a writable Core and adapter configuration.'
+          : 'Designer writes are disabled because this restricted workspace has no writable Git change service. Check the workspace Git setup and Core write configuration.';
         this.approvals = this.writesEnabled&&this.changes ? new Approvals(this.changes, (kind, approval) => this.emit(kind, undefined, approval)) : undefined;
         if (this.workspaceEnabled) await omp.request('set_host_tools', { tools: [...workspaceTools, ...(this.approvals ? [editTool] : []),...(this.batchEnabled&&this.approvals?[batchEditTool]:[]),...(this.designer.enabled?designerTools.filter(tool=>this.writesEnabled||tool.name==='ide_designer_inspect'):[])].map(tool => ({...tool, loadMode: 'essential'})) });
         if (this.disposed) throw new Error('Connection closed during startup');

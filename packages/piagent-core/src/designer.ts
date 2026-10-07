@@ -6,7 +6,7 @@ export const DESIGNER_CAPABILITY='ide.designer.v1';
 export function designerPrompt(message:string,enabled:boolean,writesEnabled:boolean):string {
   // Native OMP slash commands must retain their original parsing and semantics.
   if(!enabled||message.trimStart().startsWith('/'))return message;
-  return `PiAgent GUI development workflow:\nFor GUI app development or visual layout changes, use the IDE form designer by default. First call ide_designer_inspect on the target document, read the returned harness instructions/catalog, component hierarchy, references and supported operations, and prefer designer tools for supported visual changes. ${writesEnabled?'Use ide_designer_set_property for supported existing scalar properties, with explicit user approval. Use ide_designer_set_reference and ide_designer_reparent only when the live snapshot advertises them and permits the target.':'Designer access is read-only; do not attempt visual writes.'} Preserve the user\'s existing UI/UX unless explicitly asked to change it. Do not invent controls, properties or designer support. If the form is not open, ask the user to open it. For unsupported operations (including adding controls or event handlers), explain the limitation and use approved source edits only when necessary; then reopen/refresh the designer, inspect and build/run to verify. Never overwrite dirty IDE buffers or bypass approvals. Follow an explicit user request to use a different workflow. This guidance applies to GUI tasks; unrelated tasks do not require designer calls.\n\n${message}`;
+  return `PiAgent GUI development workflow:\nFor GUI app development or visual layout changes, use the IDE form designer by default. First call ide_designer_inspect on the target document, read the returned harness instructions/catalog, component hierarchy, references and supported operations, and prefer designer tools for supported visual changes. ${writesEnabled?'Use ide_designer_set_property for supported existing scalar properties, with explicit user approval. Use ide_designer_set_reference and ide_designer_reparent only when the live snapshot advertises them and permits the target.':'Designer access is read-only; do not attempt visual writes.'} Preserve the user\'s existing UI/UX unless explicitly asked to change it. Read hostAccess, writeBlockCode and writeBlockReason from the inspection result. Distinguish an OMP approval denial, plan/read-only host access, unsaved IDE changes and unsupported operations; report the actual reason and recovery action, never assume administrator privileges are required. Do not invent controls, properties or designer support. If the form is not open, ask the user to open it. For unsupported operations (including adding controls or event handlers), explain the limitation and use approved source edits only when necessary; then reopen/refresh the designer, inspect and build/run to verify. Never overwrite dirty IDE buffers or bypass approvals. Follow an explicit user request to use a different workflow. This guidance applies to GUI tasks; unrelated tasks do not require designer calls.\n\n${message}`;
 }
 export const designerTools=[{
   name:'ide_designer_inspect',description:'Inspect the active IDE form/XAML document, component tree, current properties and supported designer operations. Use before UI edits. Unsupported frameworks are reported, never guessed.',
@@ -27,6 +27,7 @@ export class DesignerBridge {
   get waiting(): boolean { return this.approvals.size > 0; }
   enabled=false;
   writesEnabled=false;
+  writeBlockReason='Designer writes are disabled on this connection; check the session access mode and negotiated workspace writes.';
   private pending=new Map<string,Pending>();
   private approvals=new Map<string,{resolve:(value:boolean)=>void;cleanup:()=>void}>();
   constructor(private readonly emit:(frame:Record<string,unknown>)=>void) {}
@@ -60,14 +61,15 @@ export class DesignerBridge {
       if(Object.keys(args).length)throw new Error('Invalid inspect arguments');
       const snapshot=await this.request('inspect',{},signal);
       const harness=await guiHarness(snapshot);
-      return {...snapshot,...(harness?{harness}:{})};
+      return {...snapshot,hostAccess:{canWrite:this.writesEnabled,...(!this.writesEnabled?{reason:this.writeBlockReason}:{})},...(harness?{harness}:{})};
     }
     const operation=name==='ide_designer_set_property'?'setProperty':name==='ide_designer_set_reference'?'setReference':name==='ide_designer_reparent'?'reparent':undefined;
     const fields=operation==='setProperty'?['component','property','value']:operation==='setReference'?['component','property','target']:['component','parent'];
     if(!operation||Object.keys(args).some(k=>!fields.includes(k))||!fields.every(k=>typeof args[k]==='string'&&String(args[k]).length<=4096))throw new Error('Invalid designer request');
-    if(!this.writesEnabled)throw new Error('Designer writes are disabled');
+    if(!this.writesEnabled)throw new Error(this.writeBlockReason);
     const snapshot=await this.request('inspect',{},signal);
-    if(snapshot['canSetProperty']!==true||typeof snapshot['revision']!=='string'||typeof snapshot['document']!=='string')throw new Error('This designer does not expose property edits');
+    if(snapshot['canSetProperty']!==true)throw new Error(typeof snapshot['writeBlockReason']==='string'?snapshot['writeBlockReason'].slice(0,2048):'This designer does not expose property edits; inspect its supported operations and save any unsaved IDE changes first');
+    if(typeof snapshot['revision']!=='string'||typeof snapshot['document']!=='string')throw new Error('Invalid designer snapshot: document/revision missing');
     const component=Array.isArray(snapshot['components'])?snapshot['components'].filter(isObject).find(c=>c['id']===args['component']):undefined;
     if(!component)throw new Error('Component is not available in this designer');
     let reason:string,diff:string;

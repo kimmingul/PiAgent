@@ -1,10 +1,10 @@
 # PiAgent
 
-현재 버전 **0.9.17** · 서명 사전 릴리즈 **0.9.17** · 문서 갱신일 **2026-10-08 KST**.
+현재 버전 **0.9.18** · 서명 사전 릴리즈 **0.9.18** · 문서 갱신일 **2026-10-08 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
-[0.9.17 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.17).
+[0.9.18 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.18).
 소스와 서명 설치 파일은 공개 저장소 `kimmingul/PiAgent`에서 제공한다.
 
 Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 Delphi BPL은
@@ -13,8 +13,8 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-서명 설치파일은 `dist/PiAgent-Setup-0.9.17.exe`다. 이 PC의 Core에는 세션 복구 수정을
-별도 적용해 VS2026에서 확인했다. 새 릴리즈 빌드·게시는 실행 중인 IDE를 자동 교체하지 않는다.
+서명 설치파일은 `dist/PiAgent-Setup-0.9.18.exe`다. 이 PC에는 Core와 RAD32/64를 업데이트하고
+중복된 RAD BPL 등록을 정리했다. 새 릴리즈 빌드·게시는 실행 중인 IDE를 자동 교체하지 않는다.
 설치 전 IDE를 종료하고 새 설치파일을 실행한다.
 Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
@@ -26,11 +26,18 @@ VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다
 - 사용자별 루트는 `%LOCALAPPDATA%\Programs\PiAgent`, release별 runtime을 사용한다.
   ARM64 Windows에서는 ARM64 Node/.NET/OMP를 사용하고 setup은 x64 호환 실행이다.
 
-이 PC의 복구 검증 receipt는 `0.9.16-session-recovery-20261007125243` release를 가리키며 VS2022/2026와 RAD32/64
+이 PC의 RAD 검증 receipt는 `0.9.18-20261007162727` release를 가리키며 VS2022/2026와 RAD32/64
 등록을 기록한다. 설치 기록은 실사용 검증 완료를 뜻하지 않는다. 현재 우선 실사용 검증 대상은
 **VS2026와 RAD13.2 64-bit**다. VS2022 최종 검증과 RAD32 UI 검증은 완료로 주장하지 않는다.
 
 ## 현재 기능과 검증
+
+0.9.18은 RAD 폼 디자이너의 OMP 승인과 실제 IDE 변경 차단을 구분한다. 승인 카드에 작업 범위를
+표시하고, 미저장 변경·읽기 전용 소스·변경 서비스 부재의 구체적인 복구 이유를 전달한다.
+[0.9.18 변경 및 검증](docs/RELEASE-0.9.18.md) · [RAD 원인과 사용 안내](docs/RAD-DESIGNER-DIAGNOSTICS.md).
+전체 회귀 **143/143**, C#/Delphi adapter 통합 **17/17**을 통과했다.
+RAD13.2 64-bit의 VCL·FMX에서 실제 모델의 기존 폼 속성 변경·저장·재조회와 빌드·실행 화면을 확인했다.
+컨트롤 생성·삭제와 이벤트 처리기 생성은 네이티브 도구의 지원 범위 밖이며 승인된 소스 편집이 필요하다.
 
 0.9.17은 이전 실행의 저장 세션 잠금이 남아 마지막 대화를 열지 못하던 문제를 수정한다.
 실제 중복 접속은 막고, 소유 Core/OMP가 종료된 세션을 안전하게 복구한다. 세션 시작 실패와

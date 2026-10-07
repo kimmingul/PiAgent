@@ -25,18 +25,35 @@ end;
 
 function Snapshot(const Module: IOTAModule; const Editor: IOTAFormEditor): TJSONObject;
 var Root,Item: TComponent; Components,Properties: TJSONArray; I,J,Count: Integer;
-  List: PPropList; Prop: PPropInfo; Obj: TJSONObject; Value,Framework: string; Dirty,Writable: Boolean;
+  List: PPropList; Prop: PPropInfo; Obj: TJSONObject; Value,Framework,BlockCode,BlockReason: string;
+  Dirty,Writable,CanWrite: Boolean; NativeEditor: INTAFormEditor;
 begin
   Root := NativeOf(Editor.GetRootComponent);
   if Root = nil then raise Exception.Create('Native form designer unavailable');
   Framework := FrameworkOf(Root); Dirty := False;
   if Root.ComponentCount > 255 then raise Exception.Create('Designer component limit exceeded');
   for I := 0 to Module.ModuleFileCount-1 do Dirty := Dirty or Module.ModuleFileEditors[I].Modified;
+  BlockCode := ''; BlockReason := '';
+  if Framework = 'unknown' then begin
+    BlockCode := 'unsupported_framework'; BlockReason := 'This form framework is unsupported; VCL or FMX is required.';
+  end else if Dirty then begin
+    BlockCode := 'unsaved_changes';
+    BlockReason := 'The IDE form or source has unsaved changes. Save the target module in RAD Studio, then inspect and approve again. This is not a permission denial.';
+  end else if not Supports(Editor,INTAFormEditor,NativeEditor) or (NativeEditor.FormDesigner = nil) then begin
+    BlockCode := 'modification_service_unavailable';
+    BlockReason := 'The native designer modification service is unavailable. Open the form Design tab and inspect again.';
+  end else if NativeEditor.FormDesigner.IsSourceReadOnly then begin
+    BlockCode := 'source_read_only';
+    BlockReason := 'RAD Studio reports that the target source is read-only. Make the target module writable in the IDE and inspect again.';
+  end;
+  CanWrite := BlockCode = '';
   Components := TJSONArray.Create;
   Result := TJSONObject.Create.AddPair('document',Module.FileName).AddPair('framework',Framework)
-    .AddPair('canSetProperty',TJSONBool.Create((not Dirty) and (Framework <> 'unknown'))).AddPair('components',Components);
+    .AddPair('canSetProperty',TJSONBool.Create(CanWrite)).AddPair('components',Components);
+  Result.AddPair('dirty',TJSONBool.Create(Dirty));
+  if not CanWrite then Result.AddPair('writeBlockCode',BlockCode).AddPair('writeBlockReason',BlockReason);
   Result.AddPair('schemaVersion',TJSONNumber.Create(2)).AddPair('hierarchyKind','streamed-component-parentage');
-  if (not Dirty) and (Framework <> 'unknown') then
+  if CanWrite then
     Result.AddPair('supportedOperations',TJSONArray.Create.Add('setProperty').Add('setReference').Add('reparent'))
   else Result.AddPair('supportedOperations',TJSONArray.Create);
   try
@@ -46,7 +63,7 @@ begin
       Properties := TJSONArray.Create;
       Obj := TJSONObject.Create.AddPair('id',Item.Name).AddPair('type',Item.ClassName).AddPair('properties',Properties);
       Components.AddElement(Obj);
-      AddRelations(Root,Item,Obj,(not Dirty) and (Framework <> 'unknown'));
+      AddRelations(Root,Item,Obj,CanWrite);
       Count := GetPropList(Item.ClassInfo,ScalarKinds,nil);
       GetMem(List,Count*SizeOf(Pointer));
       try
@@ -56,7 +73,7 @@ begin
           Prop := List^[J]; if SameText(string(Prop.Name),'Name') then Continue;
           try
             Value := VarToStr(GetPropValue(Item,string(Prop.Name),True));
-            Writable := (Prop.SetProc <> nil) and (Length(Value) <= 4096);
+            Writable := CanWrite and (Prop.SetProc <> nil) and (Length(Value) <= 4096);
             if Length(Value) > 4096 then Value := Copy(Value,1,4096);
             Properties.AddElement(TJSONObject.Create.AddPair('name',string(Prop.Name)).AddPair('value',Value)
               .AddPair('writable',TJSONBool.Create(Writable)));
@@ -96,8 +113,9 @@ begin
   if (Operation <> 'setProperty') and (Operation <> 'setReference') and (Operation <> 'reparent') then raise Exception.Create('Unsupported designer operation');
   View := Snapshot(Module,Editor);
   try
-    if not View.GetValue<Boolean>('canSetProperty',False) or
-      not SameText(Target,Args.GetValue<string>('document','')) or
+    if not View.GetValue<Boolean>('canSetProperty',False) then
+      raise Exception.Create(View.GetValue<string>('writeBlockReason','Designer edits are unavailable'));
+    if not SameText(Target,Args.GetValue<string>('document','')) or
       (View.GetValue<string>('revision','') <> Args.GetValue<string>('revision','')) then
       raise Exception.Create('Designer changed or has unsaved edits; inspect and approve again');
   finally View.Free; end;
