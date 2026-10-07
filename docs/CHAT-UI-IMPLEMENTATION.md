@@ -2,8 +2,9 @@
 
 2026-10-05 KST. 기준 감사: [CHAT-UI-AUDIT-AND-IMPLEMENTATION-PLAN.md](CHAT-UI-AUDIT-AND-IMPLEMENTATION-PLAN.md).
 초기 기록은 Core 0.9.0의 additive protocol 변경 및 VSIX 0.9.6 개발 산출물 기준이다.
-현재 0.9.14로 서명·설치했으며 전체 실사용 acceptance는 PARTIAL/MANUAL 잔여 항목 때문에 완료로
-주장하지 않는다. 2026-10-06 기준 상태는 [설치 acceptance](INSTALLED-ACCEPTANCE-0.9.14.md),
+최신 배포는 [0.9.17](RELEASE-0.9.17.md)이며 [세션 복구](SESSION-RECOVERY-FIX.md)를 포함한다.
+전체 실사용 acceptance는 PARTIAL/MANUAL 잔여 항목 때문에 완료로 주장하지 않는다.
+이전 설치 기록은 [설치 acceptance](INSTALLED-ACCEPTANCE-0.9.14.md),
 [후속 결함 수정](ACCEPTANCE-FIXES-0.9.14.md), [장시간 작업 수정](LONG-RUNNING-TURN-FIX.md)을 따른다.
 
 ## 구현한 동작

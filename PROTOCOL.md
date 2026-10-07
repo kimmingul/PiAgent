@@ -1,6 +1,6 @@
 # PiAgent pipe protocol v1
 
-문서 상태: 2026-10-06, 구현 0.9.14. pipe protocol은 v1 및 additive capability 협상을 유지한다.
+문서 상태: 2026-10-08, 구현 0.9.17. pipe protocol은 v1 및 additive capability 협상을 유지한다.
 제품 버전과 protocol 버전은 별개이며 CORE_VERSION은 package 버전에서 생성한다.
 현재 구현의 인증 후 idle 정책과 turn activity/종료 계약은 아래 해당 절을 따른다.
 새 기능을 제공했다고 해서 wire version을 임의로 올리거나 미협상 기능을 활성화하지 않는다.
@@ -328,7 +328,7 @@ Only one connection can lease a saved session at a time. The store is scoped to 
 private credential parent. Timestamps are epoch milliseconds. Transcript entries use role:user/assistant/status,
 text:string. Maximum displayed history is 200 entries/256 KiB of serialized JSON.
 Empty-session deletion requires `chat.sessions.v1` and explicit `confirmed:true`. The Core obtains
-the target lease lock and rechecks emptiness; active/stale-locked sessions, retained or previously
+the target lease lock and rechecks emptiness; active/inspection-required sessions, retained or previously
 truncated history, OMP message records, BTW topics, plans/lineage/checkpoints and unknown files are
 protected. Only verified store-owned regular files are removed; links and arbitrary recursive deletion
 are forbidden. `empty`, `active` and `deletable` are advisory list snapshots, never deletion authority.

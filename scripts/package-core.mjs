@@ -41,7 +41,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await cp(join(repository, 'docs/WORKSPACE-TOOLS.md'), join(output, 'docs/WORKSPACE-TOOLS.md'));
   await cp(join(repository, 'docs/SECURITY.md'), join(output, 'docs/SECURITY.md'));
   await cp(join(repository, 'docs/APPROVED-CHANGES.md'), join(output, 'docs/APPROVED-CHANGES.md'));
-  for(const document of ['SESSIONS-USAGE.md','INSTALLATION.md','OMP-DESIGNERS.md','GUI-HARNESS.md','CHAT-UI-IMPLEMENTATION.md','MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md','CORE-IDLE-DISCONNECT-FIX.md','LONG-RUNNING-TURN-FIX.md',`RELEASE-${version}.md`]) await cp(join(repository,'docs',document),join(output,'docs',document));
+  for(const document of ['SESSIONS-USAGE.md','SESSION-RECOVERY-FIX.md','INSTALLATION.md','OMP-DESIGNERS.md','GUI-HARNESS.md','CHAT-UI-IMPLEMENTATION.md','MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md','CORE-IDLE-DISCONNECT-FIX.md','LONG-RUNNING-TURN-FIX.md',`RELEASE-${version}.md`]) await cp(join(repository,'docs',document),join(output,'docs',document));
   await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
     'Secure transport also requires .NET 8+ runtime; no npm install, TypeScript compiler or native Node addon is needed.\n\n' +

@@ -56,6 +56,7 @@ export class OmpProcess extends EventEmitter {
   }
 
   get state(): OmpState { return this.currentState; }
+  get pid():number|undefined {return this.child?.pid;}
 
   async start(): Promise<Record<string, unknown>> {
     if (this.currentState !== 'new') throw new Error('OMP manager is single-use');

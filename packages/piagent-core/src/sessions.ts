@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink, rmdir } from 'node:fs/promises';
-import type { FileHandle } from 'node:fs/promises';
+import {SessionLock} from './session-lock.js';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isObject } from '@piagent/protocol';
 
@@ -69,7 +69,7 @@ export class SessionStore {
     const values=await Promise.all(names.map(async name=>{ try{return await this.load(name);}catch{return undefined;} }));
     return Promise.all(values.filter((value):value is SavedSession=>!!value).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,50)
       .map(async record=>{const {savedSessionId,title,updatedAt,createdAt,ompFile}=record;
-        const active=!!await lstat(join(this.path(savedSessionId),'active.lock')).catch(()=>undefined);
+        const active=await SessionLock.active(this.path(savedSessionId));
         const empty=await this.emptyFiles(record).then(()=>true,()=>false);
         return {savedSessionId,title,updatedAt,createdAt,resumable:!!ompFile,empty,active,deletable:empty&&!active};}));
   }
@@ -102,14 +102,14 @@ export class SessionStore {
   }
   async deleteEmpty(id:unknown):Promise<void>{
     const dir=this.path(id);await this.directory(dir);
-    let lock:FileHandle;try{lock=await open(join(dir,'active.lock'),'wx');}catch{throw new Error('사용 중인 세션은 삭제할 수 없습니다.');}
+    let lock:SessionLock;try{lock=await SessionLock.acquire(dir);}catch{throw new Error('사용 중이거나 잠금 확인이 필요한 세션은 삭제할 수 없습니다.');}
     try{
       const files=await this.emptyFiles(await this.load(id));
       // Remove only verified regular files; never recursively delete arbitrary directories.
       for(const file of files.slice(1))await unlink(file);
       const omp=join(dir,'omp');if(await lstat(omp).catch(()=>undefined))await rmdir(omp);
       await unlink(files[0]!);
-    }finally{await lock.close();await unlink(join(dir,'active.lock'));}
+    }finally{await lock.release();}
     await rmdir(dir);
     // last() falls back to another saved conversation when its target is absent.
   }
@@ -122,11 +122,12 @@ export class SessionStore {
       await mkdir(this.path(record.savedSessionId));
     }
     const dir=this.path(record.savedSessionId); await this.directory(dir);
-    let lock:FileHandle;
-    try {lock=await open(join(dir,'active.lock'),'wx');}
-    catch {throw new Error('Saved session is already active or needs interrupted-session inspection');}
-    const lease=new SessionLease(this,record,lock);
-    try {await lease.save(); return lease;} catch(error){await lease.release();throw error;}
+    const lock=await SessionLock.acquire(dir);
+    try {
+      // Reload after obtaining ownership; a retiring writer may have saved since load().
+      if(id!==undefined)record=await this.load(id);
+      const lease=new SessionLease(this,record,lock);await lease.save();return lease;
+    }catch(error){await lock.release();throw error;}
   }
   ompDirectory(id:string):string {return join(this.path(id),'omp');}
   async prepareOmpDirectory(id:string):Promise<string> {
@@ -157,8 +158,10 @@ export class SessionStore {
   }
 }
 export class SessionLease {
-  private tail:Promise<void>=Promise.resolve();private released=false;
-  constructor(readonly store:SessionStore,readonly record:SavedSession,private readonly lock:FileHandle) {}
+  private tail:Promise<void>=Promise.resolve();private releasing:Promise<void>|undefined;
+  constructor(readonly store:SessionStore,readonly record:SavedSession,private readonly lock:SessionLock) {}
+  starting():Promise<void>{return this.lock.starting();}
+  started(pid:number|undefined):Promise<void>{return this.lock.started(pid);}
   save():Promise<void> {const next=this.tail.then(()=>this.store.save(this.record));this.tail=next.catch(()=>{});return next;}
   append(role:TranscriptLine['role'],text:string,timing?:{started:number;ended:number;stopped:boolean},attachments?:string[]):void {
     if (!text) return;
@@ -172,5 +175,5 @@ export class SessionLease {
     if(event['t']==='thinkingDelta'&&last?.role==='event'&&last.event?.['t']==='thinkingDelta'&&typeof last.event['text']==='string'){last.event['text']=(last.event['text']+String(event['text']??'')).slice(0,32768);return;}
     this.record.transcript.push({role:'event',text:'',ts:Date.now(),event});
   }
-  async release():Promise<void> {if(this.released)return;this.released=true;try{await this.save();}finally{await this.lock.close();await unlink(join(this.store.root,this.record.savedSessionId,'active.lock'));}}
+  release():Promise<void> {return this.releasing??=(async()=>{try{await this.save();}finally{await this.lock.release();}})();}
 }

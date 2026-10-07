@@ -10,7 +10,9 @@ for (const [, target] of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     if (target.length > 1) assert.ok(html.includes(`id="${target.slice(1)}"`), `Missing anchor ${target}`);
   } else if (!/^[a-z]+:/i.test(target)) assert.ok(existsSync(resolve(root, target)), `Missing asset ${target}`);
 }
-assert.ok(html.includes('releases/download/v0.9.14/PiAgent-Setup-0.9.14.exe'));
+const {version}=JSON.parse(readFileSync(resolve('package.json'),'utf8'));
+assert.ok(html.includes(`releases/download/v${version}/PiAgent-Setup-${version}.exe`));
+assert.ok(html.includes(`releases/tag/v${version}`));
 assert.ok(html.includes('비공개 저장소의 다운로드는 GitHub 접근 권한이 필요합니다.'));
 const translations = [...html.matchAll(/data-ko="([^"]*)" data-en="([^"]*)"/g)].map(([,ko,en]) => ({dataset:{ko,en},innerHTML:ko}));
 assert.ok(translations.length > 35);

@@ -1,6 +1,6 @@
 # PiAgent architecture
 
-현재 상태: 2026-10-06, PiAgent 0.9.14. Node/TypeScript Core, IDE adapter, 공유 WebView 경계를 유지한다.
+현재 상태: 2026-10-08, PiAgent 0.9.17. Node/TypeScript Core, IDE adapter, 공유 WebView 경계를 유지한다.
 현재는 초기 vertical slice를 넘어 native OMP 실행 제어·역할/설정·BTW·메시지 timeline·GUI harness까지
 구현했다. 아래 버전별 설명은 확장 이력이며 초기 restricted profile 제약을 native profile에 적용하지 않는다.
 전체/미구현 범위는 [OMP 진행표](docs/OMP-FEATURE-IMPLEMENTATION.md)를 따른다.
@@ -234,7 +234,10 @@ hash of the canonical workspace (OMP cwd when no workspace is configured). Opaqu
 Each active lease has an exclusive lock; close/disconnect joins OMP before flushing metadata and releasing it.
 OMP runs with a private --session-dir and resumes via switch_session, preserving model history/tool results.
 Displayed transcript is limited to 200 entries/256 KiB; it is separate from OMP's full conversation file.
-Interrupted locks require inspection; approvals never survive a disconnected connection.
+Windows session leases hold an OS-owned named pipe guard plus a durable owner journal (Core/OMP PIDs).
+After abrupt termination, a new owner reclaims the marker only under that guard and only when both
+processes are gone. Legacy, malformed or incomplete-spawn markers still require inspection.
+Startup failure/disconnect cleanup is joined before ownership is released; approvals never survive a disconnected connection.
 
 `chat.usage.v1` reads get_session_stats/get_state and queries `omp usage --json --provider` through execFile
 with no shell, bounded output and a 30-second timeout. Account limits are cached for 60 seconds. Only normalized

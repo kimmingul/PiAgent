@@ -1,12 +1,18 @@
 # PiAgent validation history
 
-## 최신 상태 (2026-10-06)
+## 최신 상태 (2026-10-08)
 
-제품 버전 0.9.14. 설치 receipt의 현재 release는 `0.9.14-20261005095258`이다.
+제품 버전 0.9.17. 현재 로컬 복구 검증 receipt는 `0.9.16-session-recovery-20261007125243`이다.
 VS2022/2026와 RAD32/64 등록이 기록되어 있으나 최신 실사용 검증은 VS2026/RAD13.2 64-bit를 우선한다.
 설치 등록, 자동 회귀, fixture/mock bridge, 실제 모델·IDE 결과를 서로 구분한다.
 
-- 장시간 수정 자동 회귀 118/118, 실제 Named Pipe fixture 631초와 WebView2 PASS 57개.
+- 세션 복구 수정 자동 회귀 140/140, 강제 종료 후 재개와 여섯 프로세스의 복구 경쟁 보호 확인.
+- 실제 VS2026/NanumPDF 저장 대화 재개, 연결 상태 및 OMP JSONL 해시 보존 확인.
+- [0.9.17 배포 검증](RELEASE-0.9.17.md)과 [원인·복구 기록](SESSION-RECOVERY-FIX.md).
+- 0.9.17 전체 자동 회귀 140/140, C#/Delphi adapter 통합 17/17, 패키지 WebView 검증 통과.
+- 통합 설치파일과 VSIX/내부 DLL, RAD32/64 BPL, PipeHost 서명·타임스탬프 검증 통과.
+  내장 payload 전체 해시, ARM64/x64 번들 인증 연결·ping, 설치 안전성 검사 통과.
+- 이전 장시간 수정 자동 회귀 118/118, 실제 Named Pipe fixture 631초와 WebView2 PASS 57개.
 - 설치 VS2026의 NanumPDF 개발 턴: 2026-10-05 18:58:30–21:35:54 KST,
   약 2시간 37분 후 UI 최종 응답 및 Core `completed` 기록으로 종료 확인.
 - RAD13.2 64-bit 서명 UI의 로드/연결과 프로젝트 바인딩 확인은 장시간 NanumPDF 검증과 별개다.

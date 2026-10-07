@@ -1,6 +1,6 @@
-# Windows 설치 (0.9.14)
+# Windows 설치 (0.9.17)
 
-문서 갱신일: 2026-10-06 KST. 기본 배포는 서명된 `dist/PiAgent-Setup-0.9.14.exe`다.
+문서 갱신일: 2026-10-08 KST. 기본 배포는 서명된 `dist/PiAgent-Setup-0.9.17.exe`다.
 설치 UI에서 Core, RAD13.2 32/64-bit, VS2022/2026와 미설치 OMP의 설치 여부를 선택한다.
 기존 설치에서 선택하지 않은 adapter는 유지되므로 선택 해제가 제거를 뜻하지 않는다.
 
@@ -16,7 +16,9 @@ ARM64에서는 native ARM64 runtime을 설치한다. BPL은 IDE bitness에 맞�
 VS는 Tools → PiAgent: Open Chat, RAD는 View/Tools → PiAgent에서 연다.
 상세 선택·제거·업그레이드 동작은 [UNIFIED-INSTALLER.md](UNIFIED-INSTALLER.md)를 따른다.
 
-이 PC의 현재 receipt는 `0.9.14-20261005095258` release와 VS2022/2026, RAD32/64 등록을 기록한다.
+이 PC의 세션 복구 검증 receipt는 `0.9.16-session-recovery-20261007125243` release와
+VS2022/2026, RAD32/64 등록을 기록한다. [0.9.17 릴리즈](RELEASE-0.9.17.md)는 이 Core 수정을
+서명 통합 설치파일에 포함한다. 릴리즈 빌드·게시는 현재 설치본을 자동 교체하지 않는다.
 최신 실사용 검증 대상은 VS2026/RAD13.2 64-bit이며 다른 IDE 등록을 검증 PASS로 해석하지 않는다.
 
 ## 수동 archive 설치 (이전 배포 방식)

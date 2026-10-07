@@ -1,6 +1,6 @@
 # Visual Studio adapter
 
-현재 0.9.14 (문서 갱신 2026-10-06). C# VSIX는 Tools → **PiAgent: Open Chat**의 WPF/WebView2 창에서 채팅 스트리밍·취소,
+현재 0.9.17 (문서 갱신 2026-10-08). C# VSIX는 Tools → **PiAgent: Open Chat**의 WPF/WebView2 창에서 채팅 스트리밍·취소,
 다중 파일 승인·복원, 저장 대화 재개와 세션 사용량·비용·계정 한도를 제공한다.
 Tools → PiAgent: Check Core Connection은 별도의 일회성 hello/ping 검사다.
 hello 전에 current-user credential로 상호 HMAC 인증하며 credential/revision은 WebView에 전달하지 않는다.

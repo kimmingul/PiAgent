@@ -7,7 +7,7 @@ Git bootstrap uses a compact dismissible banner and the existing sheet. Git prev
 commit require explicit user confirmation. IDE reconnect resumes the last workspace session;
 New conversation still creates a fresh one.
 
-Current documentation: 2026-10-06, PiAgent 0.9.14. Settings retain five areas and show the generated
+Current documentation: 2026-10-08, PiAgent 0.9.17. Settings retain five areas and show the generated
 package version and developer Kim Min-Gul (김민걸, mgkim@jbnu.ac.kr). Account/provider/login views
 remain inside settings; native credentials are OMP-owned. Long-running turns display activity and
 preserve the actual termination reason without a fixed ten-minute turn limit.

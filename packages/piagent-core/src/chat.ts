@@ -56,6 +56,7 @@ export class ChatSession {
   private gitSetup:GitSetup|undefined;
   private gitBusy=false;
   private opening = false;
+  private openingDone:Promise<void>|undefined;
   private disposed = false;
   private retiring: Promise<void> | undefined;
   private sequence = 0;
@@ -128,6 +129,8 @@ export class ChatSession {
       if('savedSessionId' in params&&!sessionsNegotiated)throw new ChatError(-32005,'Session capability not negotiated');
       if (this.opening || this.omp) throw new ChatError(-32011, 'Session already open or opening');
       this.opening = true;
+      let opened:()=>void=()=>{};
+      this.openingDone=new Promise<void>(resolve=>{opened=resolve;});
       try {
         if('workspaceUri' in params) {
           if(!this.bindWorkspace)throw new ChatError(-32005,'Workspace binding unavailable');
@@ -135,9 +138,9 @@ export class ChatSession {
           this.workspace=bound.workspace;this.changes=bound.changes;this.services={...this.services,sessions:bound.sessions};
           this.options={...this.options,cwd:bound.workspace.root};
         }
-      }catch(error){this.opening=false;throw error;}
-      try {const selected=params['resumeLast']===true?await this.services.sessions?.last():params['savedSessionId'];this.lease=sessionsNegotiated&&this.services.sessions?await this.services.sessions.acquire(selected):undefined;}
-      catch(error){this.opening=false;throw error;}
+      const selected=params['resumeLast']===true?await this.services.sessions?.last():params['savedSessionId'];
+      this.lease=sessionsNegotiated&&this.services.sessions?await this.services.sessions.acquire(selected):undefined;
+      if(this.disposed)throw new Error('Connection closed during startup');
       const preferred=this.lease&&!params['savedSessionId']?await new PreferencesStore(this.lease.store.root).read():undefined;
       this.approvalMode=String(params['approvalMode']??this.lease?.record.approvalMode??preferred?.defaultApproval??'always-ask');
       this.plan=this.lease?.record.plan;
@@ -145,11 +148,10 @@ export class ChatSession {
       let nativeArgs:string[]=[];
       const native=this.options.profile==='native'&&this.approvalMode!=='plan';
       if(native) {
-        if(!controlsNegotiated||!this.lease||!this.workspace||!workspaceNegotiated||!writesNegotiated) {await this.lease?.release();this.lease=undefined;this.opening=false;throw new ChatError(-32005,'Native OMP requires interactive controls, private sessions and negotiated workspace writes');}
-        try {const dir=await this.lease.store.prepareOmpDirectory(this.lease.record.savedSessionId);
+        if(!controlsNegotiated||!this.lease||!this.workspace||!workspaceNegotiated||!writesNegotiated) throw new ChatError(-32005,'Native OMP requires interactive controls, private sessions and negotiated workspace writes');
+        const dir=await this.lease.store.prepareOmpDirectory(this.lease.record.savedSessionId);
           const config=join(dir,`piagent-host-${randomUUID()}.yml`);
-          await writeFile(config,JSON.stringify({tools:{approvalMode:this.approvalMode}}),{encoding:'utf8',flag:'wx'});nativeArgs=['--config',config,'--approval-mode',this.approvalMode];}
-        catch(error){await this.lease.release();this.lease=undefined;this.opening=false;throw error;}
+          await writeFile(config,JSON.stringify({tools:{approvalMode:this.approvalMode}}),{encoding:'utf8',flag:'wx'});nativeArgs=['--config',config,'--approval-mode',this.approvalMode];
       }
       const omp = new OmpProcess({ ...this.options, executableArgs: [
         ...(this.options.executableArgs ?? []), ...(native?nativeArgs:['--no-tools', '--no-extensions', '--no-skills',
@@ -166,8 +168,12 @@ export class ChatSession {
           void this.closeSession();
         }
       });
-      try {
-        await omp.start();
+        await this.lease?.starting();
+        const startup=omp.start();
+        // Observe startup immediately while the durable child ownership is written.
+        void startup.catch(()=>{});
+        await this.lease?.started(omp.pid);
+        await startup;
         if(native) {
           await omp.request('set_event_filter',{events:null,messageUpdates:'delta'});
           await omp.request('set_subagent_subscription',{level:'progress'});
@@ -196,11 +202,11 @@ export class ChatSession {
           ...(this.lease?{savedSessionId:this.lease.record.savedSessionId,transcript:this.lease.record.transcript}:{}),
           ...(this.workspaceEnabled ? { workspaceUri: pathToFileURL(this.workspace!.root).href, readOnly: !this.writesEnabled, writeEnabled: this.writesEnabled } : {}) };
       } catch (error) {
-        await omp.stop(); this.omp = undefined;
+        await this.omp?.stop(); this.omp = undefined;
         this.interactions?.clear();this.interactions=undefined;this.designer.close();
         await this.lease?.release();this.lease=undefined;
-        throw new ChatError(-32010, error instanceof Error ? error.message : 'OMP startup failed');
-      } finally { this.opening = false; }
+        throw error instanceof ChatError?error:new ChatError(-32010, error instanceof Error ? error.message : 'OMP startup failed');
+      } finally { this.opening = false;this.openingDone=undefined;opened(); }
     }
     if (!this.id || !this.omp || this.opening || this.retiring || params['sessionId'] !== this.id)
       throw new ChatError(-32012, 'Unknown or unavailable session');
@@ -623,6 +629,9 @@ export class ChatSession {
   private closeSession(requestAbort = true): Promise<void> {
     if(this.retiring)return this.retiring;
     const done=(async()=>{
+      // A disconnect during acquire/start must not release the lease before the
+      // child exists or leave a late-acquired lease behind after cleanup returns.
+      if(this.openingDone)await this.openingDone;
       if(this.promptSetup)await this.promptSetup;
       if(this.planSaving)await this.planSaving;
       const omp=this.omp;
