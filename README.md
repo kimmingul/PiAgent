@@ -3,9 +3,9 @@
 현재 버전 **0.9.17** · 서명 사전 릴리즈 **0.9.17** · 문서 갱신일 **2026-10-08 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
-[제품 홈페이지](https://kimmingul.github.io/PiAgent-site/) ·
+[제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
 [0.9.17 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.17).
-소스와 릴리즈 저장소는 비공개이므로 다운로드에는 저장소 접근 권한이 필요하다.
+소스와 서명 설치 파일은 공개 저장소 `kimmingul/PiAgent`에서 제공한다.
 
 Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 Delphi BPL은
 인증된 Named Pipe JSON-RPC로 연결하고 Core는 OMP와 `--mode rpc-ui` JSONL로 통신한다.

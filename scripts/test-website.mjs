@@ -13,7 +13,8 @@ for (const [, target] of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
 const {version}=JSON.parse(readFileSync(resolve('package.json'),'utf8'));
 assert.ok(html.includes(`releases/download/v${version}/PiAgent-Setup-${version}.exe`));
 assert.ok(html.includes(`releases/tag/v${version}`));
-assert.ok(html.includes('비공개 저장소의 다운로드는 GitHub 접근 권한이 필요합니다.'));
+assert.ok(html.includes('<link rel="canonical" href="https://kimmingul.github.io/PiAgent/">'));
+assert.ok(!/PiAgent-site|비공개 저장소|private repository/.test(html));
 const translations = [...html.matchAll(/data-ko="([^"]*)" data-en="([^"]*)"/g)].map(([,ko,en]) => ({dataset:{ko,en},innerHTML:ko}));
 assert.ok(translations.length > 35);
 const buttons = Object.fromEntries(['#theme','#language'].map(id => [id,{addEventListener(type, fn){this.click=fn;},setAttribute(){}}]));

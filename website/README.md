@@ -7,8 +7,11 @@ https://kimmingul.github.io/NanumCsvViewer/. The PiAgent IDE UI is not redesigne
 - Korean/English switch, system/light/dark appearance, responsive layouts, keyboard focus and reduced-motion support.
 - No analytics, external fonts, runtime API requests or build dependencies.
 - Illustrative preview is labeled; features and validation limits reflect PiAgent 0.9.17, including abandoned session recovery.
-- Public site repository: `kimmingul/PiAgent-site`. PiAgent source and release repository remain private.
-- Download links require permission to the private PiAgent repository.
+- Public source, releases and website repository: `kimmingul/PiAgent`.
+- Canonical homepage: https://kimmingul.github.io/PiAgent/.
+- Signed installer downloads are public and do not require repository access.
 
-Deploy these website files to the root of the public site repository. GitHub Pages serves its `main` branch root.
-Only these public-facing files are copied; project source, diagnostic artifacts and credentials are excluded.
+The `.github/workflows/pages.yml` workflow validates and publishes only `website/`
+using GitHub Pages. It runs for website changes on the default `codex/omp-chat`
+branch, or manually through Actions. Pages uses the GitHub Actions source.
+Project source and diagnostic artifacts are not included in the website artifact.
