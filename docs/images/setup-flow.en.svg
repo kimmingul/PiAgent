@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="900" viewBox="0 0 920 900" role="img" aria-labelledby="title desc" xml:lang="en">
+<title id="title">PiAgent installation sequence</title><desc id="desc">1. Prepare one IDE. Visual Studio 2022/2026 or RAD Studio 13.2. Open and build a project first.. 2. Check basic tools. WebView2 Runtime · Git for code changes. Unified setup includes Node.js / .NET runtimes.. 3. Install PiAgent + OMP. Close IDEs → select Core + your IDE adapters. If OMP is missing, select Install OMP in setup.. 4. Configure one AI connection. Choose Claude, Codex, xAI, Google or Ollama. Cloud: account/API key · Local: Ollama + model. 5. Verify an OMP answer. Select a model → ask without changing files. Check a normal answer before opening the IDE.. 6. Start chat in the IDE. Open project → PiAgent → read-only request. Then try a small change and review approval.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#005fb8"/></marker></defs>
+<rect width="920" height="900" rx="16" fill="#f5f6f8"/>
+<g font-family="Segoe UI,Malgun Gothic,Arial,sans-serif" fill="#1a1a1a">
+<text x="52" y="46" font-size="25" font-weight="700">PiAgent installation sequence</text>
+<g transform="translate(52 74)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">1</text>
+<text x="86" y="31" font-size="22" font-weight="700">Prepare one IDE</text>
+<text x="86" y="58" font-size="18">Visual Studio 2022/2026 or RAD Studio 13.2</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">Open and build a project first.</text>
+</g><path d="M460 182V200" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 206)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">2</text>
+<text x="86" y="31" font-size="22" font-weight="700">Check basic tools</text>
+<text x="86" y="58" font-size="18">WebView2 Runtime · Git for code changes</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">Unified setup includes Node.js / .NET runtimes.</text>
+</g><path d="M460 314V332" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 338)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">3</text>
+<text x="86" y="31" font-size="22" font-weight="700">Install PiAgent + OMP</text>
+<text x="86" y="58" font-size="18">Close IDEs → select Core + your IDE adapters</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">If OMP is missing, select Install OMP in setup.</text>
+</g><path d="M460 446V464" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 470)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">4</text>
+<text x="86" y="31" font-size="22" font-weight="700">Configure one AI connection</text>
+<text x="86" y="58" font-size="18">Choose Claude, Codex, xAI, Google or Ollama</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">Cloud: account/API key · Local: Ollama + model</text>
+</g><path d="M460 578V596" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 602)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">5</text>
+<text x="86" y="31" font-size="22" font-weight="700">Verify an OMP answer</text>
+<text x="86" y="58" font-size="18">Select a model → ask without changing files</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">Check a normal answer before opening the IDE.</text>
+</g><path d="M460 710V728" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 734)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">6</text>
+<text x="86" y="31" font-size="22" font-weight="700">Start chat in the IDE</text>
+<text x="86" y="58" font-size="18">Open project → PiAgent → read-only request</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">Then try a small change and review approval.</text>
+</g>
+</g></svg>
+

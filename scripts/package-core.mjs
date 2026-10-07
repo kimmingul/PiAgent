@@ -34,6 +34,8 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   for (const document of ['ARCHITECTURE.md', 'PROTOCOL.md'])
     await cp(join(repository, document), join(output, document));
   await mkdir(join(output, 'docs'));
+  for(const document of ['GETTING-STARTED.ko.md','GETTING-STARTED.en.md']) await cp(join(repository,'docs',document),join(output,'docs',document));
+  await cp(join(repository,'docs/images'),join(output,'docs/images'),{recursive:true});
   for(const document of ['README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md',`RELEASE-${version}.en.md`])
     await cp(join(repository,'docs',document),join(output,'docs',document));
   await mkdir(join(output,'website'));

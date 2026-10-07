@@ -8,6 +8,7 @@ Current version: **0.9.19**. The main user guides below are available in Korean 
 | 문서 / Guide | 한국어 | English |
 |---|---|---|
 | 제품 소개 / Product overview | [README](../README.md) | [README](../README.en.md) |
+| 처음 설치 / First-time setup | [순서 도식·단계별 안내](GETTING-STARTED.ko.md) | [Diagram and step-by-step guide](GETTING-STARTED.en.md) |
 | Windows 설치 / Windows installation | [설치 안내](INSTALLATION.md) | [Installation](INSTALLATION.en.md) |
 | 통합 설치파일 / Unified installer | [통합 설치](UNIFIED-INSTALLER.ko.md) | [Unified installer](UNIFIED-INSTALLER.md) |
 | 언어 설정 / Language settings | [언어 지원](LOCALIZATION.md) | [Language support](LOCALIZATION.en.md) |

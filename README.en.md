@@ -9,6 +9,20 @@ Developer: **Min-Gul Kim (김민걸)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.a
 [0.9.19 prerelease](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.19).
 Source code and signed installers are available in the public `kimmingul/PiAgent` repository.
 
+## First-time setup
+
+Start with **one IDE + OMP + one AI connection**. You do not need to install Claude Code, Codex,
+Grok Build and Antigravity together. Local Ollama use needs Ollama and a downloaded model.
+Current setup targets **VS2022/2026 and RAD13.2**; RAD11/12 need BPLs rebuilt with their own SDKs.
+
+![PiAgent setup: IDE → basic tools → PiAgent and OMP → AI connection → OMP check → first IDE chat](docs/images/setup-flow.en.svg)
+
+[English: first-time setup](docs/GETTING-STARTED.en.md) · [한국어: 처음 설치하기](docs/GETTING-STARTED.ko.md) ·
+[Website setup sequence](https://kimmingul.github.io/PiAgent/?lang=en#setup).
+The guide includes completion checks, provider preparation and troubleshooting by stage.
+
+## Technical overview
+
 PiAgent has an IDE-neutral Core built with Node.js 24 LTS and TypeScript strict/ESM.
 C# VSIX and Delphi BPL adapters connect through authenticated Named Pipe JSON-RPC;
 Core communicates with OMP through `--mode rpc-ui` JSONL.

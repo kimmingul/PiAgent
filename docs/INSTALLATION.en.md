@@ -2,6 +2,10 @@
 
 [한국어](INSTALLATION.md) · **English** · [Documentation](README.md)
 
+New to OMP or AI coding tools? Start with [first-time setup](GETTING-STARTED.en.md).
+It includes an installation diagram and completion checks from IDE preparation to your first answer.
+Current setup automatically registers RAD13.2; RAD11/12 require separate builds with their own SDKs.
+
 Updated: 2026-10-08 KST. The default distribution is the signed `dist/PiAgent-Setup-0.9.19.exe`.
 Select Core, RAD13.2 32/64-bit, VS2022/2026 and optional installation of OMP if absent.
 Previously installed adapters that are not selected are retained; deselection does not uninstall them.

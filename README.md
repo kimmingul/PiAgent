@@ -9,6 +9,20 @@
 [0.9.19 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.19).
 소스와 서명 설치 파일은 공개 저장소 `kimmingul/PiAgent`에서 제공한다.
 
+## 처음 설치하는 분께
+
+**IDE 하나 + OMP + 사용할 AI 연결 하나**부터 준비하세요. Claude Code, Codex, Grok Build,
+Antigravity를 전부 설치할 필요는 없습니다. Ollama 로컬 모델을 선택하면 Ollama와 모델이 필요합니다.
+현재 설치파일은 **VS2022/2026, RAD13.2**를 대상으로 하며 RAD11/12에는 해당 SDK로 별도 빌드한 BPL이 필요합니다.
+
+![PiAgent 설치 순서: IDE → 기본 도구 → PiAgent와 OMP → AI 연결 → OMP 확인 → IDE 첫 대화](docs/images/setup-flow.ko.svg)
+
+[한국어: 처음 설치하기](docs/GETTING-STARTED.ko.md) · [English: first-time setup](docs/GETTING-STARTED.en.md) ·
+[홈페이지 설치 순서](https://kimmingul.github.io/PiAgent/?lang=ko#setup).
+각 단계의 완료 기준, AI 서비스별 준비 사항, 오류 확인 위치를 안내합니다.
+
+## 기술 개요
+
 Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 Delphi BPL은
 인증된 Named Pipe JSON-RPC로 연결하고 Core는 OMP와 `--mode rpc-ui` JSONL로 통신한다.
 기존 RADAgent의 WebView UI/UX를 유지하며 RADAgent repository는 수정하지 않는다.

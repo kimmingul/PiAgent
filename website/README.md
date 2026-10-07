@@ -4,6 +4,10 @@
 
 ## 한국어
 
+홈페이지의 **처음 설치하기**에는 6단계 순서 도식, 단계별 완료 기준, AI 연결별 준비 사항과
+오류 확인 위치가 있다. [한국어 초보자 안내](../docs/GETTING-STARTED.ko.md)와
+[English guide](../docs/GETTING-STARTED.en.md), 문서 ZIP 다운로드를 연결한다.
+
 NanumCsvViewer의 배치와 Windows 스타일을 참고한 PiAgent의 정적 홈페이지다.
 PiAgent IDE UI의 디자인은 유지한다.
 
@@ -21,6 +25,10 @@ PiAgent IDE UI의 디자인은 유지한다.
 제품 소스나 진단 산출물은 홈페이지 게시물에 포함하지 않는다.
 
 ## English
+
+**First-time setup** includes a six-stage diagram, completion checks, AI-specific preparation and
+troubleshooting. It links the [English guide](../docs/GETTING-STARTED.en.md),
+[Korean guide](../docs/GETTING-STARTED.ko.md) and downloadable documentation ZIP.
 
 Static product landing page, inspired by the layout and Windows styling of
 https://kimmingul.github.io/NanumCsvViewer/. The PiAgent IDE UI is not redesigned.

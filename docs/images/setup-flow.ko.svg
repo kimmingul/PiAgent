@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="900" viewBox="0 0 920 900" role="img" aria-labelledby="title desc" xml:lang="ko">
+<title id="title">PiAgent 설치 순서</title><desc id="desc">1. IDE 하나 준비. Visual Studio 2022/2026 또는 RAD Studio 13.2. 먼저 프로젝트를 열고 빌드해 보세요.. 2. 기본 도구 확인. WebView2 Runtime · 코드 변경용 Git. 통합 설치본에는 Node.js / .NET runtime이 포함됩니다.. 3. PiAgent + OMP 설치. IDE 종료 → Core + 사용할 IDE adapter 선택. OMP가 없으면 설치기에서 OMP 설치를 선택하세요.. 4. AI 연결 하나 설정. Claude · Codex · xAI · Google · Ollama 중 선택. 클라우드: 계정/API 키 · 로컬: Ollama + 모델. 5. OMP 답변 확인. 모델 선택 → 파일 변경 없는 간단한 질문. 정상 답변을 확인한 다음 IDE를 여세요.. 6. IDE에서 첫 대화. 프로젝트 열기 → PiAgent → 읽기 요청. 응답 확인 후 작은 변경과 승인으로 진행하세요.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#005fb8"/></marker></defs>
+<rect width="920" height="900" rx="16" fill="#f5f6f8"/>
+<g font-family="Segoe UI,Malgun Gothic,Arial,sans-serif" fill="#1a1a1a">
+<text x="52" y="46" font-size="25" font-weight="700">PiAgent 설치 순서</text>
+<g transform="translate(52 74)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">1</text>
+<text x="86" y="31" font-size="22" font-weight="700">IDE 하나 준비</text>
+<text x="86" y="58" font-size="18">Visual Studio 2022/2026 또는 RAD Studio 13.2</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">먼저 프로젝트를 열고 빌드해 보세요.</text>
+</g><path d="M460 182V200" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 206)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">2</text>
+<text x="86" y="31" font-size="22" font-weight="700">기본 도구 확인</text>
+<text x="86" y="58" font-size="18">WebView2 Runtime · 코드 변경용 Git</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">통합 설치본에는 Node.js / .NET runtime이 포함됩니다.</text>
+</g><path d="M460 314V332" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 338)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">3</text>
+<text x="86" y="31" font-size="22" font-weight="700">PiAgent + OMP 설치</text>
+<text x="86" y="58" font-size="18">IDE 종료 → Core + 사용할 IDE adapter 선택</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">OMP가 없으면 설치기에서 OMP 설치를 선택하세요.</text>
+</g><path d="M460 446V464" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 470)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">4</text>
+<text x="86" y="31" font-size="22" font-weight="700">AI 연결 하나 설정</text>
+<text x="86" y="58" font-size="18">Claude · Codex · xAI · Google · Ollama 중 선택</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">클라우드: 계정/API 키 · 로컬: Ollama + 모델</text>
+</g><path d="M460 578V596" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 602)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">5</text>
+<text x="86" y="31" font-size="22" font-weight="700">OMP 답변 확인</text>
+<text x="86" y="58" font-size="18">모델 선택 → 파일 변경 없는 간단한 질문</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">정상 답변을 확인한 다음 IDE를 여세요.</text>
+</g><path d="M460 710V728" stroke="#005fb8" stroke-width="3" marker-end="url(#arrow)"/>
+<g transform="translate(52 734)">
+<rect width="816" height="104" rx="12" fill="white" stroke="#d7dde5"/>
+<circle cx="42" cy="42" r="23" fill="#005fb8"/><text x="42" y="50" text-anchor="middle" fill="white" font-size="23" font-weight="700">6</text>
+<text x="86" y="31" font-size="22" font-weight="700">IDE에서 첫 대화</text>
+<text x="86" y="58" font-size="18">프로젝트 열기 → PiAgent → 읽기 요청</text>
+<text x="86" y="84" font-size="16" fill="#5b5f66">응답 확인 후 작은 변경과 승인으로 진행하세요.</text>
+</g>
+</g></svg>
+
