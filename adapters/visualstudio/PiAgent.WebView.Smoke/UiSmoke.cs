@@ -12,9 +12,13 @@ internal static class UiSmoke
         core.WebMessageReceived+=(_,args)=>sent.Add(args.WebMessageAsJson);
         // Exercise the shipped page and real browser/CSP, with deterministic host replies.
         for (int i = 0; i < 100; i++) {
-            if (await core.ExecuteScriptAsync("document.documentElement.lang !== 'en' && !!window.piagentPost") == "true") break;
+            if (await core.ExecuteScriptAsync("!!window.piagentPost") == "true") break;
             await Task.Delay(50);
         }
+        core.PostWebMessageAsJson("""{"type":"hostLocale","systemLanguage":"ja-JP"}""");await Task.Delay(200);
+        await Check(core,"document.documentElement.lang==='en'","non-Korean host defaults to English");
+        core.PostWebMessageAsJson("""{"type":"hostLocale","systemLanguage":"ko-KR"}""");await Task.Delay(200);
+        await Check(core,"document.documentElement.lang==='ko'","Korean host defaults to Korean");
         core.PostWebMessageAsJson("{\"type\":\"session\",\"sessionId\":\"smoke\",\"writeEnabled\":true,\"usageEnabled\":false,\"sessionsEnabled\":true,\"transcript\":[{\"role\":\"user\",\"text\":\"<script>bad()</script>\"},{\"role\":\"assistant\",\"text\":\"**원본 UI**\"}]}");
         await Task.Delay(150);
         await Check(core, "document.querySelector('.user-text').textContent === '<script>bad()</script>' && document.querySelector('.markdown-body strong').textContent === '원본 UI'", "history and Markdown");
@@ -191,6 +195,19 @@ internal static class UiSmoke
         core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"long-running","turnId":"long","sequence":3,"kind":"error","text":"OMP 프로세스가 예기치 않게 종료되었습니다."}}""");
         core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"long-running","turnId":null,"sequence":4,"kind":"closed","text":"OMP 프로세스가 예기치 않게 종료되었습니다."}}""");await Task.Delay(100);
         await Check(core,"!document.getElementById('banner').hidden && document.getElementById('banner').textContent.includes('OMP 프로세스') && document.getElementById('log').textContent.includes('OMP 프로세스')","session closure preserves failure reason in status and conversation");
+        core.PostWebMessageAsJson("""{"type":"session","sessionId":"localization","preferencesEnabled":true,"ompControlsEnabled":true,"ompProfile":"native","approvalModes":["always-ask","write","yolo","plan"]}""");await Task.Delay(100);
+        await core.ExecuteScriptAsync("document.getElementById('settings-btn').click()");
+        core.PostWebMessageAsJson("""{"type":"preferences","piagentVersion":"0.9.19","values":{"language":"en","fontSize":13,"showThinking":true,"showTools":true,"showTodos":true,"showSubagents":true,"notifications":false,"highContrast":false,"defaultApproval":"always-ask"}}""");await Task.Delay(200);
+        await Check(core,"document.documentElement.lang==='en' && document.getElementById('sheet-title').textContent==='PiAgent Settings' && Array.from(document.querySelectorAll('.settings-tab')).map(n=>n.textContent).join('|')==='Display|Account|Model roles|Extensions|Advanced'","saved English preference overrides Korean host throughout settings");
+        await core.ExecuteScriptAsync("ChatComposer.setInput('locale draft 코드 {0}');const language=document.querySelector('.settings-field select');language.value='ko';language.dispatchEvent(new Event('change'));document.getElementById('settings-tab-1').click()");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"localization","sequence":1,"kind":"omp_event","frame":{"type":"extension_ui_request","login":true,"id":"login:locale:input","method":"input","title":"Fixture authentication"}}}""");await Task.Delay(100);
+        await core.ExecuteScriptAsync("document.querySelector('.settings-login-card input').value='unsent-fixture-code'");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"localization","sequence":2,"kind":"omp_event","frame":{"type":"extension_ui_request","id":"locale:confirm","method":"confirm","title":"Fixture approval","message":"폼 디자이너 조회 승인: 현재 프로젝트의 열린 폼과 컴포넌트 속성을 읽습니다. 폼을 변경하거나 저장하지 않습니다."}}}""");await Task.Delay(100);
+        await Check(core,"document.querySelector('.action-card .card-summary').textContent.startsWith('Approve form designer inspection') && Array.from(document.querySelectorAll('.settings-login-card button')).some(b=>b.textContent==='Submit')","English designer guidance and authentication controls");
+        sent.Clear();await core.ExecuteScriptAsync("Array.from(document.querySelectorAll('.settings-actions button')).find(b=>b.textContent==='Apply').click()");await Task.Delay(100);
+        if(!sent.Exists(message=>message.Contains("\"language\":\"ko\"")&&message.Contains("\"action\":\"preferences\"")))throw new Exception("Language choice did not reach preferences store");
+        core.PostWebMessageAsJson("""{"type":"preferences","values":{"language":"ko","fontSize":13}}""");await Task.Delay(200);
+        await Check(core,"document.documentElement.lang==='ko' && document.getElementById('sheet-title').textContent==='PiAgent 설정' && document.getElementById('settings-tab-1').getAttribute('aria-selected')==='true' && document.querySelector('.settings-login-card input').value==='unsent-fixture-code' && document.getElementById('input').value==='locale draft 코드 {0}' && Array.from(document.querySelectorAll('.settings-login-card button')).some(b=>b.textContent==='제출') && Array.from(document.querySelectorAll('.action-card button')).some(b=>b.textContent==='확인')","applying Korean preserves selected tab, authentication input, draft and pending approval");
         await Check(core, "smokeErrors.length === 0", "no JavaScript or CSP errors: " + await core.ExecuteScriptAsync("smokeErrors"));
         await core.ExecuteScriptAsync("document.getElementById('sheet').hidden=true;window.marker=42;ChatComposer.setInput('도킹 전 초안');");
     }

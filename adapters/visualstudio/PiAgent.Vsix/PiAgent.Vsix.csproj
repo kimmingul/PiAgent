@@ -2,7 +2,7 @@
   <ItemGroup><Reference Include="System.Windows.Forms" /></ItemGroup>
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.9.18</Version>
+    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.9.19</Version>
     <AssemblyName>PiAgent.Vsix</AssemblyName><RootNamespace>PiAgent.Vsix</RootNamespace>
     <GeneratePkgDefFile>true</GeneratePkgDefFile><IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CreateVsixContainer>true</CreateVsixContainer><DeployExtension>false</DeployExtension>
@@ -22,7 +22,7 @@
     <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\THIRD-PARTY-NOTICES.txt"><TargetPath>THIRD-PARTY-NOTICES.txt</TargetPath></VSIXSourceItem>
     <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\WEBVIEW2-LICENSE.txt"><TargetPath>WEBVIEW2-LICENSE.txt</TargetPath></VSIXSourceItem>
     <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\..\..\ui\src\**\*" Exclude="$(MSBuildProjectDirectory)\..\..\..\ui\src\**\*.ts"><TargetPath>ui\%(RecursiveDir)%(Filename)%(Extension)</TargetPath></VSIXSourceItem>
-    <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\..\..\ui\dist\bridge.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\controller.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\interactions.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\settings.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\contracts.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\account.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\roles.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\execution.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\git.js"><TargetPath>ui\%(Filename)%(Extension)</TargetPath></VSIXSourceItem>
+    <VSIXSourceItem Include="$(MSBuildProjectDirectory)\..\..\..\ui\dist\bridge.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\controller.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\interactions.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\settings.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\contracts.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\account.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\roles.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\execution.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\git.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\i18n.js;$(MSBuildProjectDirectory)\..\..\..\ui\dist\messages.en.js"><TargetPath>ui\%(Filename)%(Extension)</TargetPath></VSIXSourceItem>
     <VSIXSourceItem Include="$(NuGetPackageRoot)microsoft.web.webview2\1.0.4258.31\runtimes\win-x64\native\WebView2Loader.dll"><TargetPath>runtimes\win-x64\native\WebView2Loader.dll</TargetPath></VSIXSourceItem>
     <VSIXSourceItem Include="$(NuGetPackageRoot)microsoft.web.webview2\1.0.4258.31\runtimes\win-arm64\native\WebView2Loader.dll"><TargetPath>runtimes\win-arm64\native\WebView2Loader.dll</TargetPath></VSIXSourceItem>
   </ItemGroup>

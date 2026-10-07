@@ -20,6 +20,7 @@ namespace PiAgent.Vsix;
 public sealed class ChatControl : UserControl, IDisposable
 {
     [DllImport("user32.dll")] private static extern bool FlashWindow(IntPtr hwnd,bool invert);
+    [DllImport("kernel32.dll")] private static extern ushort GetUserDefaultUILanguage();
     private readonly JoinableTaskCollection jobs;
     private readonly JoinableTaskFactory factory;
     private const string Page = "https://piagent.local/chat.html";
@@ -162,7 +163,7 @@ public sealed class ChatControl : UserControl, IDisposable
                     else if(action=="queuePrompt")Post(new JObject {["type"]="queueAccepted",["id"]=requestId,["ownerSessionId"]=ownerSession});
                     else if(action!="btwStop") {uiReply["type"]=action=="listFiles"?"files":action=="preferences"?"preferences":"btwList";uiReply["ownerSessionId"]=ownerSession;Post(uiReply);}
                     break;
-                case "ready": pageReady = true; break;
+                case "ready": pageReady = true; Post(new JObject {["type"]="hostLocale",["systemLanguage"]=(GetUserDefaultUILanguage() & 0x3ff)==0x12 ? "ko" : "en"}); break;
                 case "proceedPlan":
                     if(client==null||sessionId==null)throw new IOException("Core unavailable");AcceptSession(await client.RequestAsync("chat.proceedPlan",new JObject {["sessionId"]=sessionId,["path"]=message["path"]},lifetime.Token));break;
                 case "setApproval":

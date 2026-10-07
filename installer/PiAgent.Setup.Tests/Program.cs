@@ -10,6 +10,21 @@ void MustReject(Action action, string test)
 }
 try
 {
+    foreach (var system in new[] {"en-US", "ja-JP", "de-DE", "fr-FR", ""})
+        if (L.Resolve("auto", system) != "en") throw new Exception("Non-Korean default must be English");
+    if (L.Resolve("auto", "ko-KR") != "ko" || L.Resolve("en", "ko-KR") != "en" || L.Resolve("ko", "en-US") != "ko") throw new Exception("Locale override failed");
+    foreach (var pair in L.English)
+    {
+        var source = System.Text.RegularExpressions.Regex.Matches(pair.Key, @"\{\d+\}").Select(m => m.Value).Order().ToArray();
+        var translated = System.Text.RegularExpressions.Regex.Matches(pair.Value, @"\{\d+\}").Select(m => m.Value).Order().ToArray();
+        if (!source.SequenceEqual(translated) || string.IsNullOrWhiteSpace(pair.Value)) throw new Exception("Invalid translation: " + pair.Key);
+        L.Select("ko"); if (L.Text(pair.Key) != pair.Key) throw new Exception("Korean resource lost");
+        L.Select("en"); if (L.Text(pair.Key) != pair.Value) throw new Exception("English resource missing");
+    }
+    L.Select("en");
+    MustReject(() => InstallerEngine.UpgradeCoreSettings("new-node", null, "invalid json"), "English errors preserve access policy");
+    try { InstallerEngine.ExtractPayload(folder); } catch (IOException error) { if (error.Message != "Cannot extract into an existing folder.") throw; }
+    L.Select("auto"); Console.WriteLine("PASS Korean/English setup resources, placeholders, system default and overrides");
     var fresh = InstallerEngine.UpgradeCoreSettings("new-node", "detected-omp", null);
     if (fresh.allowWrites || fresh.ompProfile != "restricted" || fresh.workspace != null || fresh.omp != "detected-omp") throw new Exception("Fresh install defaults changed");
     var saved = new CoreSettings("old-node", "custom-pipe", "saved-omp", "saved-workspace", true, "native");

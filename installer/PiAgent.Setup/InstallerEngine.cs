@@ -27,11 +27,11 @@ public static class InstallerEngine
         if (previousJson == null) return new(node, omp: detectedOmp);
         CoreSettings settings;
         try { settings = JsonSerializer.Deserialize<CoreSettings>(previousJson, Json) ?? throw new JsonException("Empty settings"); }
-        catch (JsonException error) { throw new IOException("기존 Core 설정을 읽지 못했습니다. 설정을 보존하기 위해 업데이트를 중단합니다.", error); }
+        catch (JsonException error) { throw new IOException(L.Text("기존 Core 설정을 읽지 못했습니다. 설정을 보존하기 위해 업데이트를 중단합니다."), error); }
         if (string.IsNullOrEmpty(settings.pipe) || settings.pipe.Length > 128 || settings.pipe.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('_' or '-')) ||
             settings.ompProfile is not ("restricted" or "native") || (settings.allowWrites && string.IsNullOrWhiteSpace(settings.workspace)) ||
             (settings.ompProfile == "native" && (!settings.allowWrites || string.IsNullOrWhiteSpace(settings.omp ?? detectedOmp))))
-            throw new IOException("기존 Core 설정이 올바르지 않습니다. 설정을 보존하기 위해 업데이트를 중단합니다.");
+            throw new IOException(L.Text("기존 Core 설정이 올바르지 않습니다. 설정을 보존하기 위해 업데이트를 중단합니다."));
         return settings with { node = node, omp = settings.omp ?? detectedOmp };
     }
     public static Detection Detect()
@@ -81,24 +81,24 @@ public static class InstallerEngine
     {
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new IOException("프로세스를 시작하지 못했습니다: " + executable);
+        using var process = Process.Start(start) ?? throw new IOException(L.Text("프로세스를 시작하지 못했습니다: ") + executable);
         var output = process.StandardOutput.ReadToEndAsync(); var errors = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(600_000)) { process.Kill(true); throw new IOException("설치 작업 시간이 초과되었습니다."); }
+        if (!process.WaitForExit(600_000)) { process.Kill(true); throw new IOException(L.Text("설치 작업 시간이 초과되었습니다.")); }
         Task.WaitAll(output, errors);
-        if (!(accepted ?? [0]).Contains(process.ExitCode)) throw new IOException($"{Path.GetFileName(executable)} 실행 실패 ({process.ExitCode}): {errors.Result} {output.Result}");
+        if (!(accepted ?? [0]).Contains(process.ExitCode)) throw new IOException(L.Text("{0} 실행 실패 ({1}): {2} {3}", Path.GetFileName(executable), process.ExitCode, errors.Result, output.Result));
         return output.Result;
     }
     public static void ExtractPayload(string destination)
     {
-        if (Directory.Exists(destination)) throw new IOException("이미 존재하는 폴더에는 추출하지 않습니다.");
+        if (Directory.Exists(destination)) throw new IOException(L.Text("이미 존재하는 폴더에는 추출하지 않습니다."));
         Directory.CreateDirectory(destination);
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("PiAgent.Payload.zip") ?? throw new IOException("설치 payload가 없습니다.");
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("PiAgent.Payload.zip") ?? throw new IOException(L.Text("설치 payload가 없습니다."));
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         var prefix = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         foreach (var entry in archive.Entries)
         {
             var target = Path.GetFullPath(Path.Combine(destination, entry.FullName.Replace('/', Path.DirectorySeparatorChar)));
-            if (!target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new IOException("잘못된 ZIP 경로입니다.");
+            if (!target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new IOException(L.Text("잘못된 ZIP 경로입니다."));
             if (entry.FullName.EndsWith('/')) { Directory.CreateDirectory(target); continue; }
             Directory.CreateDirectory(Path.GetDirectoryName(target)!); entry.ExtractToFile(target);
         }
@@ -111,21 +111,21 @@ public static class InstallerEngine
         foreach (var entry in manifest.RootElement.GetProperty("sha256").EnumerateObject())
         {
             var target = Path.GetFullPath(Path.Combine(destination, entry.Name));
-            if (!target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new IOException("잘못된 manifest 경로입니다.");
+            if (!target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new IOException(L.Text("잘못된 manifest 경로입니다."));
             using var input = File.OpenRead(target);
-            if (!Convert.ToHexString(SHA256.HashData(input)).Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase)) throw new IOException("설치파일 무결성 오류: " + entry.Name);
+            if (!Convert.ToHexString(SHA256.HashData(input)).Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase)) throw new IOException(L.Text("설치파일 무결성 오류: ") + entry.Name);
         }
     }
     private static void CheckClosed(bool rad, bool vs)
     {
         if ((rad && Process.GetProcessesByName("bds").Length > 0) || (vs && Process.GetProcessesByName("devenv").Length > 0))
-            throw new IOException("선택한 IDE를 모두 종료한 뒤 다시 설치해주세요.");
+            throw new IOException(L.Text("선택한 IDE를 모두 종료한 뒤 다시 설치해주세요."));
     }
     public static void Install(Selection selection, Detection detected, IProgress<string> progress)
     {
         if ((selection.Rad32 && !detected.Rad32) || (selection.Rad64 && !detected.Rad64) ||
             (selection.Vs22 && !detected.VisualStudio.Any(v => v.Major == 17)) || (selection.Vs26 && !detected.VisualStudio.Any(v => v.Major == 18)))
-            throw new IOException("선택한 IDE가 설치되어 있지 않습니다.");
+            throw new IOException(L.Text("선택한 IDE가 설치되어 있지 않습니다."));
         CheckClosed(selection.Rad32 || selection.Rad64, selection.Vs22 || selection.Vs26);
         EnsurePlainPath(Root);
         Receipt? previous = null;
@@ -133,19 +133,19 @@ public static class InstallerEngine
         {
             previous = JsonSerializer.Deserialize<Receipt>(File.ReadAllText(Path.Combine(Root, "install-receipt.json")), Json);
             if (previous?.Product != Product || previous.Root != Root || !previous.Release.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                throw new IOException("기존 설치 기록이 올바르지 않습니다.");
+                throw new IOException(L.Text("기존 설치 기록이 올바르지 않습니다."));
         }
         Directory.CreateDirectory(Root);
-        var release = Path.Combine(Root, "releases", "0.9.18-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
+        var release = Path.Combine(Root, "releases", "0.9.19-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
         var selectedVs = detected.VisualStudio.Where(v => (v.Major == 17 && selection.Vs22) || (v.Major == 18 && selection.Vs26)).ToList();
         var receipt = new Receipt(Product, Root, release, previous?.VisualStudio.ToList() ?? new(), previous?.RadKeys.ToList() ?? new(), previous?.PreviousRad.ToList() ?? new());
         try
         {
-            progress.Report("설치파일을 확인하고 추출하고 있습니다…"); ExtractPayload(release);
+            progress.Report(L.Text("설치파일을 확인하고 추출하고 있습니다…")); ExtractPayload(release);
             var omp = detected.Omp;
             if (omp is null && selection.InstallOmp)
             {
-                progress.Report("공식 OMP 최신 버전을 다운로드하고 있습니다…");
+                progress.Report(L.Text("공식 OMP 최신 버전을 다운로드하고 있습니다…"));
                 omp = DownloadOmp();
             }
             var runtime = Path.Combine(release, "core");
@@ -158,7 +158,7 @@ public static class InstallerEngine
             File.WriteAllText(Path.Combine(runtime, "settings.json"), JsonSerializer.Serialize(settings, Json));
             var startCore = Path.Combine(release, "Start-Core.ps1");
             File.WriteAllText(startCore, "$ErrorActionPreference='Stop'\n$env:PATH=(Join-Path $PSScriptRoot 'runtimes/" + Architecture + "/dotnet')+';'+$env:PATH\n& (Join-Path $PSScriptRoot 'core/scripts/start-core.ps1')\n");
-            progress.Report("IDE adapter를 등록하고 있습니다…");
+            progress.Report(L.Text("IDE adapter를 등록하고 있습니다…"));
             if (selection.Rad32) RegisterRad(@"Known Packages", release, "Win32", receipt);
             if (selection.Rad64) RegisterRad(@"Known Packages x64", release, "Win64", receipt);
             SaveReceipt(receipt);
@@ -176,20 +176,25 @@ public static class InstallerEngine
                 if (installed != null && Version.Parse(installed) >= Version.Parse(targetVersion))
                     Run(installer, ["/quiet", "/shutdownprocesses", "/instanceIds:" + instance.Id, "/uninstall:" + VsixId, "/logFile:" + log]);
                 Run(installer, ["/quiet", "/shutdownprocesses", "/instanceIds:" + instance.Id, "/logFile:" + log, Path.Combine(runtime, @"adapters\visualstudio\PiAgent.Vsix.vsix")]);
-                if (InstalledVsixVersion(instance) != targetVersion) throw new IOException("VSIX 설치 버전 확인에 실패했습니다. 로그: " + log);
+                if (InstalledVsixVersion(instance) != targetVersion) throw new IOException(L.Text("VSIX 설치 버전 확인에 실패했습니다. 로그: ") + log);
                 if (!receipt.VisualStudio.Any(v => v.Id == instance.Id)) receipt.VisualStudio.Add(instance);
                 SaveReceipt(receipt);
             }
             var setup = Path.Combine(Root, "PiAgent-Setup.exe"); File.Copy(Environment.ProcessPath!, setup, true);
-            CreateShortcut("PiAgent Core 실행", "powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + startCore + "\"");
-            if (omp != null) CreateShortcut("OMP 실행 (로그인 및 설정)", omp, "");
-            CreateShortcut("PiAgent 제거", setup, "--uninstall");
+            // Replace only this product's known shortcuts when the selected language changes.
+            var shortcutFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "PiAgent");
+            EnsurePlainPath(shortcutFolder);
+            foreach (var shortcut in new[] {"PiAgent Core 실행", "Start PiAgent Core", "OMP 실행 (로그인 및 설정)", "Start OMP (sign-in and settings)", "PiAgent 제거", "Uninstall PiAgent"})
+                File.Delete(Path.Combine(shortcutFolder, shortcut + ".lnk"));
+            CreateShortcut(L.Text("PiAgent Core 실행"), "powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + startCore + "\"");
+            if (omp != null) CreateShortcut(L.Text("OMP 실행 (로그인 및 설정)"), omp, "");
+            CreateShortcut(L.Text("PiAgent 제거"), setup, "--uninstall --language " + L.Language);
             using var uninstall = Registry.CurrentUser.CreateSubKey(UninstallKey);
-            uninstall.SetValue("DisplayName", "PiAgent"); uninstall.SetValue("DisplayVersion", "0.9.18");
+            uninstall.SetValue("DisplayName", "PiAgent"); uninstall.SetValue("DisplayVersion", "0.9.19");
             uninstall.SetValue("Publisher", "Nanum Space Co., Ltd."); uninstall.SetValue("InstallLocation", Root);
-            uninstall.SetValue("UninstallString", "\"" + setup + "\" --uninstall"); uninstall.SetValue("DisplayIcon", setup);
+            uninstall.SetValue("UninstallString", "\"" + setup + "\" --uninstall --language " + L.Language); uninstall.SetValue("DisplayIcon", setup);
             uninstall.SetValue("NoModify", 1, RegistryValueKind.DWord); uninstall.SetValue("NoRepair", 1, RegistryValueKind.DWord);
-            SaveReceipt(receipt); progress.Report("설치 완료");
+            SaveReceipt(receipt); progress.Report(L.Text("설치 완료"));
         }
         catch
         {
@@ -218,15 +223,15 @@ public static class InstallerEngine
     private static string DownloadOmp()
     {
         using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("PiAgent-Setup/0.9.18");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("PiAgent-Setup/0.9.19");
         var text = http.GetStringAsync("https://api.github.com/repos/can1357/oh-my-pi/releases/latest").GetAwaiter().GetResult();
         using var data = JsonDocument.Parse(text);
         var name = "omp-windows-" + Architecture + ".exe";
         var asset = data.RootElement.GetProperty("assets").EnumerateArray().Single(a => a.GetProperty("name").GetString() == name);
         var digest = asset.GetProperty("digest").GetString()!;
-        if (!digest.StartsWith("sha256:") || digest.Length != 71) throw new IOException("OMP 공식 SHA-256 정보가 없습니다.");
+        if (!digest.StartsWith("sha256:") || digest.Length != 71) throw new IOException(L.Text("OMP 공식 SHA-256 정보가 없습니다."));
         var uri = new Uri(asset.GetProperty("browser_download_url").GetString()!);
-        if (uri.Scheme != "https" || uri.Host != "github.com" || !uri.AbsolutePath.StartsWith("/can1357/oh-my-pi/releases/download/")) throw new IOException("잘못된 OMP 다운로드 주소입니다.");
+        if (uri.Scheme != "https" || uri.Host != "github.com" || !uri.AbsolutePath.StartsWith("/can1357/oh-my-pi/releases/download/")) throw new IOException(L.Text("잘못된 OMP 다운로드 주소입니다."));
         var folder = Path.Combine(Root, @"dependencies\omp"); Directory.CreateDirectory(folder);
         var temp = Path.Combine(folder, "omp-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
@@ -237,7 +242,7 @@ public static class InstallerEngine
                 using var input = response.Content.ReadAsStream(); using var output = File.Create(temp); input.CopyTo(output);
             }
             using (var input = File.OpenRead(temp))
-                if (!Convert.ToHexString(SHA256.HashData(input)).Equals(digest[7..], StringComparison.OrdinalIgnoreCase)) throw new IOException("OMP 다운로드 무결성 검증 실패.");
+                if (!Convert.ToHexString(SHA256.HashData(input)).Equals(digest[7..], StringComparison.OrdinalIgnoreCase)) throw new IOException(L.Text("OMP 다운로드 무결성 검증 실패."));
             var target = Path.Combine(folder, "omp.exe"); File.Move(temp, target, false); return target;
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
@@ -255,13 +260,13 @@ public static class InstallerEngine
         }
         if (!receipt.RadKeys.Contains(keyName)) receipt.RadKeys.Add(keyName); SaveReceipt(receipt);
         foreach (var name in key.GetValueNames().Where(n => Path.GetFileName(n).Equals("PiAgent370.bpl", StringComparison.OrdinalIgnoreCase))) key.DeleteValue(name, false);
-        key.SetValue(path, "PiAgent 0.9.18");
+        key.SetValue(path, "PiAgent 0.9.19");
     }
     private static void SaveReceipt(Receipt receipt) => File.WriteAllText(Path.Combine(Root, "install-receipt.json"), JsonSerializer.Serialize(receipt, Json));
     private static void CreateShortcut(string name, string target, string arguments)
     {
         var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "PiAgent"); Directory.CreateDirectory(folder);
-        var type = Type.GetTypeFromProgID("WScript.Shell") ?? throw new IOException("시작 메뉴 바로가기를 만들 수 없습니다.");
+        var type = Type.GetTypeFromProgID("WScript.Shell") ?? throw new IOException(L.Text("시작 메뉴 바로가기를 만들 수 없습니다."));
         dynamic shell = Activator.CreateInstance(type)!;
         try
         {
@@ -274,20 +279,20 @@ public static class InstallerEngine
     private static void EnsurePlainPath(string path)
     {
         for (var current = Path.GetFullPath(path); current != null; current = Path.GetDirectoryName(current))
-            if (Directory.Exists(current) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new IOException("연결된 설치 경로는 허용하지 않습니다.");
+            if (Directory.Exists(current) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new IOException(L.Text("연결된 설치 경로는 허용하지 않습니다."));
     }
     public static void Uninstall()
     {
         EnsurePlainPath(Root);
-        var receipt = JsonSerializer.Deserialize<Receipt>(File.ReadAllText(Path.Combine(Root, "install-receipt.json")), Json) ?? throw new IOException("설치 기록이 없습니다.");
-        if (receipt.Product != Product || receipt.Root != Root || !receipt.Release.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new IOException("설치 기록이 올바르지 않습니다.");
+        var receipt = JsonSerializer.Deserialize<Receipt>(File.ReadAllText(Path.Combine(Root, "install-receipt.json")), Json) ?? throw new IOException(L.Text("설치 기록이 없습니다."));
+        if (receipt.Product != Product || receipt.Root != Root || !receipt.Release.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new IOException(L.Text("설치 기록이 올바르지 않습니다."));
         CheckClosed(receipt.RadKeys.Count > 0, receipt.VisualStudio.Count > 0);
         foreach (var instance in receipt.VisualStudio)
             if (InstalledVsixVersion(instance) != null)
                 Run(Path.Combine(instance.Path, @"Common7\IDE\VSIXInstaller.exe"), ["/quiet", "/shutdownprocesses", "/instanceIds:" + instance.Id, "/uninstall:" + VsixId]);
         foreach (var name in receipt.RadKeys)
         {
-            if (name != BdsKey + @"\Known Packages" && name != BdsKey + @"\Known Packages x64") throw new IOException("잘못된 RAD 설치 기록입니다.");
+            if (name != BdsKey + @"\Known Packages" && name != BdsKey + @"\Known Packages x64") throw new IOException(L.Text("잘못된 RAD 설치 기록입니다."));
             using var key = Registry.CurrentUser.OpenSubKey(name, true);
             if (key == null) continue;
             foreach (var value in key.GetValueNames())
@@ -295,7 +300,7 @@ public static class InstallerEngine
             foreach (var prior in receipt.PreviousRad.Where(p => p.Key == name && File.Exists(p.Name))) key.SetValue(prior.Name, prior.Value);
         }
         foreach (var path in Directory.EnumerateFileSystemEntries(Root, "*", SearchOption.AllDirectories))
-            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("연결된 설치 파일이 있어 제거를 중단했습니다.");
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException(L.Text("연결된 설치 파일이 있어 제거를 중단했습니다."));
         // Never stop unrelated Core or IDE processes. A running installation must be closed by the user.
         Directory.Delete(Root, true);
         Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false);

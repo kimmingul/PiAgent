@@ -1,17 +1,26 @@
 # PiAgent unified Windows installer
 
-Documentation updated: 2026-10-08, signed product 0.9.18.
-This PC's RAD validation receipt points to `0.9.18-20261007162727` and records VS2022/2026 and RAD32/64 registrations.
+[한국어](UNIFIED-INSTALLER.ko.md) · **English** · [Documentation](README.md)
+
+Documentation updated: 2026-10-08, signed product 0.9.19.
+The earlier 0.9.18 RAD validation receipt points to `0.9.18-20261007162727` and records VS2022/2026 and RAD32/64 registrations.
 Core and RAD32/64 were upgraded; old duplicate RAD BPL registrations were consolidated.
 The local Core fix is documented in [session recovery](SESSION-RECOVERY-FIX.md); release publication does not install the new setup automatically.
 Registration is separate from live validation: current acceptance prioritizes VS2026/RAD13.2 64-bit.
 The signed setup includes the idle/long-turn fixes; [validation history](VALIDATION.md) records remaining limits.
 
-Output: `dist/PiAgent-Setup-0.9.18.exe`. A single self-contained setup supports Windows
+Output: `dist/PiAgent-Setup-0.9.19.exe`. A single self-contained setup supports Windows
 x64 and ARM64. The setup executable uses Windows x64 compatibility on ARM64; installed
 Node.js, .NET and OMP use the host's native architecture. No system PATH or runtime is replaced.
 
 The native WPF setup detects installed IDEs and offers independent selections:
+
+Use the **한국어 / English** selector at the top right. The default is Korean on Korean Windows and
+English elsewhere. Guidance, progress, PiAgent errors, shortcuts and uninstall messages use the selected
+language. The uninstall shortcut retains that language. `--language auto`, `--language ko` or
+`--language en` may be added to UI, diagnostic or unattended commands below.
+In the app, **Settings → Display → Language** defaults to `Automatic`: Korean on Korean systems,
+English otherwise. Explicit choices are saved in the current project's private preferences.
 
 - RAD Studio 13.2 / Delphi 37.0, 32-bit IDE (Win32 BPL)
 - RAD Studio 13.2 / Delphi 37.0, 64-bit IDE (Win64 BPL)
@@ -46,7 +55,7 @@ prerequisite; existing installations on this PC already have it. Git is required
 workspace writes. Initial Core settings are read-only, with no workspace and no login autorun.
 
 Per-user destination: `%LOCALAPPDATA%/Programs/PiAgent`. No administrator rights are requested.
-Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. VSIX 0.9.18 and the RAD
+Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. VSIX 0.9.19 and the RAD
 adapter automatically start the installed Core when opening chat
 (RAD View/Tools > PiAgent, VS Tools > PiAgent: Open Chat). Configure workspace
 and write permissions in the installed `core/settings.json` only when needed.

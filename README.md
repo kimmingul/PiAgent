@@ -1,10 +1,12 @@
 # PiAgent
 
-현재 버전 **0.9.18** · 서명 사전 릴리즈 **0.9.18** · 문서 갱신일 **2026-10-08 KST**.
+**한국어** · [English](README.en.md) · [문서 / Documentation](docs/README.md)
+
+현재 버전 **0.9.19** · 서명 사전 릴리즈 **0.9.19** · 문서 갱신일 **2026-10-08 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
-[0.9.18 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.18).
+[0.9.19 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.19).
 소스와 서명 설치 파일은 공개 저장소 `kimmingul/PiAgent`에서 제공한다.
 
 Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 Delphi BPL은
@@ -13,12 +15,12 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-서명 설치파일은 `dist/PiAgent-Setup-0.9.18.exe`다. 이 PC에는 Core와 RAD32/64를 업데이트하고
+서명 설치파일은 `dist/PiAgent-Setup-0.9.19.exe`다. 이 PC에는 Core와 RAD32/64를 업데이트하고
 중복된 RAD BPL 등록을 정리했다. 새 릴리즈 빌드·게시는 실행 중인 IDE를 자동 교체하지 않는다.
 설치 전 IDE를 종료하고 새 설치파일을 실행한다.
 Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
-[설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.md).
+[설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.ko.md).
 
 - VS: **Tools → PiAgent: Open Chat**.
 - RAD: **View → PiAgent** 또는 **Tools → PiAgent**.
@@ -26,9 +28,15 @@ VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다
 - 사용자별 루트는 `%LOCALAPPDATA%\Programs\PiAgent`, release별 runtime을 사용한다.
   ARM64 Windows에서는 ARM64 Node/.NET/OMP를 사용하고 setup은 x64 호환 실행이다.
 
-이 PC의 RAD 검증 receipt는 `0.9.18-20261007162727` release를 가리키며 VS2022/2026와 RAD32/64
+0.9.18 검증 당시 RAD receipt는 `0.9.18-20261007162727` release를 가리키며 VS2022/2026와 RAD32/64
 등록을 기록한다. 설치 기록은 실사용 검증 완료를 뜻하지 않는다. 현재 우선 실사용 검증 대상은
 **VS2026와 RAD13.2 64-bit**다. VS2022 최종 검증과 RAD32 UI 검증은 완료로 주장하지 않는다.
+
+## 언어 선택
+
+**설정 → 표시 → 언어**에서 `자동`, `한국어`, `English`를 선택한다. 기본값 `자동`은 한국어 시스템에서 한국어, 그 외에는 영어다. 직접 선택한 언어는 현재 프로젝트의 비공개 설정에 저장되며 다음 실행에도 적용한다. 설정·계정·모델 역할·실행 제어·Git·승인 안내가 함께 전환된다. 모델의 답변이나 코드, 외부 도구의 원문을 자동 번역하지 않는다.
+설치프로그램 오른쪽 위에서도 한국어/영어를 선택할 수 있다. 홈페이지는 선택을 저장하고 [한국어](https://kimmingul.github.io/PiAgent/?lang=ko) / [English](https://kimmingul.github.io/PiAgent/?lang=en)로 직접 연결할 수 있다.
+[0.9.19 변경 및 검증](docs/RELEASE-0.9.19.md).
 
 ## 현재 기능과 검증
 

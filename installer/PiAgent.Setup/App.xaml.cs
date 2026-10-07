@@ -8,6 +8,8 @@ public partial class App : Application
         base.OnStartup(e);
         try
         {
+            var languageIndex = Array.IndexOf(e.Args, "--language");
+            if (languageIndex >= 0) L.Select(languageIndex + 1 < e.Args.Length ? e.Args[languageIndex + 1] : "invalid");
             if (e.Args.Contains("--inspect"))
             {
                 var path = e.Args.SkipWhile(a => a != "--inspect").Skip(1).First();
@@ -32,7 +34,7 @@ public partial class App : Application
             if (e.Args.Contains("--uninstall-worker"))
             {
                 await Task.Run(() => InstallerEngine.Uninstall());
-                MessageBox.Show("PiAgent를 제거했습니다. 저장된 대화와 외부 OMP 설치는 유지됩니다.", "PiAgent");
+                MessageBox.Show(L.Text("PiAgent를 제거했습니다. 저장된 대화와 외부 OMP 설치는 유지됩니다."), "PiAgent");
                 Shutdown(0); return;
             }
             new MainWindow(e.Args.Contains("--uninstall")).Show();
@@ -41,7 +43,7 @@ public partial class App : Application
         {
             if (e.Args.Any(a => a.StartsWith("--inspect") || a == "--verify-payload" || a == "--install-components"))
                 File.WriteAllText(Path.Combine(Path.GetTempPath(), "PiAgent-setup-error.txt"), error.ToString());
-            else MessageBox.Show(error.Message, "PiAgent 설치", MessageBoxButton.OK, MessageBoxImage.Error);
+            else MessageBox.Show(error.Message, L.Text("PiAgent 설치"), MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
     }

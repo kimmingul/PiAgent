@@ -34,6 +34,10 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   for (const document of ['ARCHITECTURE.md', 'PROTOCOL.md'])
     await cp(join(repository, document), join(output, document));
   await mkdir(join(output, 'docs'));
+  for(const document of ['README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md',`RELEASE-${version}.en.md`])
+    await cp(join(repository,'docs',document),join(output,'docs',document));
+  await mkdir(join(output,'website'));
+  await cp(join(repository,'website/README.md'),join(output,'website/README.md'));
   await mkdir(join(output, 'scripts'));
   for(const name of ['install-core.ps1','start-core.ps1','uninstall-core.ps1']) await cp(join(repository,'scripts',name),join(output,'scripts',name));
   await cp(join(repository, 'docs/VALIDATION.md'), join(output, 'docs/VALIDATION.md'));
@@ -42,7 +46,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await cp(join(repository, 'docs/SECURITY.md'), join(output, 'docs/SECURITY.md'));
   await cp(join(repository, 'docs/APPROVED-CHANGES.md'), join(output, 'docs/APPROVED-CHANGES.md'));
   for(const document of ['SESSIONS-USAGE.md','SESSION-RECOVERY-FIX.md','RAD-DESIGNER-DIAGNOSTICS.md','INSTALLATION.md','OMP-DESIGNERS.md','GUI-HARNESS.md','CHAT-UI-IMPLEMENTATION.md','MESSAGE-TIMELINE-AND-INSTALLED-ACCEPTANCE.md','CORE-IDLE-DISCONNECT-FIX.md','LONG-RUNNING-TURN-FIX.md',`RELEASE-${version}.md`]) await cp(join(repository,'docs',document),join(output,'docs',document));
-  await writeFile(join(output, 'README.md'), `# PiAgent ${version} runtime\n\n` +
+  await writeFile(join(output, 'README.en.md'), `# PiAgent ${version} runtime\n\n[한국어](README.md) · **English** · [Documentation](docs/README.md)\n\n` +
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS). Node runtime is installed separately.\n' +
     'Secure transport also requires .NET 8+ runtime; no npm install, TypeScript compiler or native Node addon is needed.\n\n' +
     'Start: node core.mjs --pipe piagent-dev\n' +
@@ -57,6 +61,15 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
     'For VS Chat: Tools > PiAgent: Open Chat (connects automatically). For RAD: View > PiAgent or Tools > PiAgent.\n' +
     'Select code in the editor, capture it in Chat, inspect the attachment and send your question. See docs/SELECTION-CONTEXT.md.\n' +
     'Both adapters use an installed WebView2 Runtime. File creation/deletion/rename remain a future scope.\n');
+  await writeFile(join(output,'README.md'),`# PiAgent ${version} runtime\n\n**한국어** · [English](README.en.md) · [문서](docs/README.md)\n\n`+
+    'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS)와 .NET 8+가 필요합니다. 통합 설치파일은 전용 런타임을 포함합니다. 독립 Core 압축파일은 런타임을 별도로 준비합니다. npm install이나 TypeScript compiler는 필요 없습니다.\n\n'+
+    '시작: node core.mjs --pipe piagent-dev\n확인: node probe.mjs piagent-dev test-adapter release\n종료: Ctrl+C\n\n'+
+    'OMP를 사용하려면 실행파일을 별도로 설치하고 --omp C:\\path\\omp.exe --cwd C:\\workspace를 지정합니다.\n'+
+    'CLI는 현재 사용자 전용 로컬 pipe와 상호 HMAC 인증을 사용합니다. docs/SECURITY.md를 참고하세요.\n'+
+    '--workspace C:\\project는 제한된 파일 읽기/검색, --allow-writes는 diff 승인과 checkpoint 복원을 사용합니다. 쓰기에는 Git이 필요합니다.\n\n'+
+    'VS: Tools → PiAgent: Open Chat. RAD: View/Tools → PiAgent. 통합 설치한 adapter는 Core를 자동 시작합니다. WebView2 Runtime이 필요합니다.\n'+
+    '설정 → 표시 → 언어에서 한국어/English를 선택합니다. 자동 기본값은 한국어 시스템에서 한국어, 그 외에는 영어입니다.\n'+
+    '세부 설치·지원 범위는 docs/INSTALLATION.md, 언어 지원은 docs/LOCALIZATION.md를 참고하세요.\n');
   if (adapters) {
     for (const ide of ['visualstudio', 'radstudio']) {
       const target = join(output, 'adapters', ide);

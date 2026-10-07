@@ -182,7 +182,13 @@ begin
     Msg := TJSONObject.ParseJSONValue(string(Json)) as TJSONObject; if Msg = nil then Exit;
     try
       Action := Msg.GetValue<string>('action','');RequestId := Msg.GetValue<string>('id','');
-      if Action = 'ready' then begin FReady := True; Exit; end;
+      if Action = 'ready' then begin
+        FReady := True;
+        if (GetUserDefaultUILanguage and $3FF) = LANG_KOREAN then
+          Post('{"type":"hostLocale","systemLanguage":"ko"}')
+        else Post('{"type":"hostLocale","systemLanguage":"en"}');
+        Exit;
+      end;
       if Action = 'notify' then begin if not Active then FlashWindow(Handle,True);Exit;end;
       if Action = 'connect' then begin
         if FWorkspacePending then Exit;

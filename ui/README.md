@@ -1,5 +1,12 @@
 # RADAgent UI compatibility
 
+0.9.19 localizes PiAgent's added TypeScript screens through `i18n.ts` and `messages.en.ts`.
+Settings → Display → Language defaults to automatic Korean on Korean Windows, English elsewhere;
+explicit saved preferences override the native host locale. Bound labels update without rebuilding
+pending authentication/approval inputs or the selected settings tab. Translation requests are ordered
+so a late startup response cannot override the saved preference. Other original languages retain their
+renderer dictionaries and use English fallback for added screens. Model replies/code/tool payloads stay intact.
+
 0.9.15 user-requested changes: activity.js/activity.css add a native details/summary fold for the
 task list while retaining its original colors and renderer. Original provenance hashes remain in
 reference-files.json; these two adapted files join the documented integration exceptions.

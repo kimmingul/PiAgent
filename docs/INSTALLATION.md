@@ -1,6 +1,8 @@
-# Windows 설치 (0.9.18)
+# Windows 설치 (0.9.19)
 
-문서 갱신일: 2026-10-08 KST. 기본 배포는 서명된 `dist/PiAgent-Setup-0.9.18.exe`다.
+**한국어** · [English](INSTALLATION.en.md) · [문서](README.md)
+
+문서 갱신일: 2026-10-08 KST. 기본 배포는 서명된 `dist/PiAgent-Setup-0.9.19.exe`다.
 설치 UI에서 Core, RAD13.2 32/64-bit, VS2022/2026와 미설치 OMP의 설치 여부를 선택한다.
 기존 설치에서 선택하지 않은 adapter는 유지되므로 선택 해제가 제거를 뜻하지 않는다.
 
@@ -14,11 +16,11 @@
 ARM64에서는 native ARM64 runtime을 설치한다. BPL은 IDE bitness에 맞춘 Win32/Win64이며 ARM64 BPL은 아니다.
 통합 설치된 VS/RAD adapter는 채팅 창을 열 때 Core를 자동 실행하거나 재사용한다.
 VS는 Tools → PiAgent: Open Chat, RAD는 View/Tools → PiAgent에서 연다.
-상세 선택·제거·업그레이드 동작은 [UNIFIED-INSTALLER.md](UNIFIED-INSTALLER.md)를 따른다.
+상세 선택·제거·업그레이드 동작은 [UNIFIED-INSTALLER.ko.md](UNIFIED-INSTALLER.ko.md)를 따른다.
 
-이 PC의 RAD 검증 receipt는 `0.9.18-20261007162727` release와
+0.9.18 검증 당시 RAD receipt는 `0.9.18-20261007162727` release와
 VS2022/2026, RAD32/64 등록을 기록한다. Core와 RAD를 선택 업데이트하여 중복 BPL 등록을 정리했다.
-[0.9.18 릴리즈](RELEASE-0.9.18.md)는 세션 복구와 디자이너 진단 수정을 포함한다.
+[0.9.19 릴리즈](RELEASE-0.9.19.md)는 세션 복구와 디자이너 진단 수정을 포함한다.
 릴리즈 빌드·게시는 현재 설치본을 자동 교체하지 않는다.
 최신 실사용 검증 대상은 VS2026/RAD13.2 64-bit이며 다른 IDE 등록을 검증 PASS로 해석하지 않는다.
 
@@ -30,7 +32,7 @@ RAD 폼 디자이너에서 권한 관련 메시지가 나오면 [승인과 변�
 
 아래 0.8.1 archive 예제는 기존 수동 설치의 유지·복구용이다. 통합 설치 runtime 경로와 혼용하지 않는다.
 
-통합 설치파일은 [UNIFIED-INSTALLER.md](UNIFIED-INSTALLER.md)를 참고한다.
+통합 설치파일은 [UNIFIED-INSTALLER.ko.md](UNIFIED-INSTALLER.ko.md)를 참고한다.
 VSIX 0.9.3부터 모든 adapter의 인증 경로는 `PIAGENT_AUTH_FILE` 명시 값,
 또는 `%USERPROFILE%/.piagent/security/<pipe>/token`을 사용한다. AppData의 패키지 리디렉션을
 피하기 위한 경로이며 ACL과 상호 HMAC 인증은 유지한다. 인증 파일을 직접 만들거나 권한을 넓히지 않는다.

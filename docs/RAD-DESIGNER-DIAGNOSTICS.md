@@ -1,5 +1,7 @@
 # RAD Studio 폼 디자이너 승인과 변경 차단
 
+**한국어** · [English](RAD-DESIGNER-DIAGNOSTICS.en.md) · [문서](README.md)
+
 2026-10-08 KST · PiAgent 0.9.18 · RAD Studio 13.2 64-bit / OMP 18.6.1.
 
 ## 확인한 원인

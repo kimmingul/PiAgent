@@ -50,7 +50,7 @@ try {
         $uiOutput = Join-Path $output 'ui'
         New-Item -ItemType Directory -Path $uiOutput -Force | Out-Null
         Get-ChildItem -LiteralPath ui/src | Where-Object Extension -ne '.ts' | Copy-Item -Destination $uiOutput -Recurse -Force
-        Copy-Item -LiteralPath ui/dist/bridge.js,ui/dist/controller.js,ui/dist/interactions.js,ui/dist/settings.js,ui/dist/contracts.js,ui/dist/account.js,ui/dist/roles.js,ui/dist/execution.js,ui/dist/git.js -Destination $uiOutput -Force
+        Copy-Item -LiteralPath ui/dist/bridge.js,ui/dist/controller.js,ui/dist/interactions.js,ui/dist/settings.js,ui/dist/contracts.js,ui/dist/account.js,ui/dist/roles.js,ui/dist/execution.js,ui/dist/git.js,ui/dist/i18n.js,ui/dist/messages.en.js -Destination $uiOutput -Force
         $loaderArch = if ($platform -eq 'Win32') { 'win-x86' } else { 'win-x64' }
         $loader = Join-Path $env:USERPROFILE ".nuget\packages\microsoft.web.webview2\1.0.4258.31\runtimes\$loaderArch\native\WebView2Loader.dll"
         Copy-Item -LiteralPath $loader -Destination $output

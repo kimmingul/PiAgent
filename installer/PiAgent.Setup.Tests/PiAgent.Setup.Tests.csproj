@@ -6,5 +6,5 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
-  <ItemGroup><Compile Include="../PiAgent.Setup/InstallerEngine.cs" Link="InstallerEngine.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../PiAgent.Setup/InstallerEngine.cs" Link="InstallerEngine.cs" /><Compile Include="../PiAgent.Setup/Localization.cs" Link="Localization.cs" /></ItemGroup>
 </Project>
