@@ -2,7 +2,7 @@
 
 **한국어** · [English](GETTING-STARTED.en.md) · [문서 목록](README.md)
 
-대상: Windows x64/ARM64, PiAgent **0.9.19**. 확인일: **2026-10-08 KST**.
+대상: Windows x64/ARM64, PiAgent **0.9.20**. 확인일: **2026-10-09 KST**.
 OMP나 AI 코딩 도구를 처음 사용하는 분을 위한 안내입니다.
 
 **사용할 IDE 하나와 AI 연결 하나부터 준비하세요.** PiAgent는 IDE 안의 채팅 화면이고,
@@ -38,7 +38,7 @@ OMP를 직접 먼저 설치하고 로그인한 다음 PiAgent를 설치하는 �
 |---|---|---|
 | Visual Studio 2022 / 2026 | 설치된 IDE에 PiAgent 확장 등록 | Visual Studio Code와 다른 제품입니다. C# WinForms/WPF에는 `.NET 데스크톱 개발` 워크로드를 선택합니다. 다른 언어는 해당 프로젝트용 워크로드를 선택합니다. |
 | RAD Studio 13.2 / Delphi 37.0 | 32-bit / 64-bit IDE용 패키지 등록 | Delphi/C++Builder와 사용할 VCL/FMX 개발 환경을 준비하고 프로젝트를 빌드해 봅니다. |
-| RAD Studio 11 / 12, 다른 RAD compiler 버전 | 현재 0.9.19 설치파일의 자동 등록 대상이 아님 | 해당 버전의 SDK로 PiAgent BPL을 별도 빌드해야 합니다. 13.2용 BPL을 그대로 설치하지 마세요. |
+| RAD Studio 11 / 12, 다른 RAD compiler 버전 | 현재 0.9.20 설치파일의 자동 등록 대상이 아님 | 해당 버전의 SDK로 PiAgent BPL을 별도 빌드해야 합니다. 13.2용 BPL을 그대로 설치하지 마세요. |
 
 두 종류의 IDE를 모두 설치할 필요는 없습니다. 현재 실사용 검증은 VS2026과 RAD13.2 64-bit를
 우선합니다. VS2022와 RAD32의 설치·빌드 지원을 전체 실사용 검증 완료로 해석하지 않습니다.
@@ -62,8 +62,8 @@ OMP를 직접 먼저 설치하고 로그인한 다음 PiAgent를 설치하는 �
 
 ## 3. PiAgent와 OMP를 설치하세요
 
-1. [PiAgent 0.9.19 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.19)에서
-   `PiAgent-Setup-0.9.19.exe`를 내려받습니다.
+1. [PiAgent 0.9.20 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.20)에서
+   `PiAgent-Setup-0.9.20.exe`를 내려받습니다.
 2. Visual Studio와 RAD Studio를 모두 종료합니다.
 3. 설치파일을 실행합니다. 오른쪽 위에서 한국어/English를 선택할 수 있습니다.
 4. **Core**와 실제로 사용할 IDE 항목을 선택합니다. RAD는 **IDE 자체의 bitness**에 맞춰 선택합니다.

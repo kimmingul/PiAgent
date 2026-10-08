@@ -3,11 +3,23 @@ import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink, rmdir 
 import {SessionLock} from './session-lock.js';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isObject } from '@piagent/protocol';
+import {setTimeout as delay} from 'node:timers/promises';
 
 export const SESSION_CAPABILITY = 'chat.sessions.v1';
 export const USAGE_CAPABILITY = 'chat.usage.v1';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const canonical=(path:string):string=>process.platform==='win32'?resolve(path).toLowerCase():resolve(path);
+/** Concurrent Windows readers can briefly deny atomic replacement. Keep the old
+ * record and exclusive lease intact; never delete the destination as a fallback. */
+async function replaceSessionFile(source:string,target:string):Promise<void> {
+  for(let attempt=0;;attempt++) {
+    try{await rename(source,target);return;}
+    catch(error){
+      if(process.platform!=='win32'||attempt>=4||!isObject(error)||!['EPERM','EACCES','EBUSY'].includes(String(error['code'])))throw error;
+      await delay(25*2**attempt);
+    }
+  }
+}
 export interface TranscriptLine { role: 'user'|'assistant'|'status'|'event'; text: string; seq?:number; ts?:number;started?:number;ended?:number;stopped?:boolean;event?:Record<string,unknown>;attachments?:string[]; }
 export interface SavedSession {
   version: 1|2; savedSessionId: string; title: string; createdAt: number; updatedAt: number;
@@ -36,7 +48,7 @@ export class SessionStore {
     const target=join(this.root,'last-session'),stat=await lstat(target).catch(()=>undefined);
     if(stat&&(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1))throw new Error('Invalid last session pointer');
     const temporary=join(this.root,'last-'+randomUUID());const file=await open(temporary,'wx');
-    try{await file.writeFile(id);await file.close();await rename(temporary,target);}finally{await file.close().catch(()=>{});await unlink(temporary).catch(()=>{});}
+    try{await file.writeFile(id);await file.close();await replaceSessionFile(temporary,target);}finally{await file.close().catch(()=>{});await unlink(temporary).catch(()=>{});}
   }
   private async directory(path: string): Promise<void> {
     const value=await lstat(path);
@@ -153,8 +165,10 @@ export class SessionStore {
     record.transcript=record.transcript.slice(-200);
     while (Buffer.byteLength(JSON.stringify(record.transcript))>256*1024) record.transcript.shift();
     const temporary=join(dir,randomUUID()+'.tmp');const file=await open(temporary,'wx');
-    try {await file.writeFile(JSON.stringify(record));await file.sync();}finally{await file.close();}
-    await rename(temporary,join(dir,'session.json'));
+    try {
+      try {await file.writeFile(JSON.stringify(record));await file.sync();}finally{await file.close();}
+      await replaceSessionFile(temporary,join(dir,'session.json'));
+    }finally{await unlink(temporary).catch(()=>{});}
   }
 }
 export class SessionLease {

@@ -3,6 +3,7 @@ import {resolve,dirname} from 'node:path';
 import assert from 'node:assert/strict';
 const pairs=[['README.md','README.en.md'],['docs/INSTALLATION.md','docs/INSTALLATION.en.md'],['docs/UNIFIED-INSTALLER.ko.md','docs/UNIFIED-INSTALLER.md'],['docs/RAD-DESIGNER-DIAGNOSTICS.md','docs/RAD-DESIGNER-DIAGNOSTICS.en.md'],['docs/RELEASE-0.9.18.md','docs/RELEASE-0.9.18.en.md'],['docs/RELEASE-0.9.19.md','docs/RELEASE-0.9.19.en.md'],['docs/LOCALIZATION.md','docs/LOCALIZATION.en.md']];
 pairs.push(['docs/GETTING-STARTED.ko.md','docs/GETTING-STARTED.en.md']);
+pairs.push(['docs/RELEASE-0.9.20.md','docs/RELEASE-0.9.20.en.md']);
 for(const pair of pairs){
  const blocks=[];
  for(const file of pair){

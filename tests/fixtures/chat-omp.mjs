@@ -51,13 +51,40 @@ lines.on('line', line => {
     if(process.argv.includes('--approval-mode'))emit({type:'session_settled',status:'aborted'});
     emit({ type: 'agent_end', isTerminal: true }); response({}); return;
   }
+  if(command.type==='follow_up'&&toolMode==='busy-prompt') {
+    if(command.message==='busy-queue-failure'){emit({type:'response',id:command.id,command:command.type,success:false,error:'Queue unavailable'});return;}
+    response({});timers.push(setTimeout(()=>{
+      active=false;emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:'Queued request completed once'}});
+      emit({type:'session_settled',status:'completed'});
+    },100));return;
+  }
   if (command.type !== 'prompt') { response({}); return; }
   active = true; emit({ type: 'agent_start' });
+  if(command.message==='busy-prompt'||command.message==='busy-queue-failure') {
+    toolMode='busy-prompt';emit({type:'response',id:command.id,command:'prompt',success:false,error:'Agent is already streaming. Specify streamingBehavior.'});
+    timers.push(setTimeout(()=>emit({type:'prompt_result',id:command.id,agentInvoked:false,status:'error',sessionSettled:false,error:{message:'Agent is already streaming'}}),0));return;
+  }
   if (command.message === 'ack-timeout') return;
   if (command.message === 'reject') { emit({ type: 'response', id: command.id, command: 'prompt', success: false }); active = false; return; }
-  if (command.message === 'local') { response({ agentInvoked: false }); return; }
+  if (command.message === 'local') { response({ agentInvoked: false });if(process.argv.includes('--approval-mode'))emit({type:'prompt_result',agentInvoked:false,status:'completed',sessionSettled:true}); return; }
+  if(command.message==='local-background') {
+    response({agentInvoked:false});emit({type:'prompt_result',agentInvoked:false,status:'completed',sessionSettled:false});
+    timers.push(setTimeout(()=>{active=false;emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:'Background work completed'}});emit({type:'session_settled',status:'completed'});},250));return;
+  }
   if (command.message === 'slow-ack') {setTimeout(()=>{response({});emit({type:'agent_end',isTerminal:true});},6500);return;}
   response({});
+  if(command.message==='abort-resume'||command.message==='abort-settle') {
+    emit({type:'auto_compaction_start'});emit({type:'auto_compaction_end',aborted:false});
+    emit({type:'message_end',message:{role:'assistant',stopReason:'aborted',errorMessage:'Request was aborted'}});
+    emit({type:'agent_end',isTerminal:true});
+    emit({type:'prompt_result',status:'aborted',sessionSettled:false});
+    timers.push(setTimeout(()=>{
+      active=false;
+      if(command.message==='abort-resume')emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:'Continued after assistant abort'}});
+      emit({type:'session_settled',status:command.message==='abort-resume'?'completed':'aborted'});
+      emit({type:'prompt_result',status:command.message==='abort-resume'?'completed':'aborted',sessionSettled:true});
+    },250));return;
+  }
   if(command.message.startsWith('retry-')) {
     emit({type:'message_end',message:{role:'assistant',stopReason:'error',errorMessage:'Socket closed before response completed'}});
     emit({type:'agent_end',isTerminal:true});

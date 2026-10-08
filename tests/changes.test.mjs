@@ -22,6 +22,25 @@ async function setup(){
 }
 const proposal=(changes,content=after,path='Example.cs')=>changes.propose({path,content,reason:'Change test'},new AbortController().signal);
 
+test('oversized observed turns preserve files and Git state with an explicit nonfatal checkpoint result',windows,async()=>{
+ const env=await setup();try{
+   for(let i=0;i<9;i++)await writeFile(join(env.root,`Extra${i}.cs`),'before\n');
+   await git(env.root,'add','.');await git(env.root,'commit','-m','Large turn fixture');
+   const snapshot=await env.changes.beginTurn(),index=await readFile(join(env.root,'.git','index')),head=await git(env.root,'rev-parse','HEAD');
+   for(let i=0;i<9;i++)await writeFile(join(env.root,`Extra${i}.cs`),'after\n');
+   const result=await env.changes.observeTurn(snapshot);
+   assert.equal(result.recorded,false);assert.equal(result.reason,'limit');assert.equal(result.changedFiles,9);
+   assert.match(result.warning,/작업 중단을 뜻하지 않습니다/);assert.equal((await env.changes.list()).length,0);
+   for(let i=0;i<9;i++)assert.equal(await readFile(join(env.root,`Extra${i}.cs`),'utf8'),'after\n');
+   assert.deepEqual(await readFile(join(env.root,'.git','index')),index);assert.equal(await git(env.root,'rev-parse','HEAD'),head);
+   // The byte limit also applies with at most eight changed files.
+   for(let i=0;i<5;i++)await writeFile(join(env.root,`Extra${i}.cs`),'a'.repeat(30000));
+   const large=await env.changes.beginTurn();
+   for(let i=0;i<5;i++)await writeFile(join(env.root,`Extra${i}.cs`),'b'.repeat(30000));
+   const sizeResult=await env.changes.observeTurn(large);assert.equal(sizeResult.reason,'limit');assert.equal(sizeResult.changedFiles,5);assert.equal(sizeResult.bytes,300000);
+ }finally{await env.close();}
+});
+
 test('turn observation reuses the exact approved checkpoint but records subsequent native changes',windows,async()=>{
  const env=await setup();try{
   await writeFile(join(env.root,'Second.cs'),'second\r\n');await git(env.root,'add','Second.cs');await git(env.root,'commit','-m','Second');

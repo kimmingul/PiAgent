@@ -1,4 +1,4 @@
-# Windows installation (0.9.19)
+# Windows installation (0.9.20)
 
 [한국어](INSTALLATION.md) · **English** · [Documentation](README.md)
 
@@ -6,7 +6,7 @@ New to OMP or AI coding tools? Start with [first-time setup](GETTING-STARTED.en.
 It includes an installation diagram and completion checks from IDE preparation to your first answer.
 Current setup automatically registers RAD13.2; RAD11/12 require separate builds with their own SDKs.
 
-Updated: 2026-10-08 KST. The default distribution is the signed `dist/PiAgent-Setup-0.9.19.exe`.
+Updated: 2026-10-09 KST. The default distribution is the signed `dist/PiAgent-Setup-0.9.20.exe`.
 Select Core, RAD13.2 32/64-bit, VS2022/2026 and optional installation of OMP if absent.
 Previously installed adapters that are not selected are retained; deselection does not uninstall them.
 
@@ -24,7 +24,7 @@ See the [unified installer guide](UNIFIED-INSTALLER.md) for selection, uninstall
 
 The earlier 0.9.18 RAD validation receipt points to `0.9.18-20261007162727` and records VS2022/2026 and RAD32/64
 registrations. Core and RAD were selectively upgraded to remove duplicate BPL registrations.
-[0.9.19](RELEASE-0.9.19.en.md) includes session recovery and designer diagnostics fixes.
+[0.9.20](RELEASE-0.9.20.en.md) includes session recovery and designer diagnostics fixes.
 Building/publishing a release does not automatically replace the installed version.
 Current live validation prioritizes VS2026/RAD13.2 64-bit; other IDE registrations are not evidence of a live PASS.
 

@@ -1,4 +1,4 @@
-# Windows 설치 (0.9.19)
+# Windows 설치 (0.9.20)
 
 **한국어** · [English](INSTALLATION.en.md) · [문서](README.md)
 
@@ -6,7 +6,7 @@ OMP나 AI 코딩 도구가 처음이라면 [처음 설치하기](GETTING-STARTED
 IDE 준비부터 AI 연결, 첫 답변까지 설치 순서 도식과 단계별 완료 기준을 제공합니다.
 현재 설치파일의 RAD 자동 등록 대상은 13.2이며, RAD11/12는 해당 SDK로 별도 빌드해야 합니다.
 
-문서 갱신일: 2026-10-08 KST. 기본 배포는 서명된 `dist/PiAgent-Setup-0.9.19.exe`다.
+문서 갱신일: 2026-10-09 KST. 기본 배포는 서명된 `dist/PiAgent-Setup-0.9.20.exe`다.
 설치 UI에서 Core, RAD13.2 32/64-bit, VS2022/2026와 미설치 OMP의 설치 여부를 선택한다.
 기존 설치에서 선택하지 않은 adapter는 유지되므로 선택 해제가 제거를 뜻하지 않는다.
 
@@ -24,7 +24,7 @@ VS는 Tools → PiAgent: Open Chat, RAD는 View/Tools → PiAgent에서 연다.
 
 0.9.18 검증 당시 RAD receipt는 `0.9.18-20261007162727` release와
 VS2022/2026, RAD32/64 등록을 기록한다. Core와 RAD를 선택 업데이트하여 중복 BPL 등록을 정리했다.
-[0.9.19 릴리즈](RELEASE-0.9.19.md)는 세션 복구와 디자이너 진단 수정을 포함한다.
+[0.9.20 릴리즈](RELEASE-0.9.20.md)는 세션 복구와 디자이너 진단 수정을 포함한다.
 릴리즈 빌드·게시는 현재 설치본을 자동 교체하지 않는다.
 최신 실사용 검증 대상은 VS2026/RAD13.2 64-bit이며 다른 IDE 등록을 검증 PASS로 해석하지 않는다.
 

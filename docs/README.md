@@ -2,8 +2,8 @@
 
 [한국어 README](../README.md) · [English README](../README.en.md)
 
-현재 버전: **0.9.19**. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
-Current version: **0.9.19**. The main user guides below are available in Korean and English.
+현재 버전: **0.9.20**. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
+Current version: **0.9.20**. The main user guides below are available in Korean and English.
 
 | 문서 / Guide | 한국어 | English |
 |---|---|---|
@@ -12,7 +12,8 @@ Current version: **0.9.19**. The main user guides below are available in Korean 
 | Windows 설치 / Windows installation | [설치 안내](INSTALLATION.md) | [Installation](INSTALLATION.en.md) |
 | 통합 설치파일 / Unified installer | [통합 설치](UNIFIED-INSTALLER.ko.md) | [Unified installer](UNIFIED-INSTALLER.md) |
 | 언어 설정 / Language settings | [언어 지원](LOCALIZATION.md) | [Language support](LOCALIZATION.en.md) |
-| 최신 릴리즈 / Current release | [0.9.19](RELEASE-0.9.19.md) | [0.9.19](RELEASE-0.9.19.en.md) |
+| 최신 릴리즈 / Current release | [0.9.20](RELEASE-0.9.20.md) | [0.9.20](RELEASE-0.9.20.en.md) |
+| 이전 언어 지원 / Previous language support | [0.9.19](RELEASE-0.9.19.md) | [0.9.19](RELEASE-0.9.19.en.md) |
 | 이전 디자이너 수정 / Previous designer fixes | [0.9.18](RELEASE-0.9.18.md) | [0.9.18](RELEASE-0.9.18.en.md) |
 | RAD 디자이너 승인·차단 / RAD designer approval and restrictions | [진단·복구](RAD-DESIGNER-DIAGNOSTICS.md) | [Diagnosis and recovery](RAD-DESIGNER-DIAGNOSTICS.en.md) |
 | 홈페이지 관리 / Website maintenance | [홈페이지 README](../website/README.md#한국어) | [Website README](../website/README.md#english) |

@@ -25,7 +25,7 @@ test('abrupt owner death is recoverable and competing processes have only one wi
   const attempts=await Promise.all(Array.from({length:6},()=>owner(root,id)));
   try{
     assert.equal(attempts.filter(value=>value.result.id===id).length,1);
-    assert.ok(attempts.filter(value=>value.result.error).every(value=>/already active/.test(value.result.error)));
+    assert.ok(attempts.filter(value=>value.result.error).every(value=>/already active/.test(value.result.error)),JSON.stringify(attempts.map(value=>value.result)));
     assert.equal((await store.load(id)).transcript[0].text,before.transcript[0].text);
   }finally{await Promise.all(attempts.map(value=>stop(value.child)));}
   const lease=await store.acquire(id);await lease.release();

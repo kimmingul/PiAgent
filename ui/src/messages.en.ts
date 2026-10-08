@@ -1,5 +1,14 @@
 /** Source-message catalog for PiAgent's added UI. Keep placeholders identical. */
 export const english:Record<string,string>={
+ 'OMP가 아직 작업 중입니다. 새 요청은 후속 대기열로 보내야 합니다.':'OMP is still working. Send the new request to the follow-up queue.',
+ 'OMP가 아직 실행 중이므로 요청을 후속 대기열에 추가합니다. 현재 작업을 중단하지 않습니다.':'OMP is still running. Adding your request to the follow-up queue while the current work continues.',
+ '후속 요청을 대기열에 추가하지 못했습니다. 현재 작업이 끝난 뒤 요청을 다시 보내 주세요.':'Could not queue the follow-up request. Send it again after the current work finishes.',
+ '모델의 컨텍스트 한도를 초과했습니다. 대화를 압축하거나 새 대화에서 이어가세요.':'The model context limit was exceeded. Compact the conversation or continue in a new conversation.',
+ 'AI 제공자 인증을 확인해 주세요. 로그인 또는 API 키 설정이 필요합니다.':'Check AI provider authentication. Sign in or configure an API key.',
+ 'AI 제공자의 사용량 또는 요청 한도에 도달했습니다. 한도를 확인한 뒤 다시 시도해 주세요.':'The AI provider usage or request limit was reached. Check your limits before trying again.',
+ 'OMP가 질문 또는 승인 요청을 종료했습니다. 시간 만료 또는 취소일 수 있습니다. 작업 종료 여부는 OMP의 최종 상태로 확인합니다.':'OMP closed the question or approval request, possibly due to expiry or cancellation. The final OMP session state determines whether work has ended.',
+ '파일 변경이 복원 기록 한도(8개 파일 또는 변경 전후 합계 256 KiB)를 초과해 이 응답의 전체 변경 기록을 만들지 못했습니다. 실제 파일 변경은 유지되며 작업 중단을 뜻하지 않습니다. Git diff로 변경 내용을 확인해 주세요.':'Changes exceeded the restore checkpoint limit (8 files or 256 KiB of combined before/after content). A complete checkpoint was not recorded for this response. File changes are preserved; this does not mean work stopped. Review the changes with Git diff.',
+ '컨텍스트 압축에 실패했습니다. OMP의 작업 상태와 제공자 설정을 확인해 주세요.':'Context compaction failed. Check the OMP work state and provider settings.',
  'OMP 전역 설정':'OMP global settings',
  'OMP 전역 설정 · 표시값은 유효 설정 (프로젝트·환경변수 우선)':'OMP global settings · Effective values shown (project/environment overrides apply)',
  'OMP 프로젝트 (.omp/config.yml) 설정 · 표시값은 유효 설정 (프로젝트·환경변수 우선)':'OMP project settings (.omp/config.yml) · Effective values shown (project/environment overrides apply)',

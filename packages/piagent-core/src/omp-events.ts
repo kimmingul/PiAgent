@@ -20,7 +20,7 @@ export function uiEvent(frame:Record<string,unknown>):Record<string,unknown>|und
   if(type==='tool_execution_end')return {t:'toolEnd',id:text(frame['toolCallId']),ok:frame['isError']!==true,result:content(obj(frame['result'])['content'])};
   if(type==='queue_update')return {t:'queue',steering:Array.isArray(frame['steering'])?frame['steering'].slice(0,32).map(value=>text(value).slice(0,1024)):[],followUp:Array.isArray(frame['followUp'])?frame['followUp'].slice(0,32).map(value=>text(value).slice(0,1024)):[]};
   if(type==='auto_compaction_start')return {t:'notice',text:'대화 컨텍스트 압축 중…',level:'info'};
-  if(type==='auto_compaction_end')return {t:'notice',text:frame['aborted']?'컨텍스트 압축 취소됨':'컨텍스트 압축 완료',level:'info'};
+  if(type==='auto_compaction_end')return {t:'notice',text:frame['aborted']?'컨텍스트 압축 취소됨':frame['errorMessage']?'컨텍스트 압축에 실패했습니다. OMP의 작업 상태와 제공자 설정을 확인해 주세요.':'컨텍스트 압축 완료',level:frame['errorMessage']?'warning':'info'};
   if(type==='auto_retry_start')return {t:'notice',text:text(frame['errorMessage']),level:'retry'};
   if(type==='auto_retry_end')return {t:'notice',text:frame['success']?'재시도 완료':text(frame['finalError']??'재시도 종료'),level:'info'};
   if(type==='notice')return {t:'notice',text:text(frame['message']),level:['info','warning','error'].includes(String(frame['level']))?frame['level']:'info'};

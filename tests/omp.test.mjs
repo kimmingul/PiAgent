@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { OmpProcess, JsonlDecoder } from '@piagent/omp';
+import { OmpProcess, OmpCommandError, JsonlDecoder } from '@piagent/omp';
 const fixture = fileURLToPath(new URL('./fixtures/omp-fixture.mjs', import.meta.url));
 function manager(scenario = 'normal', overrides = {}) {
   return new OmpProcess({ executable: process.execPath, executableArgs: [fixture, scenario],
@@ -15,6 +15,16 @@ test('compact exposes only known safe failure reasons and never raw provider cre
     await assert.rejects(omp.request('compact',{nonce:'Session already compacted; secret-token'}),error=>error.message.includes('이미 압축')&&!error.message.includes('secret-token'));
     await assert.rejects(omp.request('compact',{nonce:'provider auth secret-token'}),error=>error.message==='OMP command failed: compact');
   }finally{await omp.stop();}
+});
+
+test('prompt rejection exposes safe reason categories without raw provider secrets',async()=>{
+ const omp=manager('prompt-errors');
+ try{await omp.start();for(const [message,reason]of [
+   ['Agent is already streaming. Specify streamingBehavior.','busy'],
+   ['maximum context length exceeded','context-limit'],
+   ['API key invalid','authentication'],['429 rate limit exceeded','rate-limit'],['unrecognized failure','unknown']
+ ])await assert.rejects(omp.request('prompt',{message:message+' secret-token https://private.example/path'}),error=>error instanceof OmpCommandError&&error.reason===reason&&!error.message.includes('secret-token')&&!error.message.includes('private.example'));}
+ finally{await omp.stop();}
 });
 
 test('OMP switches decoder before a v2 chunk coalesced with the negotiation response',async()=>{

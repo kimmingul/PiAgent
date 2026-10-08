@@ -9,11 +9,19 @@ import {modelRoles} from '../packages/piagent-core/dist/model-roles.js';
 import {projectConfig,writeProjectRoles} from '../packages/piagent-core/dist/project-config.js';
 import {Controller} from '../ui/dist/controller.js';
 import {ompSettings} from '../packages/piagent-core/dist/omp-settings.js';
+import {uiEvent} from '../packages/piagent-core/dist/omp-events.js';
 import {startDaemon,PipeClient} from '@piagent/daemon';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
+
+test('failed or cancelled automatic compaction is never announced as successful',()=>{
+ const failure=uiEvent({type:'auto_compaction_end',errorMessage:'provider secret-token'});
+ assert.equal(failure.level,'warning');assert.match(failure.text,/실패/);assert.ok(!failure.text.includes('secret-token'));
+ assert.match(uiEvent({type:'auto_compaction_end',aborted:true}).text,/취소/);
+ assert.match(uiEvent({type:'auto_compaction_end',aborted:false}).text,/완료/);
+});
 
 test('execution controls validate OMP enum values and never forward malformed or busy compaction',async()=>{
  const sent=[];const omp={request:async(command,fields)=>{sent.push({command,fields});return {data:{}};}};

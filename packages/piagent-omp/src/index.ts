@@ -20,6 +20,24 @@ export interface OmpOptions {
   profile?: 'restricted' | 'native';
 }
 export type OmpState = 'new' | 'starting' | 'ready' | 'stopping' | 'stopped' | 'failed';
+export type OmpFailureReason = 'busy' | 'context-limit' | 'authentication' | 'rate-limit' | 'unknown';
+/** Keep actionable classifications without exposing raw provider errors or credentials. */
+export class OmpCommandError extends Error {
+  constructor(readonly command:string, readonly reason:OmpFailureReason, message:string) {super(message);}
+}
+function commandError(command:string,frame:Record<string,unknown>):Error {
+  const error=typeof frame['error']==='string'?frame['error']:'';
+  if(command==='login'&&/secret input|not supported in RPC mode/i.test(error))return new Error('이 제공자는 OMP RPC 로그인을 지원하지 않습니다. 터미널 인증이 필요합니다.');
+  if(command==='compact'&&/nothing to compact \(session too small\)/i.test(error))return new Error('대화 기록이 아직 짧아 압축할 수 없습니다. 대화를 더 진행한 뒤 다시 시도해 주세요.');
+  if(command==='compact'&&/already compacted/i.test(error))return new Error('현재 대화는 이미 압축되어 있습니다. 새 대화 기록이 쌓인 뒤 다시 시도해 주세요.');
+  if(command==='prompt') {
+    if(frame['errorCode']==='session_busy'||/already (?:streaming|running)|AgentBusyError|streamingBehavior|session is busy/i.test(error))return new OmpCommandError(command,'busy','OMP가 아직 작업 중입니다. 새 요청은 후속 대기열로 보내야 합니다.');
+    if(/context (?:window|length)|maximum context|too many tokens|context_length_exceeded/i.test(error))return new OmpCommandError(command,'context-limit','모델의 컨텍스트 한도를 초과했습니다. 대화를 압축하거나 새 대화에서 이어가세요.');
+    if(/API key|unauthorized|authentication|not authenticated|credentials|\b401\b/i.test(error))return new OmpCommandError(command,'authentication','AI 제공자 인증을 확인해 주세요. 로그인 또는 API 키 설정이 필요합니다.');
+    if(/rate.limit|quota|\b429\b/i.test(error))return new OmpCommandError(command,'rate-limit','AI 제공자의 사용량 또는 요청 한도에 도달했습니다. 한도를 확인한 뒤 다시 시도해 주세요.');
+  }
+  return new OmpCommandError(command,'unknown',`OMP command failed: ${command}`);
+}
 interface Pending {
   command: string;
   resolve: (frame: Record<string, unknown>) => void;
@@ -215,13 +233,7 @@ export class OmpProcess extends EventEmitter {
           if(pending.command==='negotiate_protocol')this.protocol=2;
           pending.resolve(frame);
         }
-        else pending.reject(new Error(pending.command==='login'&&typeof frame['error']==='string'&&/secret input|not supported in RPC mode/i.test(frame['error'])
-          ? '이 제공자는 OMP RPC 로그인을 지원하지 않습니다. 터미널 인증이 필요합니다.'
-          : pending.command==='compact'&&typeof frame['error']==='string'&&/nothing to compact \(session too small\)/i.test(frame['error'])
-            ? '대화 기록이 아직 짧아 압축할 수 없습니다. 대화를 더 진행한 뒤 다시 시도해 주세요.'
-            : pending.command==='compact'&&typeof frame['error']==='string'&&/already compacted/i.test(frame['error'])
-              ? '현재 대화는 이미 압축되어 있습니다. 새 대화 기록이 쌓인 뒤 다시 시도해 주세요.'
-              : `OMP command failed: ${pending.command}`));
+        else pending.reject(commandError(pending.command,frame));
       }
     }
     this.emit('frame', frame);

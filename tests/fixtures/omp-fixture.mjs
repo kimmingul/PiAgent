@@ -30,6 +30,9 @@ lines.on('line', line => {
   if(scenario==='compact-errors'&&command.type==='compact'){
     emit({type:'response',id:command.id,command:command.type,success:false,error:command.nonce});return;
   }
+  if(scenario==='prompt-errors'&&command.type==='prompt'){
+    emit({type:'response',id:command.id,command:command.type,success:false,error:command.message});return;
+  }
   setTimeout(() => emit({ type: 'response', id: command.id,
     command: command.mismatch ? 'wrong' : command.type, success: !command.fail,
     data: { cwd: process.cwd(), argv: process.argv.slice(3), nonce: command.nonce ?? null } }), command.type === 'get_state' ? 20 : 1);

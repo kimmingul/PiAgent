@@ -119,6 +119,23 @@ test('OMP interaction answers are scoped, validated, single-use and bounded',asy
     assert.throws(()=>interactions.accept({method:'notify',message:'x'.repeat(300000)}),/limit/);
   }finally{interactions.clear();}
 });
+
+test('OMP owns dialog expiry; the host does not cancel or approve after five minutes',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const sent=[],frames=[],interactions=new Interactions({uiResponse:async(id,value)=>sent.push({id,value})},frame=>frames.push(frame));
+ try {
+   interactions.accept({type:'extension_ui_request',method:'select',id:'question',options:['Allow','Deny']});
+   interactions.accept({type:'extension_ui_request',method:'confirm',id:'long-deadline',timeout:600000});
+   t.mock.timers.tick(600001);
+   assert.equal(interactions.waiting,true);assert.equal(sent.length,0);
+   await interactions.respond('question',{value:'Deny'});
+   assert.deepEqual(sent,[{id:'question',value:{value:'Deny'}}]);
+   interactions.accept({type:'extension_ui_request',method:'cancel',targetId:'long-deadline'});
+   assert.equal(interactions.waiting,false);assert.equal(sent.length,1);
+   assert.ok(frames.some(frame=>frame.method==='notify'&&frame.message.includes('시간 만료')));
+   await assert.rejects(interactions.respond('long-deadline',{confirmed:true}),/expired/);
+ }finally{interactions.clear();t.mock.timers.reset();}
+});
 test('OMP controls reject arbitrary commands/fields, enforce idle settings and hide private state',async()=>{
   const calls=[],omp={request:async(command,fields)=>{calls.push({command,fields});return {data:{model:{id:'model'},sessionFile:'private',systemPrompt:'private'}};}};
   await assert.rejects(control(omp,'switch_session',{sessionPath:'x'},false));

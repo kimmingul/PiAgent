@@ -165,7 +165,8 @@ export class WorkspaceChanges {
   async observeTurn(snapshot:TurnSnapshot):Promise<Record<string,unknown>> {
     await this.drain();const files:FileEdit[]=[];let excluded=snapshot.excluded;
     for(const old of snapshot.files){try{const current=await this.reader.snapshot(old.path,signal());if(current.bytes.equals(old.bytes))continue;if(current.bytes.length>32768){excluded++;continue;}files.push({path:old.path,before:old.bytes,after:current.bytes,beforeHash:hash(old.bytes),afterHash:hash(current.bytes)});}catch{excluded++;}}
-    if(files.length>8||files.reduce((sum,file)=>sum+file.before.length+file.after.length,0)>256*1024)throw new Error('Observed turn exceeds eight files or 256 KiB; no complete turn checkpoint was recorded');
+    const bytes=files.reduce((sum,file)=>sum+file.before.length+file.after.length,0);
+    if(files.length>8||bytes>256*1024)return {recorded:false,reason:'limit',changedFiles:files.length,bytes,excluded,warning:'파일 변경이 복원 기록 한도(8개 파일 또는 변경 전후 합계 256 KiB)를 초과해 이 응답의 전체 변경 기록을 만들지 못했습니다. 실제 파일 변경은 유지되며 작업 중단을 뜻하지 않습니다. Git diff로 변경 내용을 확인해 주세요.'};
     if(!files.length)return {recorded:false,excluded};
     return this.serialize(async()=>{
       // An approved proposal already persisted this exact turn delta. Keep its ID/restoration journal.

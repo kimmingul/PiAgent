@@ -18,13 +18,17 @@ export function designerApprovalContext(frame:Record<string,unknown>):Record<str
 /** Correlate only live requests from this OMP child. Never infer approval from button labels. */
 export class Interactions {
   get waiting(): boolean { return this.pending.size > 0; }
-  private pending=new Map<string,{frame:Record<string,unknown>;timer:NodeJS.Timeout}>();
+  private pending=new Map<string,{frame:Record<string,unknown>}>();
   constructor(private readonly omp:OmpProcess,private readonly emit:(frame:Record<string,unknown>)=>void) {}
   accept(frame:Record<string,unknown>):void {
     if(Buffer.byteLength(JSON.stringify(frame))>256*1024)throw new Error('OMP interaction exceeds limit');
     frame=designerApprovalContext(frame);
     const method=frame['method'],id=frame['id'];
-    if(method==='cancel') {this.remove(String(frame['targetId']));this.emit(frame);return;}
+    if(method==='cancel') {
+      const pending=this.pending.has(String(frame['targetId']));this.remove(String(frame['targetId']));this.emit(frame);
+      if(pending)this.emit({type:'extension_ui_request',method:'notify',message:'OMP가 질문 또는 승인 요청을 종료했습니다. 시간 만료 또는 취소일 수 있습니다. 작업 종료 여부는 OMP의 최종 상태로 확인합니다.'});
+      return;
+    }
     if(!['select','confirm','input','editor'].includes(String(method))) {
       if(['notify','setStatus','setTitle','setWidget','set_editor_text','open_url'].includes(String(method))){this.emit(frame);return;}
       if(typeof id==='string')void this.omp.uiResponse(id,{cancelled:true}).catch(()=>{});
@@ -33,9 +37,10 @@ export class Interactions {
     if(typeof id!=='string'||!id||id.length>256||this.pending.has(id)||this.pending.size>=16)throw new Error('Invalid OMP interaction');
     if(method==='select'&&(!Array.isArray(frame['options'])||frame['options'].length>1024||!frame['options'].every(option=>typeof option==='string')))throw new Error('Invalid OMP select options');
     if(Buffer.byteLength(JSON.stringify(frame))>256*1024)throw new Error('OMP interaction exceeds limit');
-    const timeout=typeof frame['timeout']==='number'&&Number.isFinite(frame['timeout'])?Math.max(1,Math.min(frame['timeout'],300000)):300000;
-    const timer=setTimeout(()=>{this.remove(id);void this.omp.uiResponse(id,{cancelled:true}).catch(()=>{});this.emit({type:'extension_ui_request',method:'cancel',targetId:id});},timeout);
-    this.pending.set(id,{frame,timer});this.emit(frame);
+    // OMP owns dialog deadlines and sends `cancel` on expiry/abort. A second host
+    // timer incorrectly turns a timeout into user cancellation and aborts ask.
+    // Keep bounded pending requests until an answer, OMP cancel or connection close.
+    this.pending.set(id,{frame});this.emit(frame);
   }
   async respond(id:unknown,value:unknown):Promise<{answered:true}> {
     if(typeof id!=='string'||!isObject(value))throw new Error('Invalid OMP answer');
@@ -50,6 +55,6 @@ export class Interactions {
     } else throw new Error('Invalid OMP answer');
     this.remove(id);await this.omp.uiResponse(id,response);return {answered:true};
   }
-  private remove(id:string):void {const pending=this.pending.get(id);if(pending)clearTimeout(pending.timer);this.pending.delete(id);}
+  private remove(id:string):void {this.pending.delete(id);}
   clear():void {for(const id of this.pending.keys())this.remove(id);}
 }

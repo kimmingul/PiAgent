@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { OmpProcess } from '@piagent/omp';
+import { OmpProcess, OmpCommandError } from '@piagent/omp';
 import type { OmpOptions } from '@piagent/omp';
 import { isObject, CORE_VERSION } from '@piagent/protocol';
 import { contextPrompt } from './context.js';
@@ -467,9 +467,23 @@ export class ChatSession {
     } finally {this.admitting=false;if(this.promptSetup===setup)this.promptSetup=undefined;prepared();}
     try {
       const response = await this.omp.request('prompt', { message: prompt,...(attachedImages.length?{images:attachedImages}:{}) });
-      if (isObject(response['data']) && response['data']['agentInvoked'] === false) this.finish('completed');
+      if (this.options.profile!=='native'&&isObject(response['data']) && response['data']['agentInvoked'] === false) this.finish('completed');
       return { sessionId: this.id, turnId, accepted: true };
     } catch (error) {
+      // OMP can start an asynchronous continuation between settled turns. A rejected
+      // busy prompt was not admitted; queue it once without aborting that live work.
+      if(error instanceof OmpCommandError)this.diagnose('prompt_rejected',{phase:error.reason});
+      if(error instanceof OmpCommandError&&error.reason==='busy'&&this.options.profile==='native'&&this.turn===turnId&&!this.cancelling&&!this.disposed&&!this.retiring) {
+        this.emit('warning','OMP가 아직 실행 중이므로 요청을 후속 대기열에 추가합니다. 현재 작업을 중단하지 않습니다.');
+        try {
+          await this.omp.request('follow_up',{message:prompt,...(attachedImages.length?{images:attachedImages}:{})});
+          return {sessionId:this.id,turnId,accepted:true,queued:true};
+        } catch {
+          // Keep ownership of the pre-existing work even if queue admission fails.
+          this.emit('warning','후속 요청을 대기열에 추가하지 못했습니다. 현재 작업이 끝난 뒤 요청을 다시 보내 주세요.');
+          throw new ChatError(-32013,'후속 요청을 대기열에 추가하지 못했습니다. 현재 작업이 끝난 뒤 요청을 다시 보내 주세요.');
+        }
+      }
       this.finish('error', error instanceof Error ? error.message : 'Prompt failed');
       // A timed-out acknowledgement might still have started a turn. Retire the process.
       await this.closeSession(); throw new ChatError(-32010, this.closeReason??'OMP 요청을 시작하지 못했습니다. 다시 연결해 주세요.');
@@ -508,7 +522,11 @@ export class ChatSession {
       this.emit('delta', frame['text'].slice(0, 16_384));
     } else if (type === 'message_end' && isObject(frame['message'])
       && ['error', 'aborted'].includes(String(frame['message']['stopReason']))) {
-      if (this.cancelling || frame['message']['stopReason'] === 'aborted') this.finish('cancelled');
+      if (this.cancelling || frame['message']['stopReason'] === 'aborted') {
+        // Native assistant aborts can precede compaction, retries or asynchronous
+        // continuation. Only session settlement (or explicit retirement) ends it.
+        if(this.options.profile!=='native')this.finish('cancelled');
+      }
       else {
         this.providerError=typeof frame['message']['errorMessage'] === 'string'
           ? frame['message']['errorMessage'].slice(0, 2048) : 'OMP model request failed';
@@ -520,7 +538,7 @@ export class ChatSession {
       this.providerError=undefined;
     } else if ((this.options.profile==='native'&&(type==='session_settled'||(type==='prompt_result'&&frame['sessionSettled']!==false)))
       || (this.options.profile!=='native'&&type === 'agent_end' && frame['isTerminal'] !== false)
-      || (type === 'prompt_result' && frame['agentInvoked'] === false)) {
+      || (type === 'prompt_result' && frame['agentInvoked'] === false&&frame['sessionSettled']!==false)) {
       const error=isObject(frame['error'])&&typeof frame['error']['message']==='string'?frame['error']['message'].slice(0,2048):this.providerError;
       const failed=frame['status']==='error'||(frame['status']===undefined&&error!==undefined);
       this.finish(this.cancelling||frame['status']==='aborted' ? 'cancelled' : failed?'error':'completed',failed?error:undefined);
@@ -604,6 +622,7 @@ export class ChatSession {
       const messages:Record<string,string>={
         'OMP request timeout':'OMP 요청 확인 응답이 시간 내에 도착하지 않았습니다. 중복 실행을 막기 위해 작업 세션을 종료합니다.',
         'OMP prompt failed':'OMP가 요청을 시작하지 못했습니다. 저장된 대화를 다시 열어 주세요.',
+        'OMP command failed: prompt':'OMP가 요청을 시작하지 못했습니다. 저장된 대화를 다시 열어 주세요.',
         'OMP requires an unsupported interaction':'OMP가 지원되지 않는 상호작용을 요청하여 작업 세션을 종료했습니다.',
         'Workspace tool transport failed':'작업영역 도구와의 통신에 실패했습니다.',
         'Invalid or duplicate host tool call':'잘못되었거나 중복된 IDE 도구 요청을 받아 작업 세션을 종료했습니다.',
@@ -612,7 +631,7 @@ export class ChatSession {
     if(kind==='error')this.closeReason=text??'OMP 작업 중 오류가 발생했습니다.';
     if(this.turnSnapshot&&this.changes&&!this.finishing) {
       const snapshot=this.turnSnapshot;this.turnSnapshot=undefined;this.finishing=true;
-      this.planSaving=this.changes.observeTurn(snapshot).then(result=>{if(result['recorded'])this.emit('warning','이 응답 중 바뀐 Git 추적 UTF-8 파일을 변경 기록에 저장했습니다. 새 파일·삭제·바이너리·범위 밖 파일은 포함되지 않습니다. 복원 전 diff를 확인해 주세요.');}).catch(error=>this.emit('warning',error instanceof Error?error.message:'Turn checkpoint could not be recorded')).finally(()=>{this.finishing=false;this.planSaving=undefined;this.finish(kind,text);});return;
+      this.planSaving=this.changes.observeTurn(snapshot).then(result=>{if(result['recorded'])this.emit('warning','이 응답 중 바뀐 Git 추적 UTF-8 파일을 변경 기록에 저장했습니다. 새 파일·삭제·바이너리·범위 밖 파일은 포함되지 않습니다. 복원 전 diff를 확인해 주세요.');if(typeof result['warning']==='string')this.emit('warning',result['warning']);}).catch(error=>this.emit('warning',error instanceof Error?error.message:'Turn checkpoint could not be recorded')).finally(()=>{this.finishing=false;this.planSaving=undefined;this.finish(kind,text);});return;
     }
     if(this.timeline&&this.timelinePending){this.timelinePending=false;this.finishing=true;this.planSaving=(async()=>{await this.timeline!.settled(this.changes?await this.changes.beginTurn():undefined);})().catch(error=>this.emit('warning',error instanceof Error?error.message:'Message baseline save failed')).finally(()=>{this.finishing=false;this.planSaving=undefined;this.finish(kind,text);});return;}
     if(this.approvalMode==='plan'&&kind==='completed'&&this.answer.trim()&&this.workspace&&!this.finishing) {

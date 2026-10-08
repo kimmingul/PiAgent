@@ -2,12 +2,16 @@
 
 [한국어](README.md) · **English** · [Documentation / 문서](docs/README.md)
 
-Current version **0.9.19** · signed prerelease **0.9.19** · documentation updated **2026-10-08 KST**.
+Current version **0.9.20** · signed prerelease **0.9.20** · documentation updated **2026-10-09 KST**.
 Developer: **Min-Gul Kim (김민걸)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [Product website](https://kimmingul.github.io/PiAgent/?lang=en) ·
-[0.9.19 prerelease](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.19).
+[0.9.20 prerelease](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.20).
 Source code and signed installers are available in the public `kimmingul/PiAgent` repository.
+
+0.9.20 retains continued answers until native OMP fully settles, even after an individual response abort.
+It removes arbitrary five-minute dialog cancellation and queues prompts rejected by busy OMP.
+Checkpoint limit guidance explains that actual file changes are preserved. [Changes and validation](docs/RELEASE-0.9.20.en.md).
 
 ## First-time setup
 
@@ -30,8 +34,7 @@ It preserves RADAgent's WebView UI/UX; the RADAgent repository is not modified.
 
 ## Current use and installation
 
-The signed installer is `dist/PiAgent-Setup-0.9.19.exe`. On the validation PC, Core and RAD32/64
-were updated and duplicate RAD BPL registrations were removed. Building or publishing a release
+The signed installer is `dist/PiAgent-Setup-0.9.20.exe`. Building or publishing a release
 does not automatically replace an installation in a running IDE. Close the target IDEs before installing.
 Select Core, RAD13.2 32/64-bit, VS2022/2026, and optional OMP installation if OMP is absent.
 [Installation guide](docs/INSTALLATION.en.md) · [Unified installer](docs/UNIFIED-INSTALLER.md).
@@ -50,7 +53,7 @@ registrations. Installation records do not prove live testing. Current live vali
 
 Choose `Automatic`, `한국어` or `English` under **Settings → Display → Language**. The default `Automatic` uses Korean on Korean systems and English otherwise. An explicit choice is saved in private settings for the current project and reused on the next launch. Settings, accounts, model roles, execution controls, Git and approval guidance switch together. Model replies, code and external tool text are not automatically translated.
 The installer also offers Korean/English selection at the top right. The website remembers your selection and supports direct [Korean](https://kimmingul.github.io/PiAgent/?lang=ko) / [English](https://kimmingul.github.io/PiAgent/?lang=en) links.
-[0.9.19 changes and validation](docs/RELEASE-0.9.19.en.md).
+[0.9.20 changes and validation](docs/RELEASE-0.9.20.en.md).
 
 ## Current features and validation
 

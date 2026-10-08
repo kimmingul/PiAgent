@@ -2,12 +2,16 @@
 
 **한국어** · [English](README.en.md) · [문서 / Documentation](docs/README.md)
 
-현재 버전 **0.9.19** · 서명 사전 릴리즈 **0.9.19** · 문서 갱신일 **2026-10-08 KST**.
+현재 버전 **0.9.20** · 서명 사전 릴리즈 **0.9.20** · 문서 갱신일 **2026-10-09 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
-[0.9.19 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.19).
+[0.9.20 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.20).
 소스와 서명 설치 파일은 공개 저장소 `kimmingul/PiAgent`에서 제공한다.
+
+0.9.20은 긴 작업 중 개별 응답이 취소돼도 OMP의 전체 종료를 기다려 후속 답변을 유지합니다.
+질문의 임의 5분 취소를 제거하고, 실행 중인 OMP가 거절한 요청은 후속 대기열로 보냅니다.
+체크포인트 제한 안내는 실제 파일 변경이 유지됨을 설명합니다. [변경·검증](docs/RELEASE-0.9.20.md).
 
 ## 처음 설치하는 분께
 
@@ -29,8 +33,7 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-서명 설치파일은 `dist/PiAgent-Setup-0.9.19.exe`다. 이 PC에는 Core와 RAD32/64를 업데이트하고
-중복된 RAD BPL 등록을 정리했다. 새 릴리즈 빌드·게시는 실행 중인 IDE를 자동 교체하지 않는다.
+서명 설치파일은 `dist/PiAgent-Setup-0.9.20.exe`다. 새 릴리즈 빌드·게시는 실행 중인 IDE를 자동 교체하지 않는다.
 설치 전 IDE를 종료하고 새 설치파일을 실행한다.
 Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
@@ -50,7 +53,7 @@ VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다
 
 **설정 → 표시 → 언어**에서 `자동`, `한국어`, `English`를 선택한다. 기본값 `자동`은 한국어 시스템에서 한국어, 그 외에는 영어다. 직접 선택한 언어는 현재 프로젝트의 비공개 설정에 저장되며 다음 실행에도 적용한다. 설정·계정·모델 역할·실행 제어·Git·승인 안내가 함께 전환된다. 모델의 답변이나 코드, 외부 도구의 원문을 자동 번역하지 않는다.
 설치프로그램 오른쪽 위에서도 한국어/영어를 선택할 수 있다. 홈페이지는 선택을 저장하고 [한국어](https://kimmingul.github.io/PiAgent/?lang=ko) / [English](https://kimmingul.github.io/PiAgent/?lang=en)로 직접 연결할 수 있다.
-[0.9.19 변경 및 검증](docs/RELEASE-0.9.19.md).
+[0.9.20 변경 및 검증](docs/RELEASE-0.9.20.md).
 
 ## 현재 기능과 검증
 
