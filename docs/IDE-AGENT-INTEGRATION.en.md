@@ -1,9 +1,11 @@
 # IDE integration: candidate implementation guide
 
+Installer hash `8A3A…FD09` identifies the cycle-tested upgrade/rollback/restoration package, not a later repack. Repacked bytes require separate verification; download hashes accompany GitHub release assets (`.exe.sha256`).
+
 [한국어](IDE-AGENT-INTEGRATION.md) · **English** · [Documentation](README.md)
 
 This guide describes the implementation being validated in the working tree on
-2026-10-09. Source now reports 0.11.0 candidate; earlier acceptance receipts retain
+2026-10-10 KST. Source now reports 0.11.0 candidate; earlier acceptance receipts retain
 their actual 0.10.0 binary identities. This does not announce a signed release or certify every installed IDE
 scenario. The [roadmap](IDE-AGENT-ROADMAP.en.md) includes broader goals that remain
 subject to SDK experiments and acceptance. Use the live catalog and the recorded
@@ -65,6 +67,7 @@ and platform. `.cbproj`, `.dpk` and non-Delphi sidecars are unsupported.
 Supported nested property
 schemas are bounded and do not traverse component references; actual live
 nested scalar fields, including Font, still need actual scenario acceptance.
+A test-only Font loader attempt established inspection only, not mutation/persistence.
 Collection authoring is not implemented.
 
 ## Review and apply changes
@@ -97,6 +100,8 @@ WinUI3 source 7/7 passed; three generated WinUI3 stages compiled. This does not
 establish a WinUI3 runtime application or native visual-designer backend.
 
 ## Recovery uses the matching mechanism
+
+Stop recovery now waits for both file-checkpoint and timeline persistence before retiring the session. A localized **Retry connection** button uses the existing native Connect path (`resumeLast:true`) after closure. It resumes saved conversation without replaying an interrupted prompt or changing the model, approval policy or consent. Independent Stop and composer Escape preserve unsent drafts; focused UI checks passed 36/36. Actual native UI Stop→Retry preserved the draft and saved conversation without automatic replay. A fresh explicitly approved `ide_context snapshot` then returned the correct solution/configuration. The intervening tiny prompt completed but repeated a historical cancellation error instead of the requested `RECOVERY_OK`; that content failure remains separate from the successful fresh IDE roundtrip.
 
 Editor acceptance uses the IDE's native undo. VS semantic changes use its
 native undo context; the installed WPF fixture verified a two-file rename and
@@ -225,9 +230,9 @@ files/Git state and permitting the next turn. These use deterministic OMP fixtur
 Three Git regressions additionally cover protected contents before consent,
 staged protected commits, rename/deletion endpoints and literal pathspec handling.
 The focused Git/workspace run passed 15/15. The expanded full run completed:
-209 total, 208 PASS, 0 FAIL and one optional native-RAD receipt skip (148,986.8872 ms,
-`full-test-0.11.0-guidance.log`). Final both-architecture adapter integration passed
-18/18 with zero skips (`adapter-test-0.11.0-final-guidance-both.log`). Signed adapter acceptance
+212 total, 211 PASS, 0 FAIL and one optional native-RAD receipt skip (159,524.7573 ms,
+`full-test-recovery-final.log`). Final both-architecture adapter integration passed
+18/18 with zero skips (`adapter-test-recovery-both.log`). Signed adapter acceptance
 includes VS2022 WinForms 8/8 and C++ 3/3 using the final DLL, VS2026 WPF 11/11 and
 three generated WPF stage builds, plus actual runtime controls. The signed installer
 containing protected Git, the RAD target-identity fix and approval guidance passed complete
@@ -240,17 +245,24 @@ builds. Both actual external `Fixture.dpr` alias builds and diagnostics retained
 original `Fixture.dproj`/Delphi identity. Win64 BPL SHA256 is
 `598202985DF8705A441F4BD694C97B24F89C05A6B830A87D39256CAE359A2275`;
 Win32 is `E099084DDA176B30814FEC9FB38947B4D57E36127AFAABEC62B908BD5E4A9147`.
-Both BPL signatures remain valid and unchanged. Two shared UI JavaScript files were
-updated after native acceptance; shared WebView validation separately passed 82 checks,
-including twelve transitions and three approval-label/raw-value preservation checks.
-The UI-only VSIX repack has SHA256
-`CADA2441F1DEE303B25DDEE37E9C05A8CB2F949317EDB754911E18B0E2797A7A`;
-the native DLL (SHA256 begins 6A3141) is unchanged. Isolated PipeHost output and
-intermediate directories (`--artifacts-path`) built successfully while preserving the
-loaded original DLL (`isolated-host-build.log`). Implementation commit `24c51e7`
-is local, not pushed. Actual installation/update/recovery and four-hour soaks remain
-pending; older receipts retain their original identities.
-No release or completed soak is claimed.
+Both BPL signatures and native DLL bytes remain unchanged. The recovery VSIX SHA256 is
+`28904BA981EA0C85C08A5BA1E27042D53760BCB3D7EAB81BDAAB39C286345DEF`; six UI files changed from guidance.
+Shared WebView checks passed 91, including twelve transitions and recovery/Stop/draft
+preservation checks (`webview-stop-v3.log`). The replacement signed installer
+(`setup-20261009-154200`, SHA256 `8A3A5FAEC53F607A1B5932BBEB536BB699622C859D13478EE8903FF2468CFD09`)
+passed complete payload/runtime/policy checks (`test-installer-recovery-stop.log`).
+The actual installed cycle passed upgrade to 0.11.0 (1,056 verified payload files),
+rollback to 0.10.0 (1,029) and restoration to 0.11.0 (1,056). Receipts
+`installed-upgrade-011.json`, `installed-rollback-010.json` and `installed-restored-011.json`
+verify exactly one current product extension per VS2022/2026 installation,
+RAD32/64 registrations, signatures and preserved settings. This is upgrade/rollback
+evidence, not a clean-install or physical-x64 claim. Later documentation repacks
+require separate payload/repair verification; availability is listed on GitHub Releases.
+
+The original VS soak fails the strict four-hour gate: UTC span 14,399.0635 seconds versus Stopwatch 14,400.176 seconds, with 2,869 samples, 24 builds and no recorded errors. Its unequal timestamp anchors do not justify changing the receipt or verifier; it is near-four-hour evidence, not a four-hour PASS. RAD also fails the unchanged strict gate: UTC 14,399.018 seconds versus monotonic 14,400.203 seconds, 2,871 samples, 24 builds and zero errors. Both receipts retain their original 0.10.0 identities and are not strict four-hour PASS results.
+
+Original v3 understanding attempts 01/02 passed the unchanged exact-answer/source-preservation validator. Attempt 03 was operator-interrupted while an outer OMP approval remained pending and selected two out-of-scope web searches. It remains a failed attempt in the denominator with its original runtime provenance; no final answer or pure-model timeout is inferred. Formal comparative measurement remains incomplete.
+Availability: [GitHub Releases](https://github.com/kimmingul/PiAgent/releases).
 The deterministic real-pipe lifecycle soak additionally exercises ten distinct
 project switches and saved-session resumes, ten mode switches across all four
 access modes, thirty cancel/normal-completion cycles and one hundred isolated

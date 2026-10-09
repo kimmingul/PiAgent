@@ -1,13 +1,16 @@
-# PiAgent 0.11.0 — 미출시 후보 (UNRELEASED CANDIDATE)
+# PiAgent 0.11.0 — 제한적 사전 릴리즈
+
+설치파일 해시 `8A3A…FD09`는 업데이트/롤백/복원을 검증한 패키지 식별자이며 후속 repack 해시가 아니다. 바이트가 바뀐 repack은 별도 검사가 필요하며 배포 해시는 GitHub 릴리즈 asset의 `.exe.sha256`을 따른다.
 
 **한국어** · [English](RELEASE-0.11.0.en.md) · [후보 사용 안내](IDE-AGENT-INTEGRATION.md)
 
-2026-10-09 기준 상태: **개발 후보이며 게시된 0.11.0 배포판이 아니다**.
-소스는 현재 0.11.0 후보를 표시한다. 이전 실제 사용 검증과 진행 중인 soak receipt의
+2026-10-10 KST 기준 상태: **범위를 명시한 사전 릴리즈 준비본**. 배포 상태: [GitHub Releases](https://github.com/kimmingul/PiAgent/releases).
+소스는 현재 0.11.0 후보를 표시한다. 이전 실제 사용 검증과 soak receipt의
 실제 0.10.0 바이너리 식별자는 유지하며 최종 0.11.0 검증은 별도다. 이 문서는 예정
-릴리즈의 구현·근거를 기록한다. M0–M6 계획 전체는 완료되지 않았다. 현재 회귀·패키지
-검사는 통과했으며 실제 설치/업데이트/복구, 4시간 soak와 정식 비교 평가는 남아 있다.
-구현 commit `24c51e7`은 로컬이며 push하지 않았다.
+릴리즈의 구현·근거를 기록한다. M0–M6 계획 전체는 완료되지 않았다. 현재 회귀
+검사와 제한된 네이티브 UI 복구·교체 패키지·실제 업데이트/롤백/복원 검사는 통과했다.
+엄격한 4시간 soak와 정식 비교, 더 넓은 검증은 남은 M6 조건이다.
+구현: `24c51e7`; 복구: `b8f566b`.
 
 후보는 기존 Core/OMP/Named Pipe 구조에 실제 IDE 문맥, 검토한 변경, 실행 근거와
 복구를 확장한다. SDK 호출은 VS/RAD 어댑터에 남으며 고정 도구 목록 대신 연결된
@@ -23,7 +26,7 @@
 | M3: 테스트와 디버거 | VS 외부 VSTest/TRX 대상 선택과 확장한 네이티브 디버거 제어; RAD 명시적 DUnitX/NUnit XML 실행기와 제한된 ToolsAPI 디버거 | VS 실제 테스트/디버거 통과. RAD 실행기/parser/CPU/프로세스 fixture 통과; 더 넓은 실제 디버거/테스트 흐름 검증은 남음 |
 | M4: 디자이너 | 생성·삭제·이벤트 연결 미리보기/승인과 별도로 검토하는 소스/폼/리소스 체크포인트 복원; 제한된 타입 기반 RAD 중첩 속성 | WPF와 .NET Framework WinForms 실제 fixture 통과. RAD VCL/FMX 저장 상태 강한 검사와 생성 단계 빌드 통과; 실제 구조 도구는 저장된 표준 폼/type/parent 엄격한 조건 필요 |
 | M5: 성능과 로컬 작업 | 최신 .NET CPU/GC/이전 trace 비교; RAD Windows CPU 카운터; 검토한 로컬 publish; 로컬 Git 상태/diff/이력/브랜치와 stage/commit | WPF 프로파일/비교와 격리 로컬 publish receipt 통과. 문맥 크기 측정은 제한된 근거이며 속도 개선 입증이 아님; 원격 배포와 OMP 프로세스 풀링 없음 |
-| M6: 검증과 패키지 | 결정적 수명 검사, 비교 benchmark 작업/보고 형식, 양언어 안내와 진단 companion 패키징/서명 지원 | 자동 검사와 범위를 한정한 실제 검사 통과. 4시간 실제 soak, 최종 서명 설치/업데이트/복구, 조건을 맞춘 정식 경쟁 제품 비교는 미완료 |
+| M6: 검증과 패키지 | 결정적 수명 검사, 비교 benchmark 형식, 양언어 안내·서명 패키징과 실제 업데이트/롤백/복원 | 범위별 검사 통과, 원래 엄격한 4시간 조건 FAIL. 신규 설치, 더 넓은 검증과 조건을 맞춘 정식 비교는 미완료 |
 
 계획/읽기 전용 모드는 등록 전에 변경 작업을 제외하며 실행 시 접근 권한을 다시
 검사한다. 실행 작업은 승인 전후 어댑터 상태를 검사한다. 취소/연결 해제는 자동
@@ -62,7 +65,8 @@ heap snapshot이 아니다. EventPipe는 네이티브 C++/.NET Framework 프로�
 할당 분석이나 Delphi GC가 아니다. 각 카탈로그/검사는 실제 가용 backend를 표시한다.
 
 RAD 제한된 중첩 scalar 속성은 Font 필드를 포함해 구현됐으나 실제 Font 검증은
-남아 있다. Collection authoring은 구현하지 않았다.
+남아 있다. 시험 전용 loader 시도는 조회만 확인했으며 변경/저장 근거를 만들지 못했다.
+Collection authoring은 구현하지 않았다.
 
 로컬 Git 승인은 캐시된 diff/메시지를 보여 준다. Stage는 index를 변경하고 commit은
 로컬 hook/서명 설정을 따른다. 오래된 상태, 링크 경로, 바이너리, 사용자 clean filter,
@@ -79,14 +83,18 @@ Git 내용 조회/검토는 기존 워크스페이스 보호 경로 정책을 �
 
 ## 기록된 검증
 
-- 최신 전체 TypeScript/직렬 Node 검사: **208 PASS, 0 FAIL, 선택 네이티브 RAD receipt 검사 1개 skip**(총 209개; 148,986.8872 ms; `full-test-0.11.0-guidance.log`). 보호 경로 Git 회귀 3개를 포함한 집중 Git/워크스페이스 검사는 **15/15, skip 0개**를 통과했다. 최종 양 아키텍처 어댑터 통합은 **18/18, skip 0개**를 통과했다(`adapter-test-0.11.0-final-guidance-both.log`).
+중지 복구는 파일 체크포인트와 타임라인 저장을 모두 마친 뒤 작업 세션을 종료한다. 종료 후 **연결 다시 시도** 버튼은 기존 네이티브 Connect 경로(`resumeLast:true`)를 사용한다. 중단 요청을 재실행하지 않고 저장 대화를 재개하며 모델·승인 정책·동의를 바꾸지 않는다. 독립 중지와 편집창 Escape는 미전송 초안을 보존하며 집중 UI 36/36을 통과했다. 실제 네이티브 UI의 중지→다시 시도도 초안과 같은 저장 대화를 보존했고 자동 재실행이 없었다. 이후 새로 요청하고 한 번 승인한 `ide_context snapshot`은 올바른 솔루션/구성을 반환했다. 중간의 짧은 요청은 완료됐으나 요청한 `RECOVERY_OK` 대신 과거 취소 오류를 반복했으며, 이 답 내용 실패는 새 IDE 왕복 성공과 별도로 유지한다.
+
+원래 v3 이해 작업 01/02는 수정하지 않은 정확한 답/소스 보존 검증기를 통과했다. 03은 외부 OMP 승인 대기 중 운영자가 중지했으며 범위 밖 웹 검색 두 번을 선택했다. 원래 runtime 근거와 함께 실패 시도로 분모에 남기고 최종 답이나 순수 모델 timeout을 추정하지 않는다. 정식 비교 측정은 미완료다.
+
+- 최신 전체 TypeScript/직렬 Node 검사: **211 PASS, 0 FAIL, 선택 네이티브 RAD receipt 검사 1개 skip**(총 212개; 159,524.7573 ms; `full-test-recovery-final.log`). 보호 경로 Git 회귀 3개를 포함한 집중 Git/워크스페이스 검사는 **15/15, skip 0개**를 통과했다. 최종 양 아키텍처 어댑터 통합은 **18/18, skip 0개**를 통과했다(`adapter-test-recovery-both.log`).
 - 실제 payload/Core 재생: production C# 결과 emitter와 실제 RAD VCL/FMX 변경/복구 receipt를 사용해 **2 PASS, 0 skip**. 실제 내용 승인, 정확한 proposal/checkpoint 전달과 일회용 처리를 검사하며 이 테스트의 SDK 변경은 모의 처리한다.
 - 실제 VS2026 격리 프로필: **WPF 11/11 PASS**, **.NET Framework WinForms 8/8 PASS**. 문맥/빌드, 두 파일 rename/네이티브 Undo, 오래된 변경 거절, 디버거와 디자이너 세 작업/정확한 복원을 포함한다. WPF는 실제 VSTest, 격리 로컬 publish와 연결된 CPU/GC/비교도 통과했다.
 - 실제 RAD13.2 Win64: VCL/FMX 각각 **생성·이벤트 연결·삭제·역순 복원 강한 6단계** 통과. 생성된 프로젝트 단계 여섯 개가 모두 빌드됐으며 저장 소스/리소스 검사가 이전의 불충분한 returned-success 검사를 대체했다. VCL 실행 창을 관찰했다. 일반 프로젝트 호환성이나 RAD32 UI 검증을 의미하지 않는다.
 - 최종 RAD wave24 VCL/FMX는 각각 **실제 인증 Core→ChatWorker→SDK 시나리오 8개**(승인 이벤트 4개를 포함한 receipt 행 12개)를 통과했다. 거절된 빌드의 네이티브 실행 0회, 승인한 네이티브 빌드, 실제 구조 변경 내용 승인, 정확한 소스/폼 복원과 소비된 토큰 재실행 거절을 포함한다. 네이티브 디버거, Windows CPU/비교, 한글/emoji 편집기 completion/next-edit/Undo/오래된 상태 거절도 통과했다. 실제 DUnitX는 테스트 2개/실패 1개/exit 1, 필터 실행 테스트 1개/실패 0개/exit 0을 반환했다.
 - 실제 파이프 결정적 수명 검사: 서로 다른 프로젝트 전환/재개 10회, 모드 전환 10회, 취소/정상 완료 주기 30회, 편집기 요청 100회 통과. **프로세스 인스턴스 131개**가 모두 종료됐으며 인스턴스 ID로 Windows PID 재사용을 구분했다. 약 27초 fixture 검사는 4시간 실제 soak가 아니다.
-- 현재 VSIX는 진단 EXE/config와 전체 실행 의존성·package/license 목록을 포함하며 패키지 내 자사 EXE 서명 검증을 통과했다. 공유 WebView 검증은 전환 12회와 승인 label/원래 응답 값 보존 회귀 3개를 포함해 **82개**를 통과했다. 승인 안내 UI만 다시 넣은 VSIX SHA256은 `CADA2441F1DEE303B25DDEE37E9C05A8CB2F949317EDB754911E18B0E2797A7A`이며 네이티브 DLL은 그대로다. RAD release011b BPL도 그대로이며 네이티브 검증 후 공유 UI JavaScript 두 파일만 갱신해 공유 UI 검사로 별도 검증했다.
-- 최종 서명 VS2022는 최종 DLL(SHA256 시작 6A3141)로 **WinForms 8/8·C++ 3/3**을 통과했다. 서명 VS2026 WPF는 **11/11**, 생성 단계 빌드 3개와 실제 실행 컨트롤을 통과했다. 대상 식별 수정 후 서명 RAD release011b VCL/FMX는 각각 디자이너 **6**·네이티브 SDK **26**·Core **8 시나리오/12행**과 생성 단계 여섯 개 빌드를 통과했다. 최종 승인 안내 설치파일은 전체 payload 해시, ARM64/x64 runtime·정책 검사와 영어→한국어 전환 중 IDE 선택 보존을 통과했다(`setup-20261009-134700`, `test-installer-0.11.0-final-guidance.log`). PipeHost 출력/중간 경로를 격리한 `--artifacts-path` 빌드는 로드된 원본 DLL을 유지하며 통과했다(`isolated-host-build.log`). 실제 설치·게시 검증은 남아 있고 이전 receipt 식별자는 유지한다.
+- 현재 VSIX는 서명 진단 실행파일·runtime 의존성·license 목록을 포함한다. 복구 VSIX SHA256은 `28904BA981EA0C85C08A5BA1E27042D53760BCB3D7EAB81BDAAB39C286345DEF`이며 네이티브 DLL/BPL은 그대로다. 승인 안내 이후 UI 여섯 파일만 추가로 바뀌었다. 공유 WebView 검증은 전환 12회와 복구/중지/초안 보존 검사를 포함해 **91개**를 통과했다(`webview-stop-v3.log`).
+- 최종 서명 VS2022는 최종 DLL(SHA256 시작 6A3141)로 **WinForms 8/8·C++ 3/3**을 통과했다. 서명 VS2026 WPF는 **11/11**, 생성 단계 빌드 3개와 실제 실행 컨트롤을 통과했다. 대상 식별 수정 후 서명 RAD release011b VCL/FMX는 각각 디자이너 **6**·네이티브 SDK **26**·Core **8 시나리오/12행**과 생성 단계 여섯 개 빌드를 통과했다. 최종 승인 안내 설치파일은 전체 payload 해시, ARM64/x64 runtime·정책 검사와 영어→한국어 전환 중 IDE 선택 보존을 통과했다(`setup-20261009-134700`, `test-installer-0.11.0-final-guidance.log`). PipeHost 출력/중간 경로를 격리한 `--artifacts-path` 빌드는 로드된 원본 DLL을 유지하며 통과했다(`isolated-host-build.log`). 실제 업데이트/롤백/복원 주기는 아래에서 확인하며 이전 receipt 식별자는 유지한다.
 
 새 집중 회귀는 ChatSession 갑작스러운 중단 후 요청 재실행 없는 재개, 256 KiB
 체크포인트 예산 초과의 비치명적 처리, 하위 프로세스 종료가 불확실한 경우 편집기
@@ -103,9 +111,15 @@ Git 내용 조회/검토는 기존 워크스페이스 보호 경로 정책을 �
 
 ## 남은 릴리즈 조건
 
-VS/RAD의 240분 네이티브 context/catalog/build soak가 진행 중이며 이 문서에 완료가
-기록되지 않았다. 현재 전체 Core/adapter/UI와 서명 payload 검사는 통과했다.
-남은 M6에는 실제 설치/업데이트/복구, 바쁜 UI의 취소/연결 해제 fault 검증, 더 넓은 RAD runtime/editor/중첩 속성과
+원래 VS soak는 엄격한 4시간 조건에 실패했다. UTC 구간은 14,399.0635초, Stopwatch는 14,400.176초이며 표본 2,869개·빌드 24회·기록 오류 0개다. 서로 다른 시점에서 잡은 시간 기준은 receipt/검증기를 바꿀 근거가 아니며 거의 4시간의 관찰 근거이지 4시간 PASS가 아니다. RAD도 변경하지 않은 엄격 검사에 실패했다. UTC 14,399.018초·단조 시간 14,400.203초·표본 2,871개·빌드 24회·오류 0개다. 두 receipt의 원래 0.10.0 식별자를 유지하며 엄격한 4시간 PASS로 처리하지 않는다.
+현재 전체 Core/adapter/UI와 제한된 네이티브 복구 UI 검사는 통과했다. 교체 서명 설치파일
+(`setup-20261009-154200`, SHA256 `8A3A5FAEC53F607A1B5932BBEB536BB699622C859D13478EE8903FF2468CFD09`)은
+payload/runtime/정책 검사를 통과했다(`test-installer-recovery-stop.log`). 실제 0.11.0 업데이트,
+0.10.0 롤백, 0.11.0 복원도 통과했다. 각각 payload 1,056/1,029/1,056개와
+각 VS2022/2026 설치의 현재 제품 확장 정확히 하나, RAD32/64 등록·서명·설정 보존을 확인했다
+(`installed-upgrade-011.json`, `installed-rollback-010.json`, `installed-restored-011.json`).
+후속 문서 repack은 별도 payload/repair 검사가 필요하다. 배포 상태: [GitHub Releases](https://github.com/kimmingul/PiAgent/releases).
+남은 M6에는 신규 설치 검증, 바쁜 UI의 취소/연결 해제 fault 검증, 더 넓은 RAD runtime/editor/중첩 속성과
 더 넓은 VS 프로젝트/IME 시나리오가 포함된다. 제한된 VS2022 fixture는 통과했으며 RAD32와 물리 x64 검증은 주 검증
 환경인 VS2026/RAD13.2 Win64와 구분해야 한다.
 VS/RAD 네이티브 구조 미리보기는 변경 전에 완전한 원본 복구 검토와 전체 escaped
@@ -113,16 +127,15 @@ VS/RAD 네이티브 구조 미리보기는 변경 전에 완전한 원본 복구
 제외한다. 이 조건을 적용한 최종 wave24 VCL/FMX raw 복구 payload 모두 Core 재생을
 통과했으며 검증 fixture 범위의 근거이지 임의 프로젝트 호환성 주장은 아니다.
 
-최종 승인 안내 설치파일은 보호 Git과 RAD 식별 수정을 포함해 payload/runtime/정책
-검사를 통과했다. 서명 RAD 식별 수정은 새
+교체 설치파일은 보호 Git·RAD 식별 수정과 후속 Core/UI 복구 변경을 포함한다. 서명 RAD 식별 수정은 새
 `ide-dev-release011b` VCL/FMX 각각 디자이너 6·네이티브 SDK 26·Core 8 시나리오와
 생성 단계 여섯 개 빌드를 통과했다. 실제 외부 `.dpr` 별칭 빌드/진단은 원본
 `.dproj`/Delphi 식별자를 유지했다. 두 BPL 서명이 유효하며 SHA256은
 Win64 `598202985DF8705A441F4BD694C97B24F89C05A6B830A87D39256CAE359A2275`,
 Win32 `E099084DDA176B30814FEC9FB38947B4D57E36127AFAABEC62B908BD5E4A9147`이다.
 외부 빌드는 활성 원본 `.dpr`/`.dproj`와 `Delphi.Personality`를 요구하며
-`.cbproj`, `.dpk`, 다른 personality의 sidecar는 미지원이다. 실제 신규 설치,
-업데이트와 이전 버전 복구는 남아 있다. 릴리즈 준비 전 저장소 버전 표기를 출시된 배포판으로 취급해서는 안 된다.
+`.cbproj`, `.dpk`, 다른 personality의 sidecar는 미지원이다. 실제 업데이트/롤백/복원 주기는
+통과했으나 신규 설치나 물리 x64 근거는 아니다. 릴리즈 준비 전 저장소 버전 표기를 출시된 배포판으로 취급해서는 안 된다.
 정식 Copilot/Kai 우월성 주장을 하지 않는다. 비교를 발표하려면 모델/설정/작업을
 맞추고 정확성을 독립적으로 평가하며 실패·미지원 시도를 분모에 남기고 충분한
 조건 일치 지연 표본을 수집해야 한다.

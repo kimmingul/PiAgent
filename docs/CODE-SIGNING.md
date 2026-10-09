@@ -5,9 +5,12 @@ Nanum Space certificate in CurrentUser/My, thumbprint
 `3CE49DE1124F325082FA90BDE4944756D1626251`. Connect the SafeNet USB token.
 Signing failures stop the build; an unsigned release is never reported as successful.
 
-Latest verification: the [0.9.18 release](RELEASE-0.9.18.md), built on 2026-10-08 KST,
-passed setup, VSIX/embedded assemblies, Win32/Win64 BPL and PipeHost signature/timestamp checks.
-The completed installer also passed embedded payload hashes and ARM64/x64 runtime verification.
+The [0.11.0 candidate](RELEASE-0.11.0.en.md) records the current signed VSIX and
+Win32/Win64 BPL identities. UI-only repackaging preserves the already validated
+native assemblies and signs the updated VSIX container again. Each replacement
+installer must pass its own signature, payload hash and bundled runtime checks;
+an earlier candidate's checks do not certify later bytes. Installation acceptance
+and publication status are recorded separately in the candidate release notes.
 
 ## Register the USB PIN once
 

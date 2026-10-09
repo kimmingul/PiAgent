@@ -2,7 +2,7 @@
 
 **한국어** · [English](README.en.md) · [문서 / Documentation](docs/README.md)
 
-소스 버전 **0.11.0 서명 후보** · 설치 검증/soak/게시 대기 · 문서 갱신일 **2026-10-09 KST**.
+소스 버전 **0.11.0 서명 후보** · 복구·설치·롤백 검증 통과 / 게시 대기 · 엄격한 4시간 soak 미통과 · 문서 갱신일 **2026-10-10 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
@@ -14,7 +14,7 @@
 
 [VS2026·RAD13.2 전체 IDE 활용 개발 계획](docs/IDE-AGENT-ROADMAP.md): 단계별 기능, GPT-6.1 sol 병렬 개발 분담, 검증 기준을 정리했습니다. 계획된 신규 기능은 현재 출시 기능과 구분합니다.
 
-[개발 후보 사용 안내](docs/IDE-AGENT-INTEGRATION.md): `/ide` 기능 상태, 변경 미리보기·승인·복원, VS/RAD 도구별 지원 범위와 문맥 최적화 측정이다. 소스는 0.11.0이며 이전 실제 검증 receipt의 0.10.0 식별자는 유지한다. 서명 후보의 패키지 검사는 통과했으며 실제 설치/업데이트/복구·4시간 soak·게시는 별도 대기 조건이다.
+[개발 후보 사용 안내](docs/IDE-AGENT-INTEGRATION.md): `/ide` 기능 상태, 변경 미리보기·승인·복원, VS/RAD 도구별 지원 범위와 문맥 최적화 측정이다. 전체 Core 검사 211 PASS(선택 검사 1 skip), 어댑터 18/18, WebView 91개를 통과했다. 중지 시 저장 완료를 기다리고, 초안을 유지하는 중지·Esc와 명시적 재연결을 제공한다. 이전 네이티브 검증의 실제 바이너리 식별자는 유지한다. 두 IDE의 장시간 자동 시험은 기록 오류가 없었지만 UTC 기준 약 1초 부족으로 엄격한 4시간 조건에 실패했다. M0–M6 전체 완료나 경쟁 제품 대비 우위를 주장하지 않는다.
 
 ## 처음 설치하는 분께
 
@@ -36,7 +36,7 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-로컬 서명 사전 릴리즈 후보는 `dist/PiAgent-Setup-0.11.0.exe`이며 패키지/runtime/정책 검사를 통과했다. 실제 설치/업데이트/복구·4시간 soak·게시는 대기 중이다. 예정 릴리즈 경로는 `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`다. 빌드·게시는 실행 중인 IDE를 자동 교체하지 않으며 게시된 검증 패키지를 설치하기 전에 IDE를 종료한다.
+로컬 서명 사전 릴리즈 후보는 `dist/PiAgent-Setup-0.11.0.exe`이며 패키지/runtime/정책 검사를 통과했다. 실제 0.11.0 업그레이드 → 0.10.0 롤백 → 0.11.0 재설치는 통과했다. 엄격한 4시간 조건은 미통과이며 게시를 준비 중이다. 예정 릴리즈 경로는 `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`다. 빌드·게시는 실행 중인 IDE를 자동 교체하지 않으며 게시된 검증 패키지를 설치하기 전에 IDE를 종료한다.
 Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
 [설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.ko.md).

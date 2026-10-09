@@ -2,7 +2,7 @@
 
 [한국어](README.md) · **English** · [Documentation / 문서](docs/README.md)
 
-Source version **0.11.0 signed candidate** · installation acceptance/soak/publication pending · documentation updated **2026-10-09 KST**.
+Source version **0.11.0 signed candidate** · recovery/installation/rollback passed; publication pending · strict four-hour soak unmet · documentation updated **2026-10-10 KST**.
 Developer: **Min-Gul Kim (김민걸)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [Product website](https://kimmingul.github.io/PiAgent/?lang=en) ·
@@ -14,7 +14,7 @@ The public `kimmingul/PiAgent` repository contains source and earlier signed rel
 
 [VS2026/RAD13.2 comprehensive IDE integration plan](docs/IDE-AGENT-ROADMAP.en.md): milestones, GPT-6.1 sol parallel ownership and acceptance criteria. Planned features are distinguished from current released functionality.
 
-[Candidate implementation guide](docs/IDE-AGENT-INTEGRATION.en.md): `/ide` availability, reviewed changes and recovery, VS/RAD backend scope and context measurements. Source is 0.11.0; earlier live receipts retain their actual 0.10.0 identities. Signed candidate package checks passed; actual installation/update/recovery, four-hour soaks and publication remain separate pending gates.
+[Candidate implementation guide](docs/IDE-AGENT-INTEGRATION.en.md): `/ide` availability, reviewed changes and recovery, VS/RAD backend scope and context measurements. Checks passed: 211 Core tests (one optional skip), 18/18 adapter tests and 91 WebView checks. Stop now waits for persistence, preserves drafts through Stop/Escape, and offers explicit reconnection. Earlier native evidence retains its actual binary identities. Both automated soaks recorded no errors but missed the strict four-hour UTC requirement by about one second. This is not completion of all M0–M6 gates or a claim of superiority over competing products.
 
 ## First-time setup
 
@@ -37,7 +37,7 @@ It preserves RADAgent's WebView UI/UX; the RADAgent repository is not modified.
 
 ## Current use and installation
 
-The local signed prerelease candidate is `dist/PiAgent-Setup-0.11.0.exe`; package/runtime/policy checks passed. Actual installation/update/recovery, four-hour soaks and publication remain pending. Its planned release path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`. Building or publishing a release does not automatically replace an installation in a running IDE. Close the target IDEs before installing an available verified package.
+The local signed prerelease candidate is `dist/PiAgent-Setup-0.11.0.exe`; package/runtime/policy checks passed. Actual 0.11.0 upgrade → 0.10.0 rollback → 0.11.0 restoration passed. The strict four-hour requirement remains unmet; publication is being prepared. Its planned release path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`. Building or publishing a release does not automatically replace an installation in a running IDE. Close the target IDEs before installing an available verified package.
 Select Core, RAD13.2 32/64-bit, VS2022/2026, and optional OMP installation if OMP is absent.
 [Installation guide](docs/INSTALLATION.en.md) · [Unified installer](docs/UNIFIED-INSTALLER.md).
 

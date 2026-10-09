@@ -1,8 +1,10 @@
 # IDE 통합: 개발 후보 사용 안내
 
+설치파일 해시 `8A3A…FD09`는 업데이트/롤백/복원을 검증한 패키지 식별자이며 후속 repack 해시가 아니다. 바이트가 바뀐 repack은 별도 검사가 필요하며 배포 해시는 GitHub 릴리즈 asset의 `.exe.sha256`을 따른다.
+
 **한국어** · [English](IDE-AGENT-INTEGRATION.en.md) · [문서 목록](README.md)
 
-이 문서는 2026-10-09 작업 트리에서 검증 중인 구현을 설명한다. 소스는 현재 0.11.0
+이 문서는 2026-10-10 KST 작업 트리에서 검증 중인 구현을 설명한다. 소스는 현재 0.11.0
 후보를 표시하며 이전 검증 receipt의 실제 0.10.0 바이너리 식별자는 유지한다. 서명 릴리즈나
 모든 설치 IDE 시나리오의 검증 완료를 선언하지 않는다. [개발 계획](IDE-AGENT-ROADMAP.md)의
 더 넓은 목표는 SDK 실험과 실제 사용 검증이 필요하다. 연결된 설치에서 실제로
@@ -59,7 +61,7 @@ RAD `ide_diagnostics`는 정확히 같은 워크스페이스/프로젝트/구성
 확인한 뒤 `.dproj`를 해석하며 polling/진단 재사용 시 원본 경로, personality, 구성과
 플랫폼을 다시 확인한다. `.cbproj`, `.dpk`, 다른 personality의 sidecar는 미지원이다.
 지원되는 중첩 속성 스키마는 크기/깊이가 제한되고 컴포넌트 참조를
-따라가지 않는다. Font를 포함한 중첩 scalar 필드는 구현됐으나 실제 시나리오 검증은
+따라가지 않는다. 시험 전용 Font loader 시도는 조회만 확인했으며 변경/저장 근거를 만들지 못했다. Font를 포함한 중첩 scalar 필드는 구현됐으나 실제 시나리오 검증은
 남아 있다. Collection authoring은 구현하지 않았다.
 
 ## 변경 미리보기와 적용
@@ -89,6 +91,8 @@ WinUI는 WPF 전용 DockPanel/WrapPanel을 광고하지 않는다. 구체적인 
 네이티브 visual designer backend를 검증한 것은 아니다.
 
 ## 변경에 맞는 복구 사용
+
+중지 복구는 파일 체크포인트와 타임라인 저장을 모두 마친 뒤 작업 세션을 종료한다. 종료 후 **연결 다시 시도** 버튼은 기존 네이티브 Connect 경로(`resumeLast:true`)를 사용한다. 중단 요청을 재실행하지 않고 저장 대화를 재개하며 모델·승인 정책·동의를 바꾸지 않는다. 독립 중지와 편집창 Escape는 미전송 초안을 보존하며 집중 UI 36/36을 통과했다. 실제 네이티브 UI의 중지→다시 시도도 초안과 같은 저장 대화를 보존했고 자동 재실행이 없었다. 이후 새로 요청하고 한 번 승인한 `ide_context snapshot`은 올바른 솔루션/구성을 반환했다. 중간의 짧은 요청은 완료됐으나 요청한 `RECOVERY_OK` 대신 과거 취소 오류를 반복했으며, 이 답 내용 실패는 새 IDE 왕복 성공과 별도로 유지한다.
 
 편집기 제안 수락은 IDE의 네이티브 실행 취소를 사용한다. VS 의미 기반 변경은
 네이티브 undo context를 사용한다. 설치된 WPF fixture에서 두 파일 rename과 네이티브
@@ -205,10 +209,10 @@ IME/다른 공급자 공존, 취소 결과를 기록한다.
 이 검사들은 결정적 OMP fixture를 사용한다.
 Git 회귀 3개를 추가해 승인 전 보호 파일 내용, 보호 경로의 스테이징 커밋,
 이름 변경/삭제 양쪽 경로와 literal pathspec 처리를 검사했다. 집중 Git/워크스페이스
-검사는 15/15를 통과했다. 확장된 전체 검사는 총 209개, 208 PASS, 0 FAIL,
-선택 네이티브 RAD receipt 검사 1개 skip으로 완료됐다(148,986.8872 ms,
-`full-test-0.11.0-guidance.log`). 최종 양 아키텍처 어댑터 통합은 18/18,
-skip 0개를 통과했다(`adapter-test-0.11.0-final-guidance-both.log`). 서명 어댑터 검증은 최종 DLL의
+검사는 15/15를 통과했다. 확장된 전체 검사는 총 212개, 211 PASS, 0 FAIL,
+선택 네이티브 RAD receipt 검사 1개 skip으로 완료됐다(159,524.7573 ms,
+`full-test-recovery-final.log`). 최종 양 아키텍처 어댑터 통합은 18/18,
+skip 0개를 통과했다(`adapter-test-recovery-both.log`). 서명 어댑터 검증은 최종 DLL의
 VS2022 WinForms 8/8·C++ 3/3, VS2026 WPF 11/11·생성 단계 빌드 3개와 실제
 실행 컨트롤을 포함한다. 보호 Git·RAD 대상 식별 수정·승인 안내를 반영한 서명 설치파일은 전체
 payload 해시, ARM64/x64 번들 runtime·정책 검사를 통과했다
@@ -220,15 +224,23 @@ payload 해시, ARM64/x64 번들 runtime·정책 검사를 통과했다
 유지했다. BPL SHA256은 Win64
 `598202985DF8705A441F4BD694C97B24F89C05A6B830A87D39256CAE359A2275`,
 Win32 `E099084DDA176B30814FEC9FB38947B4D57E36127AFAABEC62B908BD5E4A9147`이며
-두 BPL 서명은 유효하며 바이너리는 그대로다. 네이티브 검증 후 공유 UI JavaScript
-두 파일만 갱신했다. 공유 WebView 별도 검증은 전환 12회와 승인 label/원래 응답 값
-보존 회귀 3개를 포함해 82개를 통과했다. UI만 다시 넣은 VSIX SHA256은
-`CADA2441F1DEE303B25DDEE37E9C05A8CB2F949317EDB754911E18B0E2797A7A`이며
-네이티브 DLL(SHA256 시작 6A3141)은 그대로다. PipeHost 출력과 중간 경로를 격리한
-`--artifacts-path` 빌드는 로드된 원본 DLL을 유지하며 통과했다(`isolated-host-build.log`).
-구현 commit `24c51e7`은 로컬이며 push하지 않았다. 실제 설치/업데이트/복구와
-4시간 soak는 남아 있고 이전 receipt 식별자는 유지한다.
-릴리즈나 soak 완료를 주장하지 않는다.
+두 BPL 서명과 네이티브 DLL 바이트는 그대로다. 복구 VSIX SHA256은
+`28904BA981EA0C85C08A5BA1E27042D53760BCB3D7EAB81BDAAB39C286345DEF`이며 승인 안내 이후
+UI 여섯 파일만 추가로 바뀌었다. 공유 WebView 검사는 전환 12회와 복구/중지/초안 보존 검사를
+포함해 91개를 통과했다(`webview-stop-v3.log`). 교체 서명 설치파일
+(`setup-20261009-154200`, SHA256 `8A3A5FAEC53F607A1B5932BBEB536BB699622C859D13478EE8903FF2468CFD09`)은
+전체 payload/runtime/정책 검사를 통과했다(`test-installer-recovery-stop.log`).
+실제 설치 주기는 0.11.0 업데이트(payload 1,056개), 0.10.0 롤백(1,029개),
+0.11.0 복원(1,056개)을 통과했다. `installed-upgrade-011.json`,
+`installed-rollback-010.json`, `installed-restored-011.json`은 각 VS2022/2026 설치의
+현재 제품 확장 정확히 하나, RAD32/64 등록, 서명과 설정 보존을 확인한다.
+이는 업데이트/롤백 근거이며 신규 설치나 물리 x64 검증 주장이 아니다.
+후속 문서 repack은 별도 payload/repair 검사가 필요하다. 배포 상태: [GitHub Releases](https://github.com/kimmingul/PiAgent/releases).
+
+원래 VS soak는 엄격한 4시간 조건에 실패했다. UTC 구간은 14,399.0635초, Stopwatch는 14,400.176초이며 표본 2,869개·빌드 24회·기록 오류 0개다. 서로 다른 시점에서 잡은 시간 기준은 receipt/검증기를 바꿀 근거가 아니며 거의 4시간의 관찰 근거이지 4시간 PASS가 아니다. RAD도 변경하지 않은 엄격 검사에 실패했다. UTC 14,399.018초·단조 시간 14,400.203초·표본 2,871개·빌드 24회·오류 0개다. 두 receipt의 원래 0.10.0 식별자를 유지하며 엄격한 4시간 PASS로 처리하지 않는다.
+
+원래 v3 이해 작업 01/02는 수정하지 않은 정확한 답/소스 보존 검증기를 통과했다. 03은 외부 OMP 승인 대기 중 운영자가 중지했으며 범위 밖 웹 검색 두 번을 선택했다. 원래 runtime 근거와 함께 실패 시도로 분모에 남기고 최종 답이나 순수 모델 timeout을 추정하지 않는다. 정식 비교 측정은 미완료다.
+배포 상태: [GitHub Releases](https://github.com/kimmingul/PiAgent/releases).
 결정적 실제 파이프 수명 검사도 서로 다른 프로젝트 전환/저장 대화 재개 10회,
 네 가지 접근 모드의 전환 10회, 취소/정상 완료 주기 30회, 격리 편집기 요청 100회를
 실행한다. 프로젝트 표식 파일 읽기를 확인하고 다른 프로젝트 경로·저장 대화·카탈로그를
