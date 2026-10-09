@@ -6,6 +6,9 @@ pairs.push(['docs/GETTING-STARTED.ko.md','docs/GETTING-STARTED.en.md']);
 pairs.push(['docs/RELEASE-0.9.20.md','docs/RELEASE-0.9.20.en.md']);
 pairs.push(['docs/RELEASE-0.10.0.md','docs/RELEASE-0.10.0.en.md']);
 pairs.push(['docs/VS-INTELLIGENCE.md','docs/VS-INTELLIGENCE.en.md']);
+pairs.push(['docs/IDE-AGENT-ROADMAP.md','docs/IDE-AGENT-ROADMAP.en.md']);
+pairs.push(['docs/IDE-AGENT-INTEGRATION.md','docs/IDE-AGENT-INTEGRATION.en.md']);
+pairs.push(['docs/RELEASE-0.11.0.md','docs/RELEASE-0.11.0.en.md']);
 for(const pair of pairs){
  const blocks=[];
  for(const file of pair){

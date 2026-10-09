@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "status": "task specifications; no benchmark results implied",
+  "reset": "Restore isolated fixture before each run; never use a user's working project.",
+  "tasks": [
+    {
+      "id": "vs-context",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "프로젝트 구성과 미저장 코드의 현재 오류를 설명해 주세요.",
+        "en": "Explain the project configuration and current unsaved-code diagnostics."
+      },
+      "checks": [
+        "Reports the active project and configuration",
+        "Uses unsaved buffer rather than stale disk content",
+        "Makes no source changes"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-symbols",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "이 메서드의 정의와 호출 위치를 찾고 영향 범위를 설명해 주세요.",
+        "en": "Find this method definition and callers and explain the impact."
+      },
+      "checks": [
+        "Correct semantic identity including overloads",
+        "No unrelated same-name symbol",
+        "Unsupported semantics explicitly identified"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-completion",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "현재 커서에서 합계 계산 코드를 완성해 주세요.",
+        "en": "Complete the sum calculation at the current caret."
+      },
+      "checks": [
+        "Useful proposal before acceptance",
+        "Tab/accept creates correct compilable code",
+        "Undo restores the exact buffer"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-next-edit",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "이름을 변경한 변수와 관련된 다음 수정을 제안해 주세요.",
+        "en": "Suggest the next edit related to the renamed variable."
+      },
+      "checks": [
+        "Correct related edit and location",
+        "No mutation before acceptance",
+        "Stale document invalidates the proposal"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-build-repair",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "컴파일 오류를 고친 뒤 지정한 구성으로 다시 빌드해 주세요.",
+        "en": "Fix the compiler error and rebuild the requested configuration."
+      },
+      "checks": [
+        "Intentional error actually resolved",
+        "Correct project/configuration",
+        "Actual compiler completion with zero errors"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-refactor",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "이 심볼을 다른 파일의 참조까지 일관되게 이름 변경해 주세요.",
+        "en": "Rename this symbol consistently including references in other files."
+      },
+      "checks": [
+        "All intended references changed",
+        "Shadowed symbols unchanged",
+        "Preview and restore preserve user edits"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-test-repair",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "실패하는 테스트의 원인을 찾아 수정하고 다시 실행해 주세요.",
+        "en": "Find the failing test cause, fix it, and rerun tests."
+      },
+      "checks": [
+        "Failure reproduced",
+        "Requested test actually executes and passes",
+        "Independent regression assertions pass"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-debug",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "중단점에서 잘못된 값이 만들어지는 원인을 찾아 수정해 주세요.",
+        "en": "Diagnose and fix the wrong value observed at the breakpoint."
+      },
+      "checks": [
+        "Uses actual stack/variable evidence",
+        "Correct fix without hard-coding",
+        "Rerun confirms behavior"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-profile",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "이 작업의 병목을 측정하고 개선 전후 결과를 비교해 주세요.",
+        "en": "Measure this operation bottleneck and compare before and after."
+      },
+      "checks": [
+        "Captures an actual supported profile",
+        "Correctness preserved",
+        "Equivalent workload before/after, no invented metrics"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-designer",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "화면에 버튼을 추가하고 클릭하면 상태 문구가 바뀌도록 연결해 주세요.",
+        "en": "Add a button and wire its click to update the status text."
+      },
+      "checks": [
+        "Designer reopens without errors",
+        "Declaration/resource/handler consistent",
+        "Application runs and click works"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-recovery",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "승인한 변경을 적용한 뒤 원래 상태로 복원해 주세요.",
+        "en": "Apply the reviewed change and restore the original state."
+      },
+      "checks": [
+        "Only approved changes occur",
+        "Unrelated user changes preserved",
+        "Restore verified in buffers and files"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "vs-deploy",
+      "ide": "VS2026",
+      "prompt": {
+        "ko": "현재 대상의 배포 파일을 확인하고 임시 로컬 폴더로 게시해 주세요.",
+        "en": "Inspect deployment files and publish to the temporary local target."
+      },
+      "checks": [
+        "Correct configuration and output",
+        "Explicit unsupported/blocked result when necessary",
+        "Actual completion evidence, no remote side effects"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-context",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "프로젝트 구성과 미저장 코드의 현재 오류를 설명해 주세요.",
+        "en": "Explain the project configuration and current unsaved-code diagnostics."
+      },
+      "checks": [
+        "Reports the active project and configuration",
+        "Uses unsaved buffer rather than stale disk content",
+        "Makes no source changes"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-symbols",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "이 메서드의 정의와 호출 위치를 찾고 영향 범위를 설명해 주세요.",
+        "en": "Find this method definition and callers and explain the impact."
+      },
+      "checks": [
+        "Correct semantic identity including overloads",
+        "No unrelated same-name symbol",
+        "Unsupported semantics explicitly identified"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-completion",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "현재 커서에서 합계 계산 코드를 완성해 주세요.",
+        "en": "Complete the sum calculation at the current caret."
+      },
+      "checks": [
+        "Useful proposal before acceptance",
+        "Tab/accept creates correct compilable code",
+        "Undo restores the exact buffer"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-next-edit",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "이름을 변경한 변수와 관련된 다음 수정을 제안해 주세요.",
+        "en": "Suggest the next edit related to the renamed variable."
+      },
+      "checks": [
+        "Correct related edit and location",
+        "No mutation before acceptance",
+        "Stale document invalidates the proposal"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-build-repair",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "컴파일 오류를 고친 뒤 지정한 구성으로 다시 빌드해 주세요.",
+        "en": "Fix the compiler error and rebuild the requested configuration."
+      },
+      "checks": [
+        "Intentional error actually resolved",
+        "Correct project/configuration",
+        "Actual compiler completion with zero errors"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-refactor",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "이 심볼을 다른 파일의 참조까지 일관되게 이름 변경해 주세요.",
+        "en": "Rename this symbol consistently including references in other files."
+      },
+      "checks": [
+        "All intended references changed",
+        "Shadowed symbols unchanged",
+        "Preview and restore preserve user edits"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-test-repair",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "실패하는 테스트의 원인을 찾아 수정하고 다시 실행해 주세요.",
+        "en": "Find the failing test cause, fix it, and rerun tests."
+      },
+      "checks": [
+        "Failure reproduced",
+        "Requested test actually executes and passes",
+        "Independent regression assertions pass"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-debug",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "중단점에서 잘못된 값이 만들어지는 원인을 찾아 수정해 주세요.",
+        "en": "Diagnose and fix the wrong value observed at the breakpoint."
+      },
+      "checks": [
+        "Uses actual stack/variable evidence",
+        "Correct fix without hard-coding",
+        "Rerun confirms behavior"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-profile",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "이 작업의 병목을 측정하고 개선 전후 결과를 비교해 주세요.",
+        "en": "Measure this operation bottleneck and compare before and after."
+      },
+      "checks": [
+        "Captures an actual supported profile",
+        "Correctness preserved",
+        "Equivalent workload before/after, no invented metrics"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-designer",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "화면에 버튼을 추가하고 클릭하면 상태 문구가 바뀌도록 연결해 주세요.",
+        "en": "Add a button and wire its click to update the status text."
+      },
+      "checks": [
+        "Designer reopens without errors",
+        "Declaration/resource/handler consistent",
+        "Application runs and click works"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-recovery",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "승인한 변경을 적용한 뒤 원래 상태로 복원해 주세요.",
+        "en": "Apply the reviewed change and restore the original state."
+      },
+      "checks": [
+        "Only approved changes occur",
+        "Unrelated user changes preserved",
+        "Restore verified in buffers and files"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    },
+    {
+      "id": "rad-deploy",
+      "ide": "RAD13.2",
+      "prompt": {
+        "ko": "현재 대상의 배포 파일을 확인하고 임시 로컬 폴더로 게시해 주세요.",
+        "en": "Inspect deployment files and publish to the temporary local target."
+      },
+      "checks": [
+        "Correct configuration and output",
+        "Explicit unsupported/blocked result when necessary",
+        "Actual completion evidence, no remote side effects"
+      ],
+      "fixture": "Requires task-specific isolated project and independent validation; SDK deterministic tests and real model runs must be reported separately."
+    }
+  ]
+}

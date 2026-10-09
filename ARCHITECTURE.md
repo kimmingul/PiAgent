@@ -1,6 +1,13 @@
 # PiAgent architecture
 
-현재 상태: 2026-10-09, PiAgent 0.10.0. Node/TypeScript Core, IDE adapter, 공유 WebView 경계를 유지한다.
+개발 후보의 확장 구조: VS/RAD adapter가 `ide.catalog.v1`으로 현재 프로젝트의 기능과
+차단 이유를 보고하고, Core는 실제 가용한 작업만 모델에 노출한다. 변경은 저장된 미리보기,
+5분 만료 승인, 실행 직전 상태 확인을 거친다. `editor.context.v1`은 전체 버퍼 revision과
+커서 주변 문맥을 분리하며, 로컬 Git 검토는 `workspace.git.v1`로 연결한다.
+[현재 계약](docs/IDE-CATALOG-CONTRACT.md) · [구현 범위와 검증](docs/IDE-AGENT-INTEGRATION.md).
+아래 버전별 설명은 출시 이력이며 개발 후보의 실제 IDE 검증 완료를 의미하지 않는다.
+
+0.10.0 기준 구조(2026-10-09): Node/TypeScript Core, IDE adapter, 공유 WebView 경계를 유지한다.
 VS adapter는 `ide.tools.v1`으로 DTE/Roslyn/선택 테스트·디버거·CPU 도구를 제공한다.
 Core의 IdeBridge는 연결별 승인·상관 ID·취소·응답 크기를 관리하고 OMP host tool로 노출한다.
 `editor.suggestions.v1`은 채팅과 별도 연결/도구 없는 임시 OMP로 추론하며, 문서 revision과 UTF-16

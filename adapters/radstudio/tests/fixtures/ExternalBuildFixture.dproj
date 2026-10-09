@@ -1,0 +1,14 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectGuid>{B44C50E7-6F44-44CE-A88C-3D8751D047BC}</ProjectGuid>
+    <MainSource>ExternalBuildFixture.dpr</MainSource>
+    <ProjectVersion>20.3</ProjectVersion><Base>True</Base><AppType>Console</AppType>
+    <Config Condition="'$(Config)'==''">Release</Config>
+    <Platform Condition="'$(Platform)'==''">Win64</Platform>
+    <DCC_Namespace>System;Winapi</DCC_Namespace>
+    <DCC_ExeOutput>..\..\bin\$(Platform)\ide-dev\external-fixture</DCC_ExeOutput>
+    <DCC_DcuOutput>..\..\bin\$(Platform)\ide-dev\external-fixture</DCC_DcuOutput>
+  </PropertyGroup>
+  <ItemGroup><DelphiCompile Include="ExternalBuildFixture.dpr"><MainSource>MainSource</MainSource></DelphiCompile></ItemGroup>
+  <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets"/>
+</Project>

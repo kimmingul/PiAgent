@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window x:Class="Fixture.WinUI3SourceLibrary.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid>
+    <!-- Source-only WinUI integration fixture: 한글 🚀 -->
+    <Button x:Name="ExistingButton" Content="한글 Button" Width="120" Height="32" />
+  </Grid>
+</Window>

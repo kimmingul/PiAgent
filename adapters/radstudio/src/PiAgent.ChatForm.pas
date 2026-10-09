@@ -1,12 +1,16 @@
 unit PiAgent.ChatForm;
 interface
-uses System.Classes, System.JSON, Vcl.Forms, Vcl.Edge, Vcl.ExtCtrls, PiAgent.ChatWorker;
+uses System.Classes, System.JSON, Vcl.Forms, Vcl.Edge, Vcl.ExtCtrls, PiAgent.ChatWorker, PiAgent.IdeHost;
 type
   TPiChatForm = class(TForm)
   private
     FBrowser: TEdgeBrowser;
     FTimer: TTimer;
     FWorker: TPiChatWorker;
+    FIdeHost: TPiIdeHost;
+    FIdeCatalogAt: UInt64;
+    FIdeRevision: string;
+    FDispatching: Boolean;
     FReady: Boolean;
     FWorkspace: string;
     FWorkspacePending: Boolean;
@@ -48,10 +52,12 @@ begin
   GetModuleFileName(HInstance,ModuleName,Length(ModuleName)); LoaderPath := TPath.Combine(ExtractFilePath(ModuleName),'WebView2Loader.dll');
   FLoader := LoadLibraryEx(PChar(LoaderPath),0,LoadFromDllDirectory or LoadFromDefaultDirectories);
   if FLoader = 0 then RaiseLastOSError;
-  Position := poScreenCenter; FWorker := TPiChatWorker.Create; FWorker.Start;
+  Position := poScreenCenter; FIdeHost:=TPiIdeHost.Create; FWorker := TPiChatWorker.Create; FWorker.Start;
   FTimer := TTimer.Create(Self); FTimer.Interval := 40; FTimer.OnTimer := Poll;
   FBrowser := TEdgeBrowser.Create(Self); FBrowser.Parent := Self; FBrowser.Align := alClient;
   FBrowser.UserDataFolder := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'),'PiAgent\RADWebView2');
+  if GetEnvironmentVariable('PIAGENT_RAD_FIXTURE_PATH')<>'' then
+    FBrowser.UserDataFolder:=TPath.Combine(GetEnvironmentVariable('PIAGENT_RAD_FIXTURE_PATH'),'webview');
   FBrowser.OnCreateWebViewCompleted := Created; FBrowser.OnWebMessageReceived := MessageReceived;
   FBrowser.OnNavigationStarting := Navigating; FBrowser.OnNewWindowRequested := NewWindow;
   FBrowser.OnPermissionRequested := Permission; FBrowser.OnDownloadStarting := Download;
@@ -61,6 +67,7 @@ destructor TPiChatForm.Destroy;
 begin
   FReady := False;
   if FTimer <> nil then begin FTimer.Enabled := False; FTimer.OnTimer := nil; end;
+  FreeAndNil(FIdeHost);
   FreeAndNil(FWorker); FApproval.Free; FRestore.Free; FSelection.Free; FMessageRestore.Free;
   if FBrowser <> nil then begin
     FBrowser.OnCreateWebViewCompleted := nil; FBrowser.OnWebMessageReceived := nil;
@@ -115,13 +122,15 @@ begin
   try Workspace := CurrentWorkspace; except Workspace := ''; end;
   if SameText(Workspace,FWorkspace) then Exit;
   FWorkspacePending := True;
+  FIdeHost.Cancel('');
   FreeAndNil(FApproval); FreeAndNil(FRestore); FreeAndNil(FSelection); FreeAndNil(FMessageRestore);
   Reply := TJSONObject.Create.AddPair('type','workspaceChanging').AddPair('workspaceUri',Workspace);
   try Post(Reply.ToJSON); finally Reply.Free; end;
   Reply := TJSONObject.Create;
   try
     if Workspace = '' then Reply.AddPair('action','disconnectWorkspace')
-    else Reply.AddPair('action','connect').AddPair('workspaceUri',Workspace);
+    else Reply.AddPair('action','connect').AddPair('workspaceUri',Workspace)
+      .AddPair('ideCatalog',FIdeHost.Catalog(Workspace));
     FWorker.Enqueue(Reply.ToJSON);
   finally Reply.Free; end;
 end;
@@ -192,7 +201,7 @@ begin
       if Action = 'notify' then begin if not Active then FlashWindow(Handle,True);Exit;end;
       if Action = 'connect' then begin
         if FWorkspacePending then Exit;
-        Msg.AddPair('workspaceUri',CurrentWorkspace); FWorkspacePending := True;
+        Msg.AddPair('workspaceUri',CurrentWorkspace).AddPair('ideCatalog',FIdeHost.Catalog(CurrentWorkspace)); FWorkspacePending := True;
       end else if not MatchText(Action,['cancel','clearSelection']) then begin
         FWorkspaceCheckAt := 0; SyncWorkspace;
         if FWorkspacePending or not SameText(CurrentWorkspace,FWorkspace) then
@@ -262,11 +271,33 @@ begin
 end;
 procedure TPiChatForm.Poll(Sender: TObject);
 var Json: string; Msg, Data, Frame, Reply: TJSONObject; Kind,Path: string; I,K,J: Integer; Dialog: TSaveDialog; Files: TJSONArray;
-  Module: IOTAModule; SourceEditor: IOTASourceEditor;
+  Module: IOTAModule; SourceEditor: IOTASourceEditor; Batch: TStringList;
 begin
+  if FDispatching then Exit;
+  FDispatching:=True;
+  try
   // Bound work on the IDE thread. All SDK and browser access remains on this thread.
-  for I := 1 to 32 do begin
-    Json := FWorker.Pop; if Json = '' then Break;
+  Batch:=TStringList.Create;
+  try
+  for I:=1 to 256 do begin Json:=FWorker.Pop; if Json='' then Break; Batch.Add(Json); end;
+  // Retire cancellations before SDK mutation, even when the request was queued
+  // first while the IDE thread was busy. IDs are bounded session tombstones.
+  for Json in Batch do begin
+    Msg:=TJSONObject.ParseJSONValue(Json) as TJSONObject;
+    try
+      if (Msg<>nil) and (Msg.GetValue<string>('type','')='event') then begin
+        Data:=Msg.GetValue('data') as TJSONObject;
+        if (Data<>nil) and (Data.GetValue('frame') is TJSONObject) then begin
+          Frame:=Data.GetValue('frame') as TJSONObject; Kind:=Frame.GetValue<string>('type','');
+          if (Kind='ide_cancel') or (Kind='designer_cancel') then begin
+            Path:=Frame.GetValue<string>('id','');
+            if Kind='ide_cancel' then FIdeHost.Cancel(Path);
+          end;
+        end;
+      end;
+    finally Msg.Free; end;
+  end;
+  for Json in Batch do begin
     Msg := TJSONObject.ParseJSONValue(Json) as TJSONObject;
     try
       Kind := Msg.GetValue<string>('type','');
@@ -302,14 +333,29 @@ begin
         Data := Msg.GetValue('data') as TJSONObject; Kind := Data.GetValue<string>('kind','');
         if (Kind = 'omp_event') and (Data.GetValue('frame') is TJSONObject) then begin
           Frame := Data.GetValue('frame') as TJSONObject;
+          if (Frame.GetValue<string>('type','')='ide_cancel') or (Frame.GetValue<string>('type','')='designer_cancel') then Continue;
+          if Frame.GetValue<string>('type','')='ide_request' then begin
+            if not FWorker.BeginSdkRequest(Data.GetValue<string>('sessionId',''),Frame.GetValue<string>('id','')) then Continue;
+            Reply:=nil;
+            try
+              try
+                if FWorkspacePending or not SameText(CurrentWorkspace,FWorkspace) then raise Exception.Create('IDE request project changed');
+                Reply:=FIdeHost.Execute(Frame,FWorkspace);
+              except on E: Exception do Reply:=TJSONObject.Create.AddPair('action','ideReply')
+                .AddPair('requestId',Frame.GetValue<string>('id','')).AddPair('error',E.Message); end;
+              if (Reply<>nil) and FWorker.MayReplySdk(Frame.GetValue<string>('id','')) then FWorker.Enqueue(Reply.ToJSON);
+            finally Reply.Free; end;
+            Continue;
+          end;
           if Frame.GetValue<string>('type','') = 'designer_request' then begin
+            if not FWorker.BeginSdkRequest(Data.GetValue<string>('sessionId',''),Frame.GetValue<string>('id','')) then Continue;
             Reply := TJSONObject.Create.AddPair('action','designerReply').AddPair('requestId',Frame.GetValue<string>('id',''));
             try
               try
                 if FWorkspacePending or not SameText(CurrentWorkspace,FWorkspace) then raise Exception.Create('디자이너 요청의 프로젝트가 변경되었습니다.');
                 Reply.AddPair('result',ExecuteDesigner(Frame.GetValue<string>('operation',''),Frame.GetValue('args') as TJSONObject,FWorkspace));
               except on E: Exception do Reply.AddPair('error',E.Message); end;
-              FWorker.Enqueue(Reply.ToJSON);
+              if FWorker.MayReplySdk(Frame.GetValue<string>('id','')) then FWorker.Enqueue(Reply.ToJSON);
             finally Reply.Free; end;
             Continue;
           end;
@@ -320,7 +366,24 @@ begin
       Post(Json);
     finally Msg.Free; end;
   end;
+  finally Batch.Free; end;
+  Reply:=FIdeHost.Poll;
+  if Reply<>nil then try if FWorker.MayReplySdk(Reply.GetValue<string>('requestId','')) then FWorker.Enqueue(Reply.ToJSON); finally Reply.Free; end;
+  if FReady and not FWorkspacePending and (FWorkspace<>'') and (GetTickCount64>=FIdeCatalogAt) then begin
+    FIdeCatalogAt:=GetTickCount64+2000;
+    try
+      Reply:=FIdeHost.Catalog(FWorkspace);
+      try
+        if Reply.GetValue<string>('revision','')<>FIdeRevision then begin
+          FIdeRevision:=Reply.GetValue<string>('revision','');
+          Frame:=TJSONObject.Create.AddPair('action','ideCatalog').AddPair('catalog',TJSONValue(Reply.Clone));
+          try FWorker.Enqueue(Frame.ToJSON); finally Frame.Free; end;
+        end;
+      finally Reply.Free; end;
+    except on E: Exception do OutputDebugString(PChar('PiAgent catalog: '+E.Message)); end;
+  end;
   SyncWorkspace;
+  finally FDispatching:=False; end;
 end;
 procedure ShowPiAgentChat;
 begin if ChatForm = nil then ChatForm := TPiChatForm.Create(nil); ChatForm.Show; ChatForm.BringToFront; end;

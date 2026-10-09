@@ -35,9 +35,10 @@ public sealed class ChatControl : UserControl, IDisposable
     private JObject? approval, restorePreview, messageRestorePreview;
     private string? workspaceUri;
     private string currentApprovalMode="always-ask";
-    private readonly System.Collections.Generic.Dictionary<string,CancellationTokenSource> ideOperations = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string,CancellationTokenSource> ideOperations = new();
     private EnvDTE.SolutionEvents? solutionEvents;
-    private bool workspaceBinding, approvalModes;
+    private bool workspaceBinding, approvalModes, ideCatalogEnabled;
+    private string? lastCatalogRevision;
     private bool initialized, connecting, pageReady, disposed;
     private bool recovering, suspended;
     private int recoveryEpoch;
@@ -48,7 +49,7 @@ public sealed class ChatControl : UserControl, IDisposable
         heartbeat.Tick += (sender, args) => factory.RunAsync(async () => {
             var active = client;
             if (active == null || sessionId == null || disposed || suspended) return;
-            try { await SynchronizeWorkspaceAsync(); await active.PingAsync("heartbeat", lifetime.Token); }
+            try { await SynchronizeWorkspaceAsync(); await active.PingAsync("heartbeat", lifetime.Token); await PublishCatalogAsync(); }
             catch (Exception error) { if (ReferenceEquals(client, active)) { Disconnect(error.Message); await RecoverAsync(); } }
         }).FileAndForget("PiAgent/Heartbeat");
     }
@@ -334,29 +335,50 @@ public sealed class ChatControl : UserControl, IDisposable
             var pipeName = Environment.GetEnvironmentVariable("PIAGENT_PIPE_NAME") ?? "piagent-dev";
             await CoreRuntime.EnsureRunningAsync(pipeName, lifetime.Token);
             var active = new PipeAdapterClient(pipeName);
+            var designerRetirement = new DesignerRequestRetirement();
+            var ideRetirement = new DesignerRequestRetirement();
             client = active;
             active.Notification += frame => {
+                // This runs on the pipe reader before waiting for a busy UI thread.
+                if (frame["params"] is JObject incoming && (string?)incoming["kind"] == "omp_event" &&
+                    incoming["frame"] is JObject cancellation) {
+                    var cancellationType=(string?)cancellation["type"];
+                    if(cancellationType=="designer_cancel"){
+                        if (!designerRetirement.Retire((string?)incoming["sessionId"], (string?)cancellation["id"])) active.Dispose();return;
+                    }
+                    if(cancellationType=="ide_cancel"){
+                        var cancelledSession=(string?)incoming["sessionId"];var cancelledId=(string?)cancellation["id"];
+                        if(!ideRetirement.Retire(cancelledSession,cancelledId)){active.Dispose();return;}
+                        if(ideOperations.TryGetValue(cancelledSession+"\0"+cancelledId,out var runningOperation))try{runningOperation.Cancel();}catch(ObjectDisposedException){}
+                        return;
+                    }
+                }
                 factory.RunAsync(async () => {
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
                     if (!ReferenceEquals(client, active) || disposed || frame["params"] is not JObject data) return;
                     if ((string?)data["sessionId"] != sessionId) return;
                     if ((string?)data["kind"] == "omp_event" && data["frame"] is JObject designerRequest && (string?)designerRequest["type"] == "designer_request") {
+                        var designerSession = (string?)data["sessionId"]; var designerId = (string?)designerRequest["id"];
+                        if (!designerRetirement.TryBegin(designerSession, designerId)) return;
                         var reply = new JObject { ["sessionId"] = sessionId, ["requestId"] = designerRequest["id"] };
                         try { reply["result"] = DesignerTools.Execute((string)designerRequest["operation"]!, designerRequest["args"] as JObject ?? new JObject(), workspaceUri); }
                         catch(Exception error) { reply["error"] = error.Message; }
-                        await active.RequestAsync("designer.reply",reply,lifetime.Token); return;
+                        if (!designerRetirement.IsRetired(designerSession, designerId) && ReferenceEquals(client, active))
+                            await active.RequestAsync("designer.reply",reply,lifetime.Token);
+                        return;
                     }
                     if ((string?)data["kind"] == "omp_event" && data["frame"] is JObject ideFrame) {
                         var requestId=(string?)ideFrame["id"];
-                        if ((string?)ideFrame["type"]=="ide_cancel" && requestId!=null && ideOperations.TryGetValue(requestId,out var cancelled)) {cancelled.Cancel();return;}
                         if ((string?)ideFrame["type"]=="ide_request" && requestId!=null) {
+                            var ideSession=(string?)data["sessionId"];if(!ideRetirement.TryBegin(ideSession,requestId))return;
                             using var operation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-                            ideOperations[requestId]=operation;
+                            var operationKey=ideSession+"\0"+requestId;ideOperations[operationKey]=operation;
+                            if(ideRetirement.IsRetired(ideSession,requestId))operation.Cancel();
                             var reply=new JObject {["sessionId"]=sessionId,["requestId"]=requestId};
-                            try {var result=await IdeTools.ExecuteAsync((string)ideFrame["operation"]!,ideFrame["args"] as JObject??new JObject(),workspaceUri!,operation.Token);if(System.Text.Encoding.UTF8.GetByteCount(result.ToString(Newtonsoft.Json.Formatting.None))>240*1024)throw new IOException("IDE snapshot exceeds 240 KiB; narrow the query");reply["result"]=result;}
+                            try {operation.Token.ThrowIfCancellationRequested();IdeCatalog.ValidateExpected(ideFrame["expectedState"] as JObject,workspaceUri!);var result=await IdeTools.ExecuteAsync((string)ideFrame["operation"]!,ideFrame["args"] as JObject??new JObject(),workspaceUri!,operation.Token);if(System.Text.Encoding.UTF8.GetByteCount(result.ToString(Newtonsoft.Json.Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>()))>240*1024)throw new IOException("IDE snapshot exceeds 240 KiB; narrow the query");reply["result"]=result;}
                             catch(Exception error) {reply["error"]=error is OperationCanceledException?"IDE operation cancelled":error.Message;}
-                            finally {ideOperations.Remove(requestId);}
-                            if(!operation.IsCancellationRequested&&ReferenceEquals(client,active))await active.RequestAsync("ide.reply",reply,lifetime.Token);
+                            finally {ideOperations.TryRemove(operationKey,out _);}
+                            if(!operation.IsCancellationRequested&&!ideRetirement.IsRetired(ideSession,requestId)&&ReferenceEquals(client,active))await active.RequestAsync("ide.reply",reply,lifetime.Token);
                             return;
                         }
                     }
@@ -371,6 +393,9 @@ public sealed class ChatControl : UserControl, IDisposable
                 }).FileAndForget("PiAgent/ChatEvent");
             };
             active.Disconnected += error => {
+                designerRetirement.Close();
+                ideRetirement.Close();
+                foreach(var runningOperation in ideOperations.Values)try{runningOperation.Cancel();}catch(ObjectDisposedException){}
                 factory.RunAsync(async () => {
                     await factory.SwitchToMainThreadAsync(lifetime.Token);
                     if (!disposed && ReferenceEquals(client, active)) { Disconnect(error.Message); await RecoverAsync(); }
@@ -379,6 +404,7 @@ public sealed class ChatControl : UserControl, IDisposable
             var hello = await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true, selectionContext: true, writes: true, designers:true, ideTools:true);
             workspaceBinding = (hello["capabilities"] as JArray)?.ToString().Contains("workspace.bind.v1") == true;
             approvalModes = (hello["capabilities"] as JArray)?.ToString().Contains("chat.approval.v1") == true;
+            ideCatalogEnabled=(hello["capabilities"] as JArray)?.Values<string>().Contains("ide.catalog.v1")==true;
             await OpenAsync(resumeLast:true); heartbeat.Start();
         }
         catch (Exception error) { Disconnect(error.Message); }
@@ -389,10 +415,20 @@ public sealed class ChatControl : UserControl, IDisposable
         await factory.SwitchToMainThreadAsync(lifetime.Token);
         var parameters = new JObject();
         if(workspaceBinding)parameters["workspaceUri"]=CurrentWorkspaceUri();
+        if(ideCatalogEnabled&&parameters["workspaceUri"]!=null)parameters["ideCatalog"]=IdeCatalog.Capture((string)parameters["workspaceUri"]!);
         if (savedId != null) parameters["savedSessionId"] = savedId;
         else if(resumeLast)parameters["resumeLast"]=true;
         var result = await client!.RequestAsync("chat.open", parameters, lifetime.Token);
         AcceptSession(result);
+        lastCatalogRevision=(string?)result["ideCatalog"]?["revision"];
+    }
+    private async Task PublishCatalogAsync()
+    {
+        await factory.SwitchToMainThreadAsync(lifetime.Token);
+        if(!ideCatalogEnabled||client==null||sessionId==null||workspaceUri==null||turnId!=null||approval!=null)return;
+        var catalog=IdeCatalog.Capture(workspaceUri);var revision=(string?)catalog["revision"];
+        if(revision==lastCatalogRevision)return;
+        await client.RequestAsync("ide.catalog",new JObject{["sessionId"]=sessionId,["catalog"]=catalog},lifetime.Token);lastCatalogRevision=revision;
     }
     private void AcceptSession(JObject result)
     {

@@ -1,6 +1,9 @@
 # Visual Studio adapter
 
-현재 0.10.0 (문서 갱신 2026-10-09). VS2022 17.14 이상 / VS2026이 필요하다.
+현재 소스 0.11.0 후보 (문서 갱신 2026-10-09). VS2022 17.14 이상 / VS2026이 필요하다.
+실제 기능 목록, 승인한 리팩터링·디자이너 복원, CPU/GC 분석과 지원 제약은
+[한국어](../../docs/IDE-AGENT-INTEGRATION.md) / [English](../../docs/IDE-AGENT-INTEGRATION.en.md)를 따른다.
+Current source: 0.11.0 candidate. The bilingual integration guide describes the supported IDE backends and verified scope. Signing a candidate does not mean it has been published.
 IDE 도구·인라인 완성·다음 수정 설정은 [한국어](../../docs/VS-INTELLIGENCE.md) / [English](../../docs/VS-INTELLIGENCE.en.md)를 참고한다.
 C# VSIX는 Tools → **PiAgent: Open Chat**의 WPF/WebView2 창에서 채팅 스트리밍·취소,
 다중 파일 승인·복원, 저장 대화 재개와 세션 사용량·비용·계정 한도를 제공한다.
@@ -53,9 +56,11 @@ Closed 이벤트에서 controller를 해제한다. 도킹 후 이전 부동 창�
 
 ## Validation
 
-최신 설치 검증 대상은 VS2026다. 2026-10-05 NanumPDF의 약 2시간 37분 작업이 연결 끊김 없이
-최종 응답과 Core 완료 기록으로 종료됨을 확인했다. 최신 VS2022 전수 검증은 보류하며 아래
-0.7.x PiAgentTest 기록을 현재 버전의 PASS로 승계하지 않는다.
+서명된 0.11.0 후보의 실제 격리 프로필에서 VS2026 WPF 11/11,
+VS2022 .NET Framework WinForms 8/8과 네이티브 C++ 3/3 검사를 통과했다.
+VS2022의 이전 후보 VB 5/5·WinUI 소스 7/7 기록은 해당 바이너리 식별자를 유지한다.
+이 결과는 전체 프레임워크·IME·확장 조합의 전수 검증을 뜻하지 않는다.
+2026-10-05 NanumPDF의 약 2시간 37분 작업 기록과 아래 0.7.x 결과는 당시 버전의 이력이다.
 [장시간 검증](../../docs/LONG-RUNNING-TURN-FIX.md) · [설치 acceptance](../../docs/INSTALLED-ACCEPTANCE-0.9.14.md).
 
 VS 2022와 VS 2026 MSBuild로 DLL/pkgdef/VSCT/VSIX와 payload를 검증했다.

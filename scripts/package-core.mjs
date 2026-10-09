@@ -7,7 +7,7 @@ const repository = fileURLToPath(new URL('../', import.meta.url));
   const components = ['protocol', 'core', 'omp', 'daemon'];
 
 // Copy real directories: release archives must not depend on workspace junctions.
-export async function packageCore(destination, { adapters = false, radPlatforms = ['Win64'] } = {}) {
+export async function packageCore(destination, { adapters = false, radPlatforms = ['Win64'], pipeHostDirectory = join(repository, 'transport/PiAgent.PipeHost/bin/Release/net8.0-windows') } = {}) {
   if (!Array.isArray(radPlatforms) || radPlatforms.length === 0 || new Set(radPlatforms).size !== radPlatforms.length || radPlatforms.some(p => !['Win32','Win64'].includes(p))) throw new Error('Invalid RAD platforms');
   const output = resolve(destination);
   await mkdir(output); // Refuse to overwrite a previous release or user directory.
@@ -15,7 +15,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   const hostTarget = join(output, 'transport/PiAgent.PipeHost/bin/Release/net8.0-windows');
   await mkdir(hostTarget, { recursive: true });
   for (const suffix of ['dll', 'deps.json', 'runtimeconfig.json'])
-    await cp(join(repository, 'transport/PiAgent.PipeHost/bin/Release/net8.0-windows', `PiAgent.PipeHost.${suffix}`), join(hostTarget, `PiAgent.PipeHost.${suffix}`));
+    await cp(join(pipeHostDirectory, `PiAgent.PipeHost.${suffix}`), join(hostTarget, `PiAgent.PipeHost.${suffix}`));
   for (const component of components) {
     const source = join(repository, 'packages', `piagent-${component}`);
     const target = join(output, 'node_modules', '@piagent', component);
@@ -36,12 +36,18 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await mkdir(join(output, 'docs'));
   for(const document of ['GETTING-STARTED.ko.md','GETTING-STARTED.en.md']) await cp(join(repository,'docs',document),join(output,'docs',document));
   await cp(join(repository,'docs/images'),join(output,'docs/images'),{recursive:true});
-  for(const document of ['VS-INTELLIGENCE.md','VS-INTELLIGENCE.en.md','README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md','RELEASE-0.9.19.md','RELEASE-0.9.19.en.md','RELEASE-0.9.20.md','RELEASE-0.9.20.en.md',`RELEASE-${version}.en.md`])
+  for(const document of ['IDE-AGENT-INTEGRATION.md','IDE-AGENT-INTEGRATION.en.md','IDE-AGENT-ROADMAP.md','IDE-AGENT-ROADMAP.en.md','IDE-CATALOG-CONTRACT.md','VS-INTELLIGENCE.md','VS-INTELLIGENCE.en.md','README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md','RELEASE-0.9.19.md','RELEASE-0.9.19.en.md','RELEASE-0.9.20.md','RELEASE-0.9.20.en.md','RELEASE-0.10.0.md','RELEASE-0.10.0.en.md',`RELEASE-${version}.en.md`])
+    await cp(join(repository,'docs',document),join(output,'docs',document));
+  // Transitive historical references from architecture and validation remain usable offline.
+  for(const document of ['OMP-FEATURE-IMPLEMENTATION.md','CHAT-UI-AUDIT-AND-IMPLEMENTATION-PLAN.md','INSTALLED-ACCEPTANCE-0.9.14.md','ACCEPTANCE-FIXES-0.9.14.md','RELEASE-0.9.17.md','RELEASE-0.9.14.md','CODE-SIGNING.md'])
     await cp(join(repository,'docs',document),join(output,'docs',document));
   await mkdir(join(output,'website'));
   await cp(join(repository,'website/README.md'),join(output,'website/README.md'));
   await mkdir(join(output, 'scripts'));
   for(const name of ['install-core.ps1','start-core.ps1','uninstall-core.ps1']) await cp(join(repository,'scripts',name),join(output,'scripts',name));
+  for(const name of ['measure-editor-context.mjs','validate-designer-contract.mjs','ide-benchmark.mjs']) await cp(join(repository,'scripts',name),join(output,'scripts',name));
+  await mkdir(join(output,'tests/helpers'),{recursive:true});
+  await cp(join(repository,'tests/helpers/designer-contract.mjs'),join(output,'tests/helpers/designer-contract.mjs'));
   await cp(join(repository, 'docs/VALIDATION.md'), join(output, 'docs/VALIDATION.md'));
   await cp(join(repository, 'docs/SELECTION-CONTEXT.md'), join(output, 'docs/SELECTION-CONTEXT.md'));
   await cp(join(repository, 'docs/WORKSPACE-TOOLS.md'), join(output, 'docs/WORKSPACE-TOOLS.md'));
@@ -57,12 +63,12 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
     'Stop with Ctrl+C. OMP requires a separately installed executable.\n\n' +
     'The default CLI uses a local-only, current-user pipe and mutual HMAC authentication. See docs/SECURITY.md.\n' +
     (adapters ? 'Adapter installers and installation instructions are in adapters/.\n' : '') +
-    'This release adds VS IDE tools, inline completion and next edits. See docs/VS-INTELLIGENCE.en.md. VS2022 requires 17.14 or later.\n' +
+    'IDE tools, reviewed designer changes and code suggestions are described in docs/IDE-AGENT-INTEGRATION.en.md, including framework-specific limits. Use /ide in Chat to inspect current capabilities. VS2022 requires 17.14 or later.\n' +
     'Add --workspace C:\\project to enable bounded file reading/search. See docs/WORKSPACE-TOOLS.md.\n' +
     'Add --allow-writes for single/multi-file diff approval and checkpoint restore. Git is required; see docs/APPROVED-CHANGES.md.\n' +
     'For VS Chat: Tools > PiAgent: Open Chat (connects automatically). For RAD: View > PiAgent or Tools > PiAgent.\n' +
     'Select code in the editor, capture it in Chat, inspect the attachment and send your question. See docs/SELECTION-CONTEXT.md.\n' +
-    'Both adapters use an installed WebView2 Runtime. File creation/deletion/rename remain a future scope.\n');
+    'Both adapters use an installed WebView2 Runtime. General workspace file creation/deletion is unavailable; supported semantic rename and reviewed designer edits follow the adapter capability catalog.\n');
   await writeFile(join(output,'README.md'),`# PiAgent ${version} runtime\n\n**한국어** · [English](README.en.md) · [문서](docs/README.md)\n\n`+
     'Windows x64 / ARM64, Node.js 24.21.0+ (24 LTS)와 .NET 8+가 필요합니다. 통합 설치파일은 전용 런타임을 포함합니다. 독립 Core 압축파일은 런타임을 별도로 준비합니다. npm install이나 TypeScript compiler는 필요 없습니다.\n\n'+
     '시작: node core.mjs --pipe piagent-dev\n확인: node probe.mjs piagent-dev test-adapter release\n종료: Ctrl+C\n\n'+
@@ -71,7 +77,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
     '--workspace C:\\project는 제한된 파일 읽기/검색, --allow-writes는 diff 승인과 checkpoint 복원을 사용합니다. 쓰기에는 Git이 필요합니다.\n\n'+
     'VS: Tools → PiAgent: Open Chat. RAD: View/Tools → PiAgent. 통합 설치한 adapter는 Core를 자동 시작합니다. WebView2 Runtime이 필요합니다.\n'+
     '설정 → 표시 → 언어에서 한국어/English를 선택합니다. 자동 기본값은 한국어 시스템에서 한국어, 그 외에는 영어입니다.\n'+
-    'VS IDE 도구·코드 제안은 docs/VS-INTELLIGENCE.md를 참고하세요. VS2022는 17.14 이상이 필요합니다.\n세부 설치·지원 범위는 docs/INSTALLATION.md, 언어 지원은 docs/LOCALIZATION.md를 참고하세요.\n');
+    'IDE 도구·승인 기반 디자이너 변경·코드 제안과 프레임워크별 제한은 docs/IDE-AGENT-INTEGRATION.md를 참고하세요. 채팅에서 /ide로 현재 기능을 확인합니다. VS2022는 17.14 이상이 필요합니다.\n세부 설치·지원 범위는 docs/INSTALLATION.md, 언어 지원은 docs/LOCALIZATION.md를 참고하세요.\n');
   if (adapters) {
     for (const ide of ['visualstudio', 'radstudio']) {
       const target = join(output, 'adapters', ide);

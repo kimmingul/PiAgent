@@ -18,6 +18,8 @@ begin
   Check(CanParent(Root,Button,Panel),'panel parent'); MoveParent(Button,Panel);
   Check(Button.GetParentComponent = Panel,'actual native parent');
   Check(Button.Owner = Root,'parent must not change lifetime owner');
+  Check(HasAuthoredDesignerChildren(Root,Panel),'authored child blocks panel deletion');
+  Check(not HasAuthoredDesignerChildren(Root,Button),'leaf button has no authored children');
   Check(not CanParent(Root,Panel,Button),'cycle rejected');
   Check(not CanParent(Root,Button,Button),'self rejected');
   Check(not CanParent(Root,Root,Panel),'root move rejected');
@@ -50,7 +52,7 @@ begin
   finally View.Free; end;
 end;
 
-var Root: TComponent;
+var Root: TComponent; Button: FMX.StdCtrls.TButton; Style,AuthoredChild: FMX.Layouts.TLayout;
 begin
   try
     Root := Vcl.ExtCtrls.TPanel.Create(nil);
@@ -62,6 +64,14 @@ begin
     try
       VerifyTree(Root,FMX.Layouts.TLayout.Create(Root),FMX.StdCtrls.TButton.Create(Root),
         FMX.Menus.TMainMenu.Create(Root),FMX.Menus.TMenuItem.Create(Root),FMX.ActnList.TActionList.Create(Root),FMX.ActnList.TAction.Create(Root));
+    finally Root.Free; end;
+    Root:=FMX.Layouts.TLayout.Create(nil);
+    try
+      Button:=FMX.StdCtrls.TButton.Create(Root); Button.Parent:=FMX.Types.TFmxObject(Root);
+      Style:=FMX.Layouts.TLayout.Create(Button); Style.Parent:=Button;
+      Check(not HasAuthoredDesignerChildren(Root,Button),'FMX owned visual style does not block leaf deletion');
+      AuthoredChild:=FMX.Layouts.TLayout.Create(Root); AuthoredChild.Parent:=Style;
+      Check(HasAuthoredDesignerChildren(Root,Button),'authored component behind a style parent blocks deletion');
     finally Root.Free; end;
     Writeln('PASS: VCL/FMX native hierarchy, menus, shared Actions, owner preservation, cycles and read-only relations');
   except on E: Exception do begin Writeln(E.ClassName+': '+E.Message); ExitCode := 1; end; end;

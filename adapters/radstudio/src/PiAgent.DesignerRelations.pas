@@ -3,6 +3,7 @@ interface
 uses System.Classes, System.JSON, System.TypInfo;
 type TParentAccess = class(TComponent);
 function CanParent(Root, Item, Parent: TComponent): Boolean;
+function HasAuthoredDesignerChildren(Root, Item: TComponent): Boolean;
 function ReferenceWritable(Prop: PPropInfo): Boolean;
 procedure AddRelations(Root, Item: TComponent; Obj: TJSONObject; Writable: Boolean);
 procedure MoveParent(Item, Parent: TComponent);
@@ -22,6 +23,22 @@ end;
 
 function ComponentId(Item: TComponent): string;
 begin if Item = nil then Result := '' else Result := Item.Name; end;
+
+function HasAuthoredDesignerChildren(Root, Item: TComponent): Boolean;
+var I,Depth: Integer; Child,Parent: TComponent;
+begin
+  Result:=False;
+  // Standard design-created components belong to the form root. FMX visual
+  // style objects can be control children but are not authored form components.
+  for I:=0 to Root.ComponentCount-1 do begin
+    Child:=Root.Components[I]; if Child=Item then Continue;
+    Parent:=Child.GetParentComponent; Depth:=0;
+    while (Parent<>nil) and (Parent<>Root) do begin
+      if (Parent=Item) or (Depth>=256) then Exit(True);
+      Parent:=Parent.GetParentComponent; Inc(Depth);
+    end;
+  end;
+end;
 
 function CanParent(Root, Item, Parent: TComponent): Boolean;
 var Ancestor: TComponent; Depth: Integer;

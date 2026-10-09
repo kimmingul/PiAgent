@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "destructiveFixture": true,
+  "kind": "WinFormsFramework",
+  "project": "WinFormsFramework.csproj",
+  "refactorFile": "FixtureLogic.cs",
+  "renameSymbol": "Add",
+  "designerFile": "MainForm.cs",
+  "debug": true
+}

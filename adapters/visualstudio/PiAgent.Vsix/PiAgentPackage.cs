@@ -20,6 +20,7 @@ public sealed class PiAgentPackage : AsyncPackage
 {
     private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
     private int running;
+    private int acceptanceAutorun;
 
     protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
     {
@@ -27,6 +28,9 @@ public sealed class PiAgentPackage : AsyncPackage
         ((EditorOptions)GetDialogPage(typeof(EditorOptions))).LoadSettingsFromStorage();
         if (await GetServiceAsync(typeof(IMenuCommandService)) is OleMenuCommandService commands)
         {
+            if (IdeAcceptanceHarness.Enabled) commands.AddCommand(new MenuCommand((sender, args) =>
+                JoinableTaskFactory.RunAsync(async () => await IdeAcceptanceHarness.RunAsync(lifetime.Token)).FileAndForget("PiAgent/FixtureAcceptance"),
+                new CommandID(new Guid("e648642e-3b01-454a-a5f5-77ab0b763a90"), 0x0106)));
             var editorCommands=new[]{"completion","next-edit","accept","dismiss"};
             for(var index=0;index<editorCommands.Length;index++){
                 var action=editorCommands[index];
@@ -43,6 +47,15 @@ public sealed class PiAgentPackage : AsyncPackage
                 }).FileAndForget("PiAgent/Chat"),
                 new CommandID(new Guid("e648642e-3b01-454a-a5f5-77ab0b763a90"), 0x0101)));
         }
+        if (IdeAcceptanceHarness.Enabled && Environment.GetEnvironmentVariable("PIAGENT_VS_ACCEPTANCE_AUTORUN") == "1")
+            KnownUIContexts.SolutionExistsAndFullyLoadedContext.WhenActivated(() => {
+                if (!lifetime.IsCancellationRequested && Interlocked.Exchange(ref acceptanceAutorun, 1) == 0)
+                    JoinableTaskFactory.RunAsync(async () => {
+                        // Yield after native solution activation, then revalidate the explicit fixture.
+                        await Task.Delay(500, lifetime.Token);
+                        await IdeAcceptanceHarness.RunAsync(lifetime.Token);
+                    }).FileAndForget("PiAgent/FixtureAcceptanceAutorun");
+            });
     }
 
     private async Task CheckConnectionAsync()

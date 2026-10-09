@@ -19,5 +19,5 @@ $previousInteractive=$env:PIAGENT_SIGNING_INTERACTIVE
 try {
     if($Interactive){$env:PIAGENT_SIGNING_INTERACTIVE='1'}else{Remove-Item Env:PIAGENT_SIGNING_INTERACTIVE -ErrorAction SilentlyContinue}
     & $hostPath (Join-Path $toolDirectory 'sign.dll') code certificate-store -cfp $fingerprint -fd sha256 -td sha256 -t $TimestampUrl -m 1 -d PiAgent -rc false (Resolve-Path -LiteralPath $Path).Path
-    if($LASTEXITCODE -ne 0){throw 'Signing failed. No automatic PIN retries; check USB connection and the local encrypted credential.'}
+    if($LASTEXITCODE -ne 0){throw 'Signing failed; inspect the preceding diagnostic for the cause (for example, a locked output file). No automatic PIN retries are performed.'}
 }finally{if($null -eq $previousInteractive){Remove-Item Env:PIAGENT_SIGNING_INTERACTIVE -ErrorAction SilentlyContinue}else{$env:PIAGENT_SIGNING_INTERACTIVE=$previousInteractive}}

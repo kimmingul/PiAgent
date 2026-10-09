@@ -1,4 +1,4 @@
-# Windows installation (0.10.0)
+# Windows installation (0.11.0 candidate)
 
 [한국어](INSTALLATION.md) · **English** · [Documentation](README.md)
 
@@ -6,7 +6,7 @@ New to OMP or AI coding tools? Start with [first-time setup](GETTING-STARTED.en.
 It includes an installation diagram and completion checks from IDE preparation to your first answer.
 Current setup automatically registers RAD13.2; RAD11/12 require separate builds with their own SDKs.
 
-Updated: 2026-10-09 KST. The default distribution is the signed `dist/PiAgent-Setup-0.10.0.exe`.
+Updated: 2026-10-09 KST. The planned distribution is `dist/PiAgent-Setup-0.11.0.exe`; signing/publication and final installation acceptance are pending. Check [release availability](https://github.com/kimmingul/PiAgent/releases) before downloading; the planned asset path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`.
 Select Core, RAD13.2 32/64-bit, VS2022 (17.14+)/2026 and optional installation of OMP if absent.
 Previously installed adapters that are not selected are retained; deselection does not uninstall them.
 
@@ -26,7 +26,7 @@ The earlier 0.9.18 RAD validation receipt points to `0.9.18-20261007162727` and 
 registrations. Core and RAD were selectively upgraded to remove duplicate BPL registrations.
 [0.10.0](RELEASE-0.10.0.en.md) includes session recovery and designer diagnostics fixes.
 Building/publishing a release does not automatically replace the installed version.
-Current live validation prioritizes VS2026/RAD13.2 64-bit; other IDE registrations are not evidence of a live PASS.
+Current fixtures passed on VS2026/RAD13.2 Win64 and scoped VS2022 VB, WinUI3 source and WinForms hosts. Registration alone is not a live PASS; RAD32 UI and final 0.11.0 signed install/update/recovery remain separate. See [candidate scope](IDE-AGENT-INTEGRATION.en.md).
 
 For permission-related RAD designer messages, follow [approval and edit-restriction guidance](RAD-DESIGNER-DIAGNOSTICS.en.md).
 Close all RAD IDEs before upgrading and select the relevant RAD32/64 components.
@@ -83,7 +83,7 @@ Updating only `Known Packages` can leave an old x64 BPL loaded; check the actual
 On Windows ARM64, RAD uses the installed Win32/Win64 IDE through compatibility execution; no ARM64 BPL is provided.
 A [separate RAD registry profile](https://docwiki.embarcadero.com/RADStudio/Athens/en/IDE_Command_Line_Switches_and_Options)
 can be launched with `bds.exe -rPiAgentValidation07`. Existing RADAgent profiles/packages are preserved.
-Live validation prioritizes VS2026 and RAD13.2; final VS2022 validation remains deferred.
+Scoped VS2022 VB 5/5, WinUI3 source 7/7 and WinForms 8/8 passed. WinUI3 has no native visual-designer/runtime-app claim; four-hour soaks and final 0.11.0 acceptance remain pending.
 
 Set `PIAGENT_PIPE_NAME` before starting the IDE when using another endpoint.
 Start the daemon first in a manual-archive-only environment; unified-setup adapters support automatic startup.

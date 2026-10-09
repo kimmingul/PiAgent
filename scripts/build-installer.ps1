@@ -12,12 +12,18 @@ try {
     $stage = Join-Path $workspacePath "artifacts/setup-$stamp"
     $payload = Join-Path $stage 'payload'
     New-Item -ItemType Directory -Path $payload -Force | Out-Null
+    # Existing IDEs can hold the normal build output open. Sign an isolated copy
+    # before packaging so release-manifest.json hashes the final signed bytes.
+    $pipeHostOutput = Join-Path $stage 'pipe-host'
+    & dotnet build transport/PiAgent.PipeHost -c Release -o $pipeHostOutput
+    if ($LASTEXITCODE -ne 0) { throw 'Isolated pipe host build failed.' }
+    if (!$NoSign) { & "$PSScriptRoot/sign-artifacts.ps1" -Directory $pipeHostOutput -AssembliesOnly }
     $packageScript = Join-Path $workspacePath 'scripts/package-core.mjs'
     $coreDestination = Join-Path $payload 'core'
-    $packageArguments = @{script=$packageScript;destination=$coreDestination} | ConvertTo-Json -Compress
+    $packageArguments = @{script=$packageScript;destination=$coreDestination;pipeHostDirectory=$pipeHostOutput} | ConvertTo-Json -Compress
     $env:PIAGENT_SETUP_PACKAGE = $packageArguments
     try {
-        & node --input-type=module -e 'import {pathToFileURL} from "node:url"; const a=JSON.parse(process.env.PIAGENT_SETUP_PACKAGE); const m=await import(pathToFileURL(a.script)); await m.packageCore(a.destination,{adapters:true,radPlatforms:["Win32","Win64"]});'
+        & node --input-type=module -e 'import {pathToFileURL} from "node:url"; const a=JSON.parse(process.env.PIAGENT_SETUP_PACKAGE); const m=await import(pathToFileURL(a.script)); await m.packageCore(a.destination,{adapters:true,radPlatforms:["Win32","Win64"],pipeHostDirectory:a.pipeHostDirectory});'
         if ($LASTEXITCODE -ne 0) { throw 'Core payload packaging failed.' }
     } finally { Remove-Item Env:PIAGENT_SETUP_PACKAGE }
     if (!$NoSign) {
@@ -61,7 +67,7 @@ try {
         $name = [IO.Path]::GetRelativePath($payload,$file.FullName).Replace('\','/')
         $hashes[$name] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     }
-    @{version='0.10.0';signed=(!$NoSign);sha256=$hashes} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $payload 'setup-manifest.json') -Encoding utf8
+    @{version='0.11.0';signed=(!$NoSign);sha256=$hashes} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $payload 'setup-manifest.json') -Encoding utf8
     $archive = Join-Path $stage 'payload.zip'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::CreateFromDirectory($payload,$archive)
@@ -72,7 +78,7 @@ try {
     $dist = Join-Path $workspacePath 'dist'
     New-Item -ItemType Directory -Path $dist -Force | Out-Null
     $suffix = if ($NoSign) { '-unsigned-preview' } else { '' }
-    $setup = Join-Path $dist "PiAgent-Setup-0.10.0$suffix.exe"
+    $setup = Join-Path $dist "PiAgent-Setup-0.11.0$suffix.exe"
     Copy-Item -LiteralPath (Join-Path $output 'PiAgent-Setup.exe') -Destination $setup
     ((Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant()+'  '+(Split-Path $setup -Leaf)) | Set-Content "$setup.sha256" -Encoding ascii
     $releaseVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version

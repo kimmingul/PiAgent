@@ -7,6 +7,6 @@ export const rendererActions=[
 ] as const;
 export type RendererActionName=typeof rendererActions[number];
 export type RendererAction={t:RendererActionName}&Record<string,unknown>;
-export const internalActions=['connect','captureSelection','accountStatus','accountLogin','cancelLogin','modelRoles','executionControl','gitSetup'] as const;
+export const internalActions=['connect','captureSelection','accountStatus','accountLogin','cancelLogin','modelRoles','executionControl','gitSetup','ideCapabilities'] as const;
 const allowed=new Set<string>([...rendererActions,...internalActions]);
 export function knownAction(value:unknown):value is RendererActionName|typeof internalActions[number]{return typeof value==='string'&&allowed.has(value);}

@@ -14,8 +14,9 @@ import {ompFeatures} from './omp-features.js';
 import {ompSettings} from './omp-settings.js';
 import {Interactions} from './interactions.js';
 import {uiEvent} from './omp-events.js';
-import {DesignerBridge,designerTools,designerPrompt} from './designer.js';
-import {IdeBridge,ideTools} from './ide-tools.js';
+import {DesignerBridge,designerTools,designerExtendedTools,designerPrompt} from './designer.js';
+import {catalogEntry,actionable} from './ide-catalog.js';
+import {IdeBridge,ideTools,ideCatalogTool} from './ide-tools.js';
 import {EditorCompletion} from './editor-completion.js';
 import {writeFile,copyFile,lstat,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -31,6 +32,8 @@ import {Timeline,timelineNotice,type TimelinePreview} from './timeline.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {TurnProgress} from './turn-progress.js';
 import {GitSetup} from './git-setup.js';
+import {GitTools,workspaceGitTool} from './git-tools.js';
+import {ideAction} from './ide-tools.js';
 export interface ChatServices { sessions?:SessionStore; usage?:UsageService; lifecycle?:(event:Record<string,unknown>)=>void; }
 export const WORKSPACE_BIND_CAPABILITY='workspace.bind.v1';
 export const APPROVAL_MODE_CAPABILITY='chat.approval.v1';
@@ -57,6 +60,7 @@ export class ChatSession {
   private providerError: string | undefined;
   private gitSetup:GitSetup|undefined;
   private gitBusy=false;
+  private gitTools:GitTools|undefined;
   private opening = false;
   private openingDone:Promise<void>|undefined;
   private disposed = false;
@@ -97,7 +101,7 @@ export class ChatSession {
   private admitting=false;
   private promptSetup:Promise<void>|undefined;
   private turnSnapshot:TurnSnapshot|undefined;
-  private readonly designer=new DesignerBridge(frame=>this.sendOmp(frame));
+  private readonly designer=new DesignerBridge(frame=>this.sendOmp(frame),name=>{const catalog=this.ide.snapshot;return !!catalog&&actionable(catalogEntry(catalog,name));});
   private readonly ide=new IdeBridge(frame=>this.sendOmp(frame));
   private editor:EditorCompletion|undefined;
   constructor(private options: OmpOptions, private readonly send: (event: ChatEvent) => void,
@@ -109,7 +113,7 @@ export class ChatSession {
   get supportsSessions():boolean {return !!this.services.sessions;}
   get supportsUsage():boolean {return !!this.services.usage;}
 
-  async handle(method: string, params: Record<string, unknown>, workspaceNegotiated = false, writesNegotiated = false, sessionsNegotiated=false, usageNegotiated=false, batchNegotiated=false, controlsNegotiated=false,designerNegotiated=false,timelineNegotiated=false,internalTransition=false,ideNegotiated=false,editorNegotiated=false): Promise<Record<string, unknown>> {
+  async handle(method: string, params: Record<string, unknown>, workspaceNegotiated = false, writesNegotiated = false, sessionsNegotiated=false, usageNegotiated=false, batchNegotiated=false, controlsNegotiated=false,designerNegotiated=false,timelineNegotiated=false,internalTransition=false,ideNegotiated=false,editorNegotiated=false,catalogNegotiated=false,editorContextNegotiated=false,gitNegotiated=false): Promise<Record<string, unknown>> {
     if(this.gitBusy)throw new ChatError(-32013,'Git setup is in progress');
     if(this.restoringMessage&&!internalTransition)throw new ChatError(-32013,'Message restore is in progress');
     if (this.disposed) throw new ChatError(-32010, 'Connection closed');
@@ -122,8 +126,9 @@ export class ChatSession {
       const bound=await this.bindWorkspace(params['workspaceUri']);
       // Resolve through the existing reader's path policy before sending an unsaved buffer to inference.
       if(typeof params['file']!=='string')throw new ChatError(-32602,'Editor file required');
-      await bound.workspace.execute('workspace_read_file',{path:params['file']},new AbortController().signal);
-      this.editor??=new EditorCompletion(this.options);
+      if(params['context']!==undefined&&!editorContextNegotiated)throw new ChatError(-32005,'Editor context window was not negotiated');
+      await bound.workspace.validateEditorPath(params['file']);
+      this.editor??=new EditorCompletion(this.options,this.services.lifecycle);
       return await this.editor.suggest(params,bound.workspace.root);
     }
     if(method==='sessions.list') {
@@ -140,7 +145,8 @@ export class ChatSession {
     if (method === 'chat.open') {
       await this.retiring;
       if (this.disposed) throw new ChatError(-32010, 'Connection closed');
-      if (Object.keys(params).some(key=>!['savedSessionId','workspaceUri','approvalMode','resumeLast'].includes(key))) throw new ChatError(-32602, 'Invalid params');
+      if (Object.keys(params).some(key=>!['savedSessionId','workspaceUri','approvalMode','resumeLast','ideCatalog'].includes(key))) throw new ChatError(-32602, 'Invalid params');
+      if(params['ideCatalog']!==undefined&&!catalogNegotiated)throw new ChatError(-32005,'IDE catalog was not negotiated');
       if(params['resumeLast']!==undefined&&(typeof params['resumeLast']!=='boolean'||!sessionsNegotiated||params['savedSessionId']!==undefined))throw new ChatError(-32602,'Invalid automatic resume request');
       if(params['approvalMode']!==undefined&&!['always-ask','write','yolo','plan'].includes(String(params['approvalMode'])))throw new ChatError(-32602,'Invalid approval mode');
       if('savedSessionId' in params&&!sessionsNegotiated)throw new ChatError(-32005,'Session capability not negotiated');
@@ -205,13 +211,18 @@ export class ChatSession {
         this.designer.enabled=designerNegotiated&&this.workspaceEnabled;
         this.ide.enabled=ideNegotiated&&this.workspaceEnabled;
         this.ide.controlsEnabled=this.writesEnabled;
+        this.ide.catalogEnabled=catalogNegotiated&&this.ide.enabled;
+        this.designer.cancellationEnabled=catalogNegotiated;
+        this.designer.extendedEnabled=catalogNegotiated;
+        if(this.ide.catalogEnabled)this.ide.bindCatalog(params['ideCatalog'],pathToFileURL(this.workspace!.root).href);
         this.designer.writesEnabled=this.writesEnabled;
+        if(gitNegotiated&&this.workspaceEnabled){this.gitTools=new GitTools(this.workspace!.root,this.ide);this.gitTools.writesEnabled=this.writesEnabled;}
         this.designer.writeBlockReason=this.approvalMode==='plan'
           ? 'The session is in plan mode. Designer inspection is available, but changes require leaving plan mode through the user access-mode control.'
           : !writesNegotiated ? 'Workspace writes were not negotiated for this connection. Reconnect using a writable Core and adapter configuration.'
           : 'Designer writes are disabled because this restricted workspace has no writable Git change service. Check the workspace Git setup and Core write configuration.';
         this.approvals = this.writesEnabled&&this.changes ? new Approvals(this.changes, (kind, approval) => this.emit(kind, undefined, approval)) : undefined;
-        if (this.workspaceEnabled) await omp.request('set_host_tools', { tools: [...workspaceTools, ...(this.approvals ? [editTool] : []),...(this.batchEnabled&&this.approvals?[batchEditTool]:[]),...(this.designer.enabled?designerTools.filter(tool=>this.writesEnabled||tool.name==='ide_designer_inspect'):[]),...(this.ide.enabled?ideTools:[])].map(tool => ({...tool, loadMode: 'essential'})) });
+        if (this.workspaceEnabled) await this.registerHostTools();
         if (this.disposed) throw new Error('Connection closed during startup');
         this.id = randomUUID(); this.sequence = 0; this.closeReason=undefined;
         if(this.lease&&controlsNegotiated)this.btw=new BtwService(join(this.lease.store.root,'btw'),this.options,event=>this.sendOmp({type:'ui_event',event}));
@@ -219,20 +230,29 @@ export class ChatSession {
         this.gitSetup=this.workspace?new GitSetup(this.workspace.root):undefined;
         const gitStatus=this.gitSetup?await this.gitSetup.status():undefined;
         if(this.lease)await this.lease.store.remember(this.lease.record.savedSessionId);
-        return { messageRestoreEnabled:!!this.timeline,sessionId: this.id, approvalMode:this.approvalMode, approvalModes:['always-ask','write','yolo','plan'], ompProfile:native?'native':'restricted', ompControlsEnabled:controlsNegotiated, toolsEnabled: this.workspaceEnabled, usageEnabled:usageNegotiated&&this.supportsUsage, sessionsEnabled:sessionsNegotiated&&this.supportsSessions,
+        return { gitToolsEnabled:!!this.gitTools,ideCatalogEnabled:this.ide.catalogEnabled,...(this.ide.snapshot?{ideCatalog:this.ide.snapshot}:{}),messageRestoreEnabled:!!this.timeline,sessionId: this.id, approvalMode:this.approvalMode, approvalModes:['always-ask','write','yolo','plan'], ompProfile:native?'native':'restricted', ompControlsEnabled:controlsNegotiated, toolsEnabled: this.workspaceEnabled, usageEnabled:usageNegotiated&&this.supportsUsage, sessionsEnabled:sessionsNegotiated&&this.supportsSessions,
           btwEnabled:!!this.btw,preferencesEnabled:!!this.lease,exportEnabled:controlsNegotiated,filesEnabled:this.workspaceEnabled,checkpointsEnabled:!!this.changes&&this.writesEnabled,
           ...(gitStatus?{gitStatus,gitSetupEnabled:controlsNegotiated&&workspaceNegotiated&&writesNegotiated&&native}:{}),
           ...(this.lease?{savedSessionId:this.lease.record.savedSessionId,transcript:this.lease.record.transcript}:{}),
           ...(this.workspaceEnabled ? { workspaceUri: pathToFileURL(this.workspace!.root).href, readOnly: !this.writesEnabled, writeEnabled: this.writesEnabled } : {}) };
       } catch (error) {
         await this.omp?.stop(); this.omp = undefined;
-        this.interactions?.clear();this.interactions=undefined;this.designer.close();this.ide.close();
+        this.interactions?.clear();this.interactions=undefined;this.designer.close();this.ide.close();this.gitTools?.close();this.gitTools=undefined;
         await this.lease?.release();this.lease=undefined;
         throw error instanceof ChatError?error:new ChatError(-32010, error instanceof Error ? error.message : 'OMP startup failed');
       } finally { this.opening = false;this.openingDone=undefined;opened(); }
     }
     if (!this.id || !this.omp || this.opening || this.retiring || params['sessionId'] !== this.id)
       throw new ChatError(-32012, 'Unknown or unavailable session');
+    if(method==='ide.catalog'){
+      if(!catalogNegotiated||!this.ide.enabled)throw new ChatError(-32005,'IDE catalog was not negotiated');
+      if(Object.keys(params).some(k=>!['sessionId','catalog'].includes(k)))throw new ChatError(-32602,'Invalid catalog parameters');
+      if(params['catalog']!==undefined){
+        if(this.turn||this.finishing||this.admitting)throw new ChatError(-32013,'Publish IDE catalog while idle');
+        this.ide.publish(params['catalog'],pathToFileURL(this.workspace!.root).href);await this.registerHostTools();
+      }
+      return {ideCatalogEnabled:true,...(this.ide.snapshot?{ideCatalog:this.ide.snapshot}:{})};
+    }
     if(method==='chat.git'){
       if(!this.gitSetup||!controlsNegotiated||!workspaceNegotiated)throw new ChatError(-32005,'Git setup unavailable');
       if(this.turn||this.finishing||this.admitting||this.restoringMessage||this.controlOperation||this.login?.active)throw new ChatError(-32013,'Finish the current operation before Git setup');
@@ -257,7 +277,7 @@ export class ChatSession {
     if(method==='chat.proceedPlan') {
       if(Object.keys(params).some(key=>!['sessionId','path'].includes(key))||!this.plan||params['path']!==this.plan.path||!this.workspace||!this.lease||!controlsNegotiated||this.turn||this.finishing||this.approvalMode!=='plan')throw new ChatError(-32005,'A completed, current plan is required');
       const plan=this.plan;const text=await new Plans(this.workspace.root).read(plan);const savedSessionId=this.lease.record.savedSessionId;
-      await this.closeSession();const session=await this.handle('chat.open',{savedSessionId,approvalMode:'always-ask'},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated);
+      await this.closeSession();const session=await this.handle('chat.open',{savedSessionId,approvalMode:'always-ask'},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated,catalogNegotiated,editorContextNegotiated,gitNegotiated);
       return {...session,planPrompt:'Implement the user-approved plan in '+plan.path+'. Read the full document before working. Ask for approvals under the current access mode. Use the native IDE designer for GUI work.\n\nPlan excerpt:\n'+text.slice(0,12000)};
     }
     if(method==='chat.previewMessageRestore'||method==='chat.restoreMessage') {
@@ -274,10 +294,10 @@ export class ChatSession {
         if(JSON.stringify(refreshed.proposal?.files?.map(file=>[file.path,file.beforeHash,file.afterHash]))!==JSON.stringify(preview.proposal?.files?.map(file=>[file.path,file.beforeHash,file.afterHash])))throw new ChatError(-32012,'Files changed after message preview');
         const clone=await this.timeline.clone(preview);await this.closeSession();
         let opened:Record<string,unknown>;
-        try{opened=await this.handle('chat.open',{savedSessionId:clone,approvalMode:mode},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,true,ideNegotiated,editorNegotiated);
+        try{opened=await this.handle('chat.open',{savedSessionId:clone,approvalMode:mode},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,true,ideNegotiated,editorNegotiated,catalogNegotiated,editorContextNegotiated,gitNegotiated);
           if(preview.proposal)await changes!.apply(preview.proposal,new AbortController().signal);
           await this.timeline?.settled(changes?await changes.beginTurn():undefined).catch(error=>this.emit('warning',error instanceof Error?error.message:'Restore baseline could not be saved'));
-        }catch(error){await this.closeSession();const restored=await this.handle('chat.open',{savedSessionId:original,approvalMode:mode},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,true,ideNegotiated,editorNegotiated);return {...restored,restoreError:error instanceof Error?error.message:'Restore failed; original conversation reopened'};}
+        }catch(error){await this.closeSession();const restored=await this.handle('chat.open',{savedSessionId:original,approvalMode:mode},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,true,ideNegotiated,editorNegotiated,catalogNegotiated,editorContextNegotiated,gitNegotiated);return {...restored,restoreError:error instanceof Error?error.message:'Restore failed; original conversation reopened'};}
         return {...opened,restoredDraft:preview.point.prompt,restoreNotice:timelineNotice(preview.seq,preview.branch,true,!!preview.current)};
       }finally{this.restoringMessage=false;this.messagePreview=undefined;}
     }
@@ -324,7 +344,7 @@ export class ChatSession {
       if(params['action']==='toggleMcpServer') {
         const current=await extensions(this.options,{action:'listExtensions'});
         if(typeof params['enabled']!=='boolean'||typeof params['id']!=='string'||! /^[a-zA-Z0-9_.-]{1,128}$/.test(params['id'])||!Array.isArray(current['mcpServers'])||!current['mcpServers'].some(value=>isObject(value)&&value['id']===params['id']))throw new ChatError(-32602,'Unknown MCP server');
-        await this.handle('chat.prompt',{sessionId:this.id,message:'/mcp '+(params['enabled']?'enable':'disable')+' '+params['id']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated);
+        await this.handle('chat.prompt',{sessionId:this.id,message:'/mcp '+(params['enabled']?'enable':'disable')+' '+params['id']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated,catalogNegotiated,editorContextNegotiated,gitNegotiated);
         // Prompt admission can precede the slash handler's config write. Wait for the
         // terminal event and all chained checkpoint saves before returning switch state.
         const deadline=Date.now()+20000;
@@ -344,14 +364,14 @@ export class ChatSession {
       if(!this.lease)throw new ChatError(-32005,'Private saved session required');
       const savedSessionId=this.lease.record.savedSessionId;
       await this.closeSession();
-      return this.handle('chat.open',{savedSessionId,approvalMode:params['mode']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated);
+      return this.handle('chat.open',{savedSessionId,approvalMode:params['mode']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated,catalogNegotiated,editorContextNegotiated,gitNegotiated);
     }
     if(method==='ide.reply') {
       if(!ideNegotiated||Object.keys(params).some(k=>!['sessionId','requestId','result','error'].includes(k)))throw new ChatError(-32602,'Invalid IDE reply');
       return this.ide.reply(params['requestId'],params['result'],params['error']);
     }
     if(method==='designer.reply'||method==='designer.decide') {
-      if(!designerNegotiated&&!(method==='designer.decide'&&ideNegotiated))throw new ChatError(-32005,'Designer capability not negotiated');
+      if(!designerNegotiated&&!(method==='designer.decide'&&(ideNegotiated||gitNegotiated)))throw new ChatError(-32005,'Designer capability not negotiated');
       const allowed=method==='designer.reply'?['sessionId','requestId','result','error']:['sessionId','proposalId','approved'];
       if(Object.keys(params).some(key=>!allowed.includes(key)))throw new ChatError(-32602,'Invalid designer params');
       return method==='designer.reply'?this.designer.reply(params['requestId'],params['result'],params['error']):this.ide.ownsApproval(params['proposalId'])?this.ide.decide(params['proposalId'],params['approved']):this.designer.decide(params['proposalId'],params['approved']);
@@ -466,7 +486,7 @@ export class ChatSession {
     }
     if(!message.trimStart().startsWith('/')){
       prompt=designerPrompt(prompt,this.designer.enabled,this.designer.writesEnabled);
-      if(this.ide.enabled)prompt='PiAgent Visual Studio workflow: Use ide_context, ide_symbols and ide_diagnostics for actual IDE state rather than guessing from disk alone. Respect unsaved buffers. Use ide_build and ide_tests to verify relevant changes; execution requires user approval. ide_debug snapshot requires a paused debugger, and debugger control/evaluation requires approval. Only claim tests or profiling ran when their results confirm it. Unsupported SDK/language/tool availability is a limitation, never a successful result.\n\n'+prompt;
+      if(this.ide.enabled)prompt='PiAgent connected IDE workflow: Use advertised IDE context, semantic and diagnostic tools for actual IDE state. Respect unsaved buffers. Consult ide_catalog when available for supported operations and blocking reasons; do not invent unavailable tools. Use supported build/test tools to verify changes; execution requires user approval. A debugger snapshot requires a paused debugger, and control/evaluation requires approval. Only claim tests or profiling ran when results confirm it. Unsupported SDK/language/tool availability is a limitation, never a successful result.\n\n'+prompt;
     }
     turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.providerError=undefined; this.closeReason=undefined; this.seenTools.clear();
     this.turnStarted=Date.now();
@@ -590,20 +610,22 @@ export class ChatSession {
     const aborted = new Promise<never>((_, reject) => { abortReject = reject; });
     const onAbort = (): void => { abortReject?.(new Error('Workspace call aborted')); };
     controller.signal.addEventListener('abort', onAbort, { once: true });
-    const designing=this.designer.enabled&&designerTools.some(tool=>tool.name===name);
-    const ideTool=this.ide.enabled&&ideTools.some(tool=>tool.name===name);
+    const designing=this.designer.enabled&&[...designerTools,...designerExtendedTools].some(tool=>tool.name===name);
+    const ideTool=this.ide.enabled&&[ideCatalogTool,...ideTools].some(tool=>tool.name===name);
+    const gitTool=!!this.gitTools&&name==='workspace_git';
+    const gitApplying=gitTool&&isObject(frame['arguments'])&&frame['arguments']['operation']==='apply';
     const proposing = (name === 'workspace_propose_edit'||(name==='workspace_propose_changes'&&this.batchEnabled)) && !!this.approvals;
-    const timeout = ideTool?undefined:setTimeout(() => controller.abort('deadline'), proposing||designing ? 370_000 : 10_000);
-    this.emit('tool_started', name === 'workspace_read_file' ? 'workspace_read_file' : name === 'workspace_search' ? 'workspace_search' : proposing||designing||ideTool ? String(name) : 'unknown',undefined,id);
+    const timeout = ideTool?undefined:setTimeout(() => controller.abort('deadline'), proposing||designing||gitApplying ? 370_000 : gitTool?40000:10_000);
+    this.emit('tool_started', name === 'workspace_read_file' ? 'workspace_read_file' : name === 'workspace_search' ? 'workspace_search' : proposing||designing||ideTool||gitTool ? String(name) : 'unknown',undefined,id);
     let ownsWrite=false;
     try {
       let text: string, isError = false;
       try {
-        if(ideTool||proposing||(designing&&name!=='ide_designer_inspect')) {
+        if(ideTool&&isObject(frame['arguments'])&&ideAction(String(name),frame['arguments'])||proposing||gitApplying||(designing&&!['ide_designer_inspect','ide_designer_preview_change','ide_designer_preview_restore'].includes(String(name)))) {
           if(this.writeToolActive)throw new Error('Another IDE/file approval is pending');
           this.writeToolActive=true;ownsWrite=true;
         }
-        text = JSON.stringify(await Promise.race([ideTool?this.ide.execute(String(name),frame['arguments'],controller.signal):designing?this.designer.execute(String(name),frame['arguments'],controller.signal):proposing ? this.approvals!.propose(frame['arguments'],controller.signal,name==='workspace_propose_changes')
+        text = JSON.stringify(await Promise.race([gitTool?this.gitTools!.execute(frame['arguments'],controller.signal):ideTool?this.ide.execute(String(name),frame['arguments'],controller.signal):designing?this.designer.execute(String(name),frame['arguments'],controller.signal):proposing ? this.approvals!.propose(frame['arguments'],controller.signal,name==='workspace_propose_changes')
         : this.workspace!.execute(String(name), frame['arguments'], controller.signal), aborted])); }
       catch (error) {
         if (controller.signal.aborted && controller.signal.reason !== 'deadline') return;
@@ -617,6 +639,11 @@ export class ChatSession {
     finally { if(ownsWrite)this.writeToolActive=false;clearTimeout(timeout); controller.signal.removeEventListener('abort', onAbort); if (this.tools.get(id) === controller) this.tools.delete(id); }
   }
   private cancelTools(): void { for (const controller of this.tools.values()) controller.abort(); this.tools.clear(); }
+  private async registerHostTools():Promise<void>{
+    const catalog=this.ide.snapshot;
+    const extended=this.designer.enabled&&this.designer.extendedEnabled&&catalog?designerExtendedTools.filter(t=>actionable(catalogEntry(catalog,t.name))&&(this.writesEnabled||['ide_designer_preview_change','ide_designer_preview_restore'].includes(t.name))):[];
+    await this.omp!.request('set_host_tools',{tools:[...workspaceTools,...(this.gitTools?[{...workspaceGitTool,parameters:{...workspaceGitTool.parameters,properties:{...workspaceGitTool.parameters.properties,operation:{enum:workspaceGitTool.parameters.properties.operation.enum.filter(op=>this.writesEnabled||op!=='apply')}}}}]:[]),...(this.approvals?[editTool]:[]),...(this.batchEnabled&&this.approvals?[batchEditTool]:[]),...(this.designer.enabled?designerTools.filter(t=>this.writesEnabled||t.name==='ide_designer_inspect'):[]),...extended,...(this.ide.enabled?this.ide.registeredTools():[])].map(t=>({...t,loadMode:'essential'}))});
+  }
   private sendOmp(frame:Record<string,unknown>):void {
     if(!this.id||this.disposed)return;
     this.send({sessionId:this.id,turnId:this.turn??null,sequence:++this.sequence,kind:'omp_event',frame});
@@ -697,7 +724,7 @@ export class ChatSession {
       }
       this.finish('cancelled');if(this.planSaving)await this.planSaving;
       this.omp=undefined;this.controlOperation=undefined;const btw=this.btw;this.btw=undefined;
-      this.interactions?.clear();this.interactions=undefined;this.designer.close();this.ide.close();
+      this.interactions?.clear();this.interactions=undefined;this.designer.close();this.ide.close();this.gitTools?.close();this.gitTools=undefined;
       clearInterval(this.progressTimer);this.progressTimer=undefined;this.progress=undefined;
       this.emit('closed',this.closeReason??(this.cancelling?'중지 요청으로 작업 세션을 종료했습니다.':'작업 세션이 종료되었습니다. 설정에서 다시 연결할 수 있습니다.'));this.id=undefined;const lease=this.lease;this.lease=undefined;
       await Promise.all([omp?.stop(),btw?.close()]);

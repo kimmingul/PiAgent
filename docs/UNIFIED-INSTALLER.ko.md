@@ -2,13 +2,12 @@
 
 **한국어** · [English](UNIFIED-INSTALLER.md) · [문서](README.md)
 
-문서 갱신: 2026-10-09. 현재 제품 버전은 0.10.0다.
+문서 갱신: 2026-10-09. 소스는 0.11.0 후보이며 서명/게시와 최종 설치 검증은 대기 중이다. 이전 서명 릴리즈 receipt의 원래 버전은 유지한다.
 이전 0.9.18에서 Core와 RAD32/64를 업데이트하고 중복 RAD BPL 등록을 정리했다.
-설치 기록과 실제 IDE 검증은 구분한다. VS2026와 RAD13.2 64-bit를 우선 검증하며,
-VS2022와 RAD32의 최종 UI 검증은 완료로 주장하지 않는다.
+설치 기록과 실제 IDE 검증은 구분한다. VS2026/RAD13.2 Win64와 제한된 VS2022 VB·WinUI3 소스·WinForms fixture를 통과했다. RAD32 UI와 4시간 soak는 별도 대기 조건이다.
 [세션 복구](SESSION-RECOVERY-FIX.md)와 [검증 기록](VALIDATION.md)을 참고한다.
 
-출력 파일은 `dist/PiAgent-Setup-0.10.0.exe`다. 하나의 독립 실행 설치파일로
+예정 출력 파일은 `dist/PiAgent-Setup-0.11.0.exe`이며 아직 게시되지 않았다. 예정 asset 경로는 `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`다. [릴리즈 게시 상태](https://github.com/kimmingul/PiAgent/releases)를 확인한다. 하나의 독립 실행 설치파일로
 Windows x64와 ARM64를 지원한다. ARM64에서는 설치파일이 x64 호환 실행되며,
 설치되는 Node.js, .NET, OMP는 시스템의 네이티브 아키텍처를 사용한다.
 시스템 PATH나 기존 런타임을 교체하지 않는다.
@@ -90,4 +89,4 @@ PiAgent-Setup.exe --install-components core,rad64,vs26
 `--language ko`, `--language en`, `--language auto`를 어떤 실행 방식에도 추가할 수 있다.
 완료는 종료 코드 0, 오류는 1과 `%TEMP%/PiAgent-setup-error.txt`로 보고한다.
 진행 기록은 `%TEMP%/PiAgent-setup-install.log`, VSIX 로그는 설치 루트의 `vsix-<instanceId>.log`에 남는다.
-미서명 preview를 서명 완료나 실제 IDE 검증 완료로 표현해서는 안 된다.
+미서명 preview를 서명 완료나 실제 IDE 검증 완료로 표현해서는 안 된다. 제한된 VS2022 VB 5/5·WinUI3 소스 7/7·WinForms 8/8을 통과했으나 모든 workload 인증은 아니다. RAD Win32는 컴파일/SDK smoke/설치 선택 범위이며 32-bit IDE의 실제 UI 검증은 별도다. [후보 지원 범위](IDE-AGENT-INTEGRATION.md)를 따른다.

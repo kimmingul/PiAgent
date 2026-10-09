@@ -1,6 +1,6 @@
 # PiAgent pipe protocol v1
 
-문서 상태: 2026-10-08, 구현 0.9.17. pipe protocol은 v1 및 additive capability 협상을 유지한다.
+문서 상태: 2026-10-09, 구현 0.11.0 후보. pipe protocol은 v1 및 additive capability 협상을 유지한다.
 제품 버전과 protocol 버전은 별개이며 CORE_VERSION은 package 버전에서 생성한다.
 현재 구현의 인증 후 idle 정책과 turn activity/종료 계약은 아래 해당 절을 따른다.
 새 기능을 제공했다고 해서 wire version을 임의로 올리거나 미협상 기능을 활성화하지 않는다.
@@ -562,7 +562,23 @@ reports the result. Events may precede acknowledgement. Running maintenance excl
 chat.close retires the owning process; 5-minute compaction timeout retires it too. Late events cannot affect new sessions.
 Subagent snapshots are bounded and omit raw progress/private paths. All commands retain owner session checks.
 
-## Visual Studio IDE and editor extensions (0.10.0)
+## IDE catalog, reviewed changes and editor context (development candidate)
+
+The M0–M6 candidate extends both adapters through `ide.catalog.v1`,
+`editor.context.v1` and `workspace.git.v1`. The current wire contract, bounded
+catalog schema, initial publication, operation gating and editor context fields
+are defined in [IDE-CATALOG-CONTRACT.md](docs/IDE-CATALOG-CONTRACT.md).
+See the [integration guide](docs/IDE-AGENT-INTEGRATION.en.md) for supported backends,
+immutable previews, single-use consent, state checks and recovery limitations.
+Candidate consent expires after five minutes; side-effecting requests recheck the
+adapter state around approval. Read requests do not carry stale mutation state.
+The adapter's completion/result fields retain their backend-specific meaning;
+transport acceptance alone does not imply successful execution.
+
+## Visual Studio IDE and editor extensions (0.10.0 historical contract)
+
+This section records the released 0.10.0 behavior. The candidate extension above
+supersedes its VS-only discovery, approval lifetime and whole-buffer restrictions.
 
 `hello` negotiates `ide.tools.v1` and `editor.suggestions.v1` independently. RAD and older adapters
 do not receive VS host tools. Seven OMP tools are registered: `ide_context`, `ide_diagnostics`,

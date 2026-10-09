@@ -13,6 +13,7 @@ type
     FDeadline: UInt64;
     FReady: Boolean;
     FName: string;
+    FCapabilities: TArray<string>;
     FOnNotification: TPiNotification;
     function ReadFrame: TJSONObject;
     function Notify(Reply: TJSONObject): Boolean;
@@ -22,10 +23,11 @@ type
   public
     constructor Create(const Name: string; CancelHandle: THandle = 0);
     destructor Destroy; override;
-    function Hello(const IdeVersion, InstanceId: string; Chat: Boolean = False): string;
+    function Hello(const IdeVersion, InstanceId: string; Chat: Boolean = False; EditorSuggestions: Boolean = False): string;
     function Ping(const Nonce: string): string;
     function Request(const Method: string; Params: TJSONObject): TJSONObject;
     function PollNotification: Boolean;
+    function HasCapability(const Name: string): Boolean;
     property OnNotification: TPiNotification read FOnNotification write FOnNotification;
   end;
 
@@ -153,7 +155,7 @@ var Request, Reply: TJSONObject; Bytes: TBytes; Header: array[0..3] of Byte;
   Id: string; Length: Cardinal;
 begin
   FDeadline := GetTickCount64 + 5000;
-  if MatchText(Method,['chat.prompt','chat.close','chat.git','chat.open','chat.setApproval','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','chat.previewMessageRestore','chat.restoreMessage','chat.extensions','changes.decide','changes.restore','chat.usage','sessions.list','sessions.deleteEmpty','omp.control']) then FDeadline := GetTickCount64 + 60000;
+  if MatchText(Method,['editor.suggest','ide.catalog','chat.prompt','chat.close','chat.git','chat.open','chat.setApproval','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','chat.previewMessageRestore','chat.restoreMessage','chat.extensions','changes.decide','changes.restore','chat.usage','sessions.list','sessions.deleteEmpty','omp.control']) then FDeadline := GetTickCount64 + 60000;
   Inc(FSequence);
   Id := 'delphi-' + IntToStr(FSequence);
   Request := TJSONObject.Create;
@@ -218,13 +220,13 @@ function TPiPipeClient.Request(const Method: string; Params: TJSONObject): TJSON
 begin
   if not FReady then begin Params.Free; raise Exception.Create('Handshake required'); end;
   if not MatchText(Method,['chat.prompt','chat.close','chat.git','chat.open','chat.setApproval','btw.ask','btw.list','btw.cancel','btw.delete','chat.preferences','workspace.files','chat.addFolder','chat.proceedPlan','chat.export','chat.previewMessageRestore','chat.restoreMessage','chat.extensions','chat.prompt','chat.cancel','chat.close','changes.decide','changes.list',
-    'changes.previewRestore','changes.restore','sessions.list','sessions.deleteEmpty','chat.usage','designer.reply','designer.decide','omp.respond','omp.control']) then
+    'ide.catalog','ide.reply','ide.decide','editor.suggest','editor.cancel','changes.previewRestore','changes.restore','sessions.list','sessions.deleteEmpty','chat.usage','designer.reply','designer.decide','omp.respond','omp.control']) then
     begin Params.Free; raise Exception.Create('Method unavailable'); end;
   Result := Call(Method,Params);
 end;
 
-function TPiPipeClient.Hello(const IdeVersion, InstanceId: string; Chat: Boolean): string;
-var Params, Adapter, Reply: TJSONObject; Caps, Required: TJSONArray;
+function TPiPipeClient.Hello(const IdeVersion, InstanceId: string; Chat,EditorSuggestions: Boolean): string;
+var Params, Adapter, Reply: TJSONObject; Caps, Required: TJSONArray; I: Integer;
 begin
   if FReady then raise Exception.Create('Already initialized');
   Authenticate;
@@ -232,11 +234,15 @@ begin
   Params.AddPair('protocolVersions', TJSONArray.Create.Add(1));
   Caps := TJSONArray.Create.Add('core.ping');
   if Chat then begin Caps.Add('chat.v1');Caps.Add('context.selection.v1'); Caps.Add('omp.controls.v1').Add('chat.approval.v1').Add('workspace.bind.v1').Add('chat.btw.v1').Add('chat.preferences.v1').Add('chat.timeline.v1'); Caps.Add('ide.designer.v1'); Caps.Add('workspace.read.v1'); Caps.Add('workspace.edit.v1'); Caps.Add('workspace.edit.batch.v1'); Caps.Add('chat.sessions.v1'); Caps.Add('chat.usage.v1'); end;
+  if Chat then Caps.Add('ide.tools.v1').Add('ide.catalog.v1').Add('workspace.git.v1');
+  if EditorSuggestions and not Chat then Caps.Add('chat.v1').Add('workspace.read.v1').Add('workspace.bind.v1');
+  if EditorSuggestions then Caps.Add('editor.suggestions.v1').Add('editor.context.v1');
   Params.AddPair('capabilities', Caps);
   Required := TJSONArray.Create.Add('core.ping'); if Chat then Required.Add('chat.v1');
+  if EditorSuggestions then Required.Add('editor.suggestions.v1');
   Params.AddPair('requiredCapabilities', Required);
   Adapter := TJSONObject.Create;
-  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.9.0');
+  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.11.0');
   Adapter.AddPair('ideVersion', IdeVersion); Adapter.AddPair('instanceId', InstanceId);
   Adapter.AddPair('capabilities', TJSONArray.Create);
   Params.AddPair('adapter', Adapter);
@@ -247,9 +253,15 @@ begin
       or (Caps.Count < 1) or (Caps.Items[0].Value <> 'core.ping') then
       raise Exception.Create('Required protocol/capability was not negotiated');
     FReady := True;
+    SetLength(FCapabilities,Caps.Count);
+    for I:=0 to Caps.Count-1 do FCapabilities[I]:=Caps.Items[I].Value;
     Result := Reply.ToJSON;
   finally Reply.Free; end;
 end;
+
+function TPiPipeClient.HasCapability(const Name: string): Boolean;
+var Capability: string;
+begin Result:=False; for Capability in FCapabilities do if Capability=Name then Exit(True); end;
 
 function TPiPipeClient.Ping(const Nonce: string): string;
 var Reply: TJSONObject;

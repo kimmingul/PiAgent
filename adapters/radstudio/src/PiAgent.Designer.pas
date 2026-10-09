@@ -4,7 +4,8 @@ uses System.JSON;
 function ExecuteDesigner(const Operation: string; Args: TJSONObject; const WorkspaceUri: string): TJSONObject;
 implementation
 uses System.SysUtils, System.Classes, System.TypInfo, System.Variants, System.Hash,
-  System.IOUtils, System.NetEncoding, Winapi.Windows, ToolsAPI, DesignIntf, PiAgent.DesignerRelations;
+  System.IOUtils, System.NetEncoding, Winapi.Windows, ToolsAPI, DesignIntf, PiAgent.DesignerRelations,
+  PiAgent.DesignerAuthoring, PiAgent.DesignerProperties;
 
 const ScalarKinds = [tkInteger,tkInt64,tkFloat,tkEnumeration,tkString,tkLString,tkWString,tkUString];
 
@@ -24,9 +25,9 @@ begin
 end;
 
 function Snapshot(const Module: IOTAModule; const Editor: IOTAFormEditor): TJSONObject;
-var Root,Item: TComponent; Components,Properties: TJSONArray; I,J,Count: Integer;
-  List: PPropList; Prop: PPropInfo; Obj: TJSONObject; Value,Framework,BlockCode,BlockReason: string;
-  Dirty,Writable,CanWrite: Boolean; NativeEditor: INTAFormEditor;
+var Root,Item: TComponent; Components,Properties: TJSONArray; I: Integer;
+  Obj: TJSONObject; Value,Framework,BlockCode,BlockReason: string;
+  Dirty,CanWrite: Boolean; NativeEditor: INTAFormEditor;
 begin
   Root := NativeOf(Editor.GetRootComponent);
   if Root = nil then raise Exception.Create('Native form designer unavailable');
@@ -64,33 +65,18 @@ begin
       Obj := TJSONObject.Create.AddPair('id',Item.Name).AddPair('type',Item.ClassName).AddPair('properties',Properties);
       Components.AddElement(Obj);
       AddRelations(Root,Item,Obj,CanWrite);
-      Count := GetPropList(Item.ClassInfo,ScalarKinds,nil);
-      GetMem(List,Count*SizeOf(Pointer));
-      try
-        GetPropList(Item.ClassInfo,ScalarKinds,List);
-        for J := 0 to Count-1 do begin
-          if Properties.Count >= 128 then Break;
-          Prop := List^[J]; if SameText(string(Prop.Name),'Name') then Continue;
-          try
-            Value := VarToStr(GetPropValue(Item,string(Prop.Name),True));
-            Writable := CanWrite and (Prop.SetProc <> nil) and (Length(Value) <= 4096);
-            if Length(Value) > 4096 then Value := Copy(Value,1,4096);
-            Properties.AddElement(TJSONObject.Create.AddPair('name',string(Prop.Name)).AddPair('value',Value)
-              .AddPair('writable',TJSONBool.Create(Writable)));
-          except
-            // A property that cannot be read is not offered for editing.
-          end;
-        end;
-      finally FreeMem(List); end;
+      DescribeDesignerProperties(Item,Properties,CanWrite);
     end;
-    Result.AddPair('revision',THashSHA2.GetHashString(Components.ToJSON));
+    AddDesignerAuthoringSchema(Result,Module,Editor,CanWrite);
+    try Value:=DesignerFileRevision(Module); except Value:=''; end;
+    Result.AddPair('revision',THashSHA2.GetHashString(Components.ToJSON+Value));
     if TEncoding.UTF8.GetByteCount(Result.ToJSON) > 220*1024 then raise Exception.Create('Designer snapshot exceeds limit');
   except Result.Free; raise; end;
 end;
 
 function ExecuteDesigner(const Operation: string; Args: TJSONObject; const WorkspaceUri: string): TJSONObject;
 var Services: IOTAModuleServices; Module: IOTAModule; Editor: IOTAFormEditor; NativeEditor: INTAFormEditor;
-  I: Integer; Root,Item,NewTarget,OldTarget: TComponent; View: TJSONObject; Prop: PPropInfo; OldValue: Variant;
+  I: Integer; Root,Item,NewTarget,OldTarget: TComponent; View: TJSONObject; Prop: PPropInfo; OldValue: Variant; PropertyTarget: TPersistent;
   RootPath,Target,ComponentName,PropertyName,Value,CheckPath: string;
 begin
   if TThread.CurrentThread.ThreadID <> MainThreadID then raise Exception.Create('Designer requires IDE main thread');
@@ -110,6 +96,15 @@ begin
   for I := 0 to Module.ModuleFileCount-1 do if Supports(Module.ModuleFileEditors[I],IOTAFormEditor,Editor) then Break;
   if Editor = nil then raise Exception.Create('The active module has no form designer');
   if Operation = 'inspect' then Exit(Snapshot(Module,Editor));
+  if (Operation='previewChange') or (Operation='applyChange') or
+    (Operation='previewRestoreChange') or (Operation='restoreChange') then begin
+    View:=Snapshot(Module,Editor);
+    try
+      if View.GetValue<Boolean>('dirty',True) then raise Exception.Create('Save unsaved form/source changes before designer authoring or recovery');
+      if not View.GetValue<Boolean>('canSetProperty',False) then raise Exception.Create('Designer source/form is unavailable or read-only');
+      Exit(ExecuteDesignerAuthoring(Operation,View.GetValue<string>('revision',''),WorkspaceUri,Args,Module,Editor));
+    finally View.Free; end;
+  end;
   if (Operation <> 'setProperty') and (Operation <> 'setReference') and (Operation <> 'reparent') then raise Exception.Create('Unsupported designer operation');
   View := Snapshot(Module,Editor);
   try
@@ -158,15 +153,15 @@ begin
     Exit(TJSONObject.Create.AddPair('applied',TJSONBool.Create(True)).AddPair('document',Target)
       .AddPair('validation','saved through ToolsAPI; inspect related properties, build and visually verify'));
   end;
-  Prop := GetPropInfo(Item,PropertyName);
-  if (Prop = nil) or (Prop.SetProc = nil) or not (Prop.PropType^.Kind in ScalarKinds) then raise Exception.Create('Property is not writable');
+  Prop := ResolveDesignerProperty(Item,PropertyName,PropertyTarget);
+  if (Prop = nil) or (Prop.SetProc = nil) then raise Exception.Create('Property is not writable');
   if not Supports(Editor,INTAFormEditor,NativeEditor) or (NativeEditor.FormDesigner = nil) then raise Exception.Create('Designer modification service unavailable');
-  OldValue := GetPropValue(Item,PropertyName,True);
+  OldValue := GetPropValue(PropertyTarget,string(Prop.Name),True);
   try
-    SetPropValue(Item,PropertyName,Value); NativeEditor.FormDesigner.Modified;
+    SetPropValue(PropertyTarget,string(Prop.Name),Value); NativeEditor.FormDesigner.Modified;
     if not Module.Save(False,True) then raise Exception.Create('Designer save failed');
   except
-    SetPropValue(Item,PropertyName,OldValue); NativeEditor.FormDesigner.Modified;
+    SetPropValue(PropertyTarget,string(Prop.Name),OldValue); NativeEditor.FormDesigner.Modified;
     raise;
   end;
   Result := TJSONObject.Create.AddPair('applied',TJSONBool.Create(True)).AddPair('document',Target)

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "destructiveFixture": true,
+  "kind": "VisualBasicConsole",
+  "project": "VisualBasicConsole.vbproj",
+  "refactorFile": "FixtureLogic.vb",
+  "renameSymbol": "Add",
+  "debug": true
+}

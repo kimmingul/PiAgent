@@ -14,11 +14,16 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $assemblyStage = Join-Path $workspacePath ('artifacts/vsix-sign-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $assemblyStage | Out-Null
 $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Path).Path)
+$firstPartyEntries = @('PiAgent.Vsix.dll','PiAgent.Transport.dll')
+# Historical packages have no diagnostics companion; keep their signing workflow usable.
+if ($archive.GetEntry('diagnostics/PiAgent.Diagnostics.exe')) { $firstPartyEntries += 'diagnostics/PiAgent.Diagnostics.exe' }
 try {
-    foreach ($name in @('PiAgent.Vsix.dll','PiAgent.Transport.dll')) {
+    foreach ($name in $firstPartyEntries) {
         $entry = $archive.GetEntry($name)
         if (!$entry) { throw "Missing VSIX assembly: $name" }
-        [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,(Join-Path $assemblyStage $name),$false)
+        $stagedAssembly = Join-Path $assemblyStage $name
+        New-Item -ItemType Directory -Path (Split-Path $stagedAssembly -Parent) -Force | Out-Null
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$stagedAssembly,$false)
     }
 } finally { $archive.Dispose() }
 & "$PSScriptRoot/sign-artifacts.ps1" -Directory $assemblyStage -AssembliesOnly -Thumbprint $Thumbprint -TimestampUrl $TimestampUrl -Interactive:$Interactive
@@ -26,7 +31,7 @@ try {
 if ($LASTEXITCODE -ne 0) { throw 'VSIX signature preparation failed.' }
 $archive = [IO.Compression.ZipFile]::Open((Resolve-Path -LiteralPath $Path).Path,[IO.Compression.ZipArchiveMode]::Update)
 try {
-    foreach ($name in @('PiAgent.Vsix.dll','PiAgent.Transport.dll')) {
+    foreach ($name in $firstPartyEntries) {
         $archive.GetEntry($name).Delete()
         [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,(Join-Path $assemblyStage $name),$name,[IO.Compression.CompressionLevel]::Optimal) | Out-Null
     }

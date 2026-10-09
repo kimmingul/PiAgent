@@ -2,7 +2,7 @@
   <ItemGroup><Reference Include="System.Windows.Forms" /></ItemGroup>
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.10.0</Version>
+    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.11.0</Version>
     <AssemblyName>PiAgent.Vsix</AssemblyName><RootNamespace>PiAgent.Vsix</RootNamespace>
     <GeneratePkgDefFile>true</GeneratePkgDefFile><IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CreateVsixContainer>true</CreateVsixContainer><DeployExtension>false</DeployExtension>
@@ -16,9 +16,11 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VisualStudio.LanguageServices" Version="4.14.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VisualStudio.Language" Version="17.14.249" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
     <ProjectReference Include="../PiAgent.Transport/PiAgent.Transport.csproj"><IncludeOutputGroupsInVSIX>BuiltProjectOutputGroup</IncludeOutputGroupsInVSIX></ProjectReference>
+    <ProjectReference Include="../PiAgent.Diagnostics/PiAgent.Diagnostics.csproj" ReferenceOutputAssembly="false" />
     <VSCTCompile Include="Commands.vsct"><ResourceName>Menus.ctmenu</ResourceName></VSCTCompile>
     <None Update="source.extension.vsixmanifest"><SubType>Designer</SubType></None>
     <VSIXSourceItem Include="$(OutputPath)Newtonsoft.Json.dll"><TargetPath>Newtonsoft.Json.dll</TargetPath></VSIXSourceItem>
@@ -31,6 +33,12 @@
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" />
+  <Target Name="PiAgentDiagnosticsPayload" BeforeTargets="GetVsixSourceItems">
+    <ItemGroup>
+      <_PiAgentDiagnosticFile Include="$(MSBuildProjectDirectory)\..\PiAgent.Diagnostics\bin\$(Configuration)\net472\*.exe;$(MSBuildProjectDirectory)\..\PiAgent.Diagnostics\bin\$(Configuration)\net472\*.dll;$(MSBuildProjectDirectory)\..\PiAgent.Diagnostics\bin\$(Configuration)\net472\*.config" />
+      <VSIXSourceItem Include="@(_PiAgentDiagnosticFile)"><TargetPath>diagnostics\%(_PiAgentDiagnosticFile.Filename)%(_PiAgentDiagnosticFile.Extension)</TargetPath></VSIXSourceItem>
+    </ItemGroup>
+  </Target>
   <Target Name="PiAgentSignAssemblies" BeforeTargets="CreateVsixContainer" Condition="'$(PiAgentCodeSign)' == 'true'">
     <Exec Command="pwsh.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\..\scripts\sign-artifacts.ps1&quot; -Directory &quot;$(MSBuildProjectDirectory)\$(OutputPath).&quot; -AssembliesOnly" />
   </Target>

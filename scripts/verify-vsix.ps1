@@ -13,8 +13,10 @@ try {
         try { if (!$chain.Build($signer)) { throw 'VSIX signer certificate chain is not trusted.' } }
         finally { $chain.Dispose() }
     }
-    foreach ($name in @('PiAgent.Vsix.dll','PiAgent.Transport.dll')) {
-        $temporary = Join-Path ([IO.Path]::GetTempPath()) ('PiAgent-verify-'+[guid]::NewGuid().ToString('N')+'.dll')
+    $firstPartyEntries = @('PiAgent.Vsix.dll','PiAgent.Transport.dll')
+    if ($package.PartExists([Uri]::new('/diagnostics/PiAgent.Diagnostics.exe',[UriKind]::Relative))) { $firstPartyEntries += 'diagnostics/PiAgent.Diagnostics.exe' }
+    foreach ($name in $firstPartyEntries) {
+        $temporary = Join-Path ([IO.Path]::GetTempPath()) ('PiAgent-verify-'+[guid]::NewGuid().ToString('N')+[IO.Path]::GetExtension($name))
         try {
             $part = $package.GetPart([Uri]::new('/'+$name,[UriKind]::Relative))
             $input = $part.GetStream([IO.FileMode]::Open,[IO.FileAccess]::Read)

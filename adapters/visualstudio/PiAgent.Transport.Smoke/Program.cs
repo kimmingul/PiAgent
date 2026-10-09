@@ -29,7 +29,7 @@ if (mode == "slow-ack") {
     var reply=await client.RequestAsync("chat.prompt",new JObject {["sessionId"]=opened["sessionId"],["message"]="slow-ack"},cancellation.Token);
     await client.PingAsync("still-connected",cancellation.Token);
     await client.RequestAsync("chat.close",new JObject {["sessionId"]=opened["sessionId"]},cancellation.Token);
-    Console.WriteLine(new JObject {["accepted"]=reply["accepted"],["elapsedMs"]=watch.ElapsedMilliseconds,["connected"]=true}.ToString(Formatting.None));return;
+    Console.WriteLine(new JObject {["accepted"]=reply["accepted"],["elapsedMs"]=watch.ElapsedMilliseconds,["connected"]=true}.ToString(Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>()));return;
 }
 if (mode == "controls")
 {
@@ -47,7 +47,7 @@ if (mode == "controls")
     }
     var extensions = await client.RequestAsync("chat.extensions", new JObject { ["sessionId"] = opened["sessionId"], ["action"] = "listExtensions" }, cancellation.Token);
     await client.RequestAsync("chat.close", new JObject { ["sessionId"] = opened["sessionId"] }, cancellation.Token);
-    Console.WriteLine(new JObject { ["workspaceUri"] = workspace, ["modes"] = modes, ["plugins"] = extensions["plugins"], ["savedSessionPreserved"] = true }.ToString(Formatting.None)); return;
+    Console.WriteLine(new JObject { ["workspaceUri"] = workspace, ["modes"] = modes, ["plugins"] = extensions["plugins"], ["savedSessionPreserved"] = true }.ToString(Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>())); return;
 }
 if (mode == "ui-services")
 {
@@ -89,7 +89,7 @@ if (mode == "changes")
     await completed.Task.WaitAsync(cancellation.Token);
     var restore = await client.RequestAsync("changes.previewRestore", new JObject { ["sessionId"] = session, ["checkpointId"] = applied["checkpointId"] }, cancellation.Token);
     var result = await client.RequestAsync("changes.restore", new JObject { ["sessionId"] = session, ["checkpointId"] = restore["checkpointId"], ["revision"] = restore["revision"] }, cancellation.Token);
-    Console.WriteLine(new JObject { ["applied"] = applied["applied"], ["restored"] = result["restored"] }.ToString(Formatting.None)); return;
+    Console.WriteLine(new JObject { ["applied"] = applied["applied"], ["restored"] = result["restored"] }.ToString(Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>())); return;
 }
 if (mode == "chat" || mode == "context" || mode == "workspace")
 {
@@ -122,7 +122,7 @@ if (mode == "chat" || mode == "context" || mode == "workspace")
     await client.RequestAsync("chat.cancel", new JObject { ["sessionId"] = session, ["turnId"] = turn }, cancellation.Token);
     await cancelled.Task.WaitAsync(cancellation.Token);
     await client.RequestAsync("chat.close", new JObject { ["sessionId"] = session }, cancellation.Token);
-    Console.WriteLine(new JObject { ["text"] = answer, ["cancelled"] = true }.ToString(Formatting.None)); return;
+    Console.WriteLine(new JObject { ["text"] = answer, ["cancelled"] = true }.ToString(Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>())); return;
 }
 if (mode == "cancel") cancellation.CancelAfter(100);
 if (mode != "normal")
@@ -143,5 +143,5 @@ try
     throw new Exception("Ping must require handshake");
 }
 catch (InvalidOperationException) { }
-Console.WriteLine((await client.InitializeAsync("visual-studio", version, $"csharp-smoke-{Environment.ProcessId}", CancellationToken.None)).ToString(Formatting.None));
-Console.WriteLine((await client.PingAsync("PiAgent 안녕 🚀", CancellationToken.None)).ToString(Formatting.None));
+Console.WriteLine((await client.InitializeAsync("visual-studio", version, $"csharp-smoke-{Environment.ProcessId}", CancellationToken.None)).ToString(Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>()));
+Console.WriteLine((await client.PingAsync("PiAgent 안녕 🚀", CancellationToken.None)).ToString(Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>()));

@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectGuid>{7E1D5C75-9658-4E98-A45A-69C69A638310}</ProjectGuid>
+    <ProjectVersion>20.6</ProjectVersion>
+    <ProjectName>CppConsoleFixture</ProjectName>
+    <MainSource>CppConsoleFixture.cpp</MainSource>
+    <FrameworkType>None</FrameworkType>
+    <AppType>Console</AppType>
+    <Base>true</Base>
+    <Config Condition="'$(Config)'==''">Debug</Config>
+    <Platform Condition="'$(Platform)'==''">Win64x</Platform>
+    <BCC_UseClassicCompiler>false</BCC_UseClassicCompiler>
+    <FinalOutputDir>build\$(Platform)</FinalOutputDir>
+    <IntermediateOutputDir>build\$(Platform)\obj</IntermediateOutputDir>
+    <UsePackages>false</UsePackages>
+    <RuntimePackages>false</RuntimePackages>
+    <LinkWithDynamicRTL>false</LinkWithDynamicRTL>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_1)'!=''">
+    <Cfg_1>true</Cfg_1>
+    <CfgParent>Base</CfgParent>
+    <Base>true</Base>
+    <BCC_DebugInformation>true</BCC_DebugInformation>
+    <ILINK_FullDebugInfo>true</ILINK_FullDebugInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <CppCompile Include="CppConsoleFixture.cpp"><BuildOrder>0</BuildOrder></CppCompile>
+    <BuildConfiguration Include="Debug"><Key>Cfg_1</Key><CfgParent>Base</CfgParent></BuildConfiguration>
+    <BuildConfiguration Include="Base"><Key>Base</Key></BuildConfiguration>
+  </ItemGroup>
+  <ProjectExtensions>
+    <Borland.Personality>CPlusPlusBuilder.Personality.12</Borland.Personality>
+    <Borland.ProjectType>CppConsole</Borland.ProjectType>
+  </ProjectExtensions>
+  <Import Project="$(BDS)\bin\CodeGear.Cpp.Targets"/>
+</Project>

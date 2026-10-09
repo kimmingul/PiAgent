@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <PlatformTarget>ARM64</PlatformTarget>
+    <RuntimeIdentifier>win-arm64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <UseXamlCompilerExecutable>false</UseXamlCompilerExecutable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.9" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9" />
+  </ItemGroup>
+</Project>

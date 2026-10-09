@@ -1,0 +1,18 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37411.7
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "NativeCppConsole", "NativeCppConsole.vcxproj", "{A1E6D376-D9F0-4DD3-84F5-7086C92D5317}"
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|x64 = Debug|x64
+        Release|x64 = Release|x64
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {A1E6D376-D9F0-4DD3-84F5-7086C92D5317}.Debug|x64.ActiveCfg = Debug|x64
+        {A1E6D376-D9F0-4DD3-84F5-7086C92D5317}.Debug|x64.Build.0 = Debug|x64
+        {A1E6D376-D9F0-4DD3-84F5-7086C92D5317}.Release|x64.ActiveCfg = Release|x64
+        {A1E6D376-D9F0-4DD3-84F5-7086C92D5317}.Release|x64.Build.0 = Release|x64
+    EndGlobalSection
+EndGlobal

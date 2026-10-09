@@ -2,6 +2,7 @@ program ChatSmoke;
 {$APPTYPE CONSOLE}
 uses System.SysUtils, System.JSON, Winapi.Windows, PiAgent.ChatWorker in '../src/PiAgent.ChatWorker.pas',
   PiAgent.CoreRuntime in '../src/PiAgent.CoreRuntime.pas',
+  PiAgent.RequestRetirement in '../src/PiAgent.RequestRetirement.pas',
   PiAgent.PipeClient in '../src/PiAgent.PipeClient.pas';
 var Worker: TPiChatWorker; Id,Rebind: string; Frame,Data,Review,Decision: TJSONObject; Started: UInt64;
 function WaitType(const Expected: string): TJSONObject;

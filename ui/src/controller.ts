@@ -4,7 +4,7 @@ import {knownAction} from './contracts.js';
 export type Frame = Record<string, unknown>;
 export const object = (value: unknown): Frame => value && typeof value === 'object' && !Array.isArray(value) ? value as Frame : {};
 export const rows = (value: unknown): Frame[] => Array.isArray(value) ? value.map(object) : [];
-const localCommands=()=>[{name:'new',description:t("새 대화")},{name:'sessions',description:t("저장된 대화")},{name:'usage',description:t("사용량")},{name:'restore',description:t("파일 변경 기록")},{name:'selection',description:t("편집기 선택 영역")},{name:'btw',description:t("별도 질문")}];
+const localCommands=()=>[{name:'new',description:t("새 대화")},{name:'sessions',description:t("저장된 대화")},{name:'usage',description:t("사용량")},{name:'restore',description:t("파일 변경 기록")},{name:'selection',description:t("편집기 선택 영역")},{name:'ide',description:t("연결된 IDE 기능")},{name:'btw',description:t("별도 질문")}];
 export interface View {
   emit(frame: Frame): void;
   list(title: string, items: {label: string; disabled?: boolean; remove?:(()=>void)|undefined; run(): void}[]): void;
@@ -79,6 +79,19 @@ export class Controller {
   action(msg: Frame): void {
     if(!knownAction(msg['t'])){this.notice(t("현재 연결에서 지원하지 않는 기능입니다."));return;}
     switch (msg['t']) {
+      case 'ideCapabilities': {
+        const catalog=object(this.features['ideCatalog']);
+        const names:Record<string,string>={ide_context:t("프로젝트와 편집기"),ide_diagnostics:t("오류와 경고"),ide_symbols:t("심볼 탐색"),ide_build:t("빌드"),ide_tests:t("테스트"),ide_debug:t("디버깅"),ide_profile:t("성능 분석"),ide_refactor:t("코드 리팩터링"),ide_designer:t("폼 디자이너"),ide_editor:t("코드 제안"),ide_run:t("실행과 배포"),ide_deploy:t("실행과 배포")};
+        const states:Record<string,string>={supported:t("사용 가능"),partial:t("일부 지원"),unavailable:t("미지원"),blocked:t("현재 사용할 수 없음")};
+        const items=this.connected&&this.features['ideCatalogEnabled']?rows(catalog['entries']).slice(0,64):[];
+        const text=items.length?[t("현재 IDE가 보고한 기능입니다. 프로젝트와 실행 상태가 바뀌면 사용 가능 여부도 달라집니다."),t("확인 시각: {0}",String(catalog['capturedAt']??'')),...(catalog['implementationVersion']?[t("어댑터 버전: {0}",String(catalog['implementationVersion']))]:[]),...items.map(item=>{
+          const name=names[String(item['tool'])]??String(item['tool']??'');
+          const operation=typeof item['operation']==='string'?` / ${item['operation']}`:'';
+          const scope=[...(Array.isArray(item['languages'])?item['languages']:[]),...(Array.isArray(item['frameworks'])?item['frameworks']:[])].filter(x=>typeof x==='string').join(', ');
+          return `${name}${operation}: ${states[String(item['availability'])]??t("상태 미확인")}${scope?` (${scope})`:''}${item['backend']?`\n  ${t("실행 방식: {0}",String(item['backend']))}`:''}${item['reason']?`\n  ${hostText(String(item['reason']).slice(0,2048))}`:''}`;
+        })].join('\n\n'):t("연결된 IDE의 기능 정보를 아직 받지 못했습니다. 다시 연결하거나 다음 작업 후 확인하세요.");
+        if(this.view.sheet)this.view.sheet(t("연결된 IDE 기능"),text);else this.emit('sheet',{title:t("연결된 IDE 기능"),text});break;
+      }
       case 'gitSetup':
         if(this.idle()&&this.features['gitSetupEnabled']){this.controlPending=true;this.status();this.post({action:'gitSetup',...Object.fromEntries(['op','previewId','revision','name','email'].filter(k=>k in msg).map(k=>[k,msg[k]]))});}
         else this.notice(t("현재 작업을 마친 뒤 쓰기 가능한 native 연결에서 Git을 설정해 주세요."));break;
@@ -192,6 +205,7 @@ export class Controller {
       case '/usage': this.usageReport=true; this.refresh(); return true;
       case '/restore': if (this.idle() && this.features['checkpointsEnabled']) this.post({action: 'listCheckpoints'}); else this.notice(t("이 작업영역에서는 복원 가능한 파일 변경 기록이 없습니다."));return true;
       case '/selection': this.action({t: 'captureSelection'}); return true;
+      case '/ide': this.action({t:'ideCapabilities'});return true;
       default: if(this.idle()&&this.features['ompProfile']==='native'){this.action({t:'submit',id:`command-${Date.now()}`,text});return true;}this.notice(t("현재 모드에서는 이 OMP 명령을 실행할 수 없습니다."));return false;
     }
   }
@@ -359,6 +373,7 @@ export class Controller {
     this.sequence = data['sequence']; const kind = data['kind'];
     if(kind==='omp_event') {
       const frame=object(data['frame']);
+      if(frame['type']==='ide_catalog'){if(this.features['ideCatalogEnabled'])this.features={...this.features,ideCatalog:object(frame['catalog'])};return;}
       if(frame['type']==='login_status'){
         this.loginBusy=frame['state']==='pending';this.view.accountEvent?.(frame,()=>{});this.status(this.loginBusy?t("로그인 진행 중…"):t("연결됨"));
         if(frame['state']==='completed'){this.post({action:'ompControl',command:'get_login_providers'});this.post({action:'ompControl',command:'get_available_models'});this.post({action:'ompControl',command:'get_state'});}return;

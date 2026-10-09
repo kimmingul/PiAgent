@@ -65,9 +65,9 @@ public sealed class PipeAdapterClient : IDisposable
         var required = (JArray)offered.DeepClone();
         if(chat) { offered.Add("chat.btw.v1"); offered.Add("chat.preferences.v1");offered.Add("chat.timeline.v1"); offered.Add("omp.controls.v1"); offered.Add("workspace.bind.v1"); offered.Add("chat.approval.v1"); }
         if(chat && designers) offered.Add("ide.designer.v1");
-        if(chat && ideTools) offered.Add("ide.tools.v1");
-        if(chat && editorSuggestions) offered.Add("editor.suggestions.v1");
-        if (chat) { offered.Add("chat.sessions.v1"); offered.Add("chat.usage.v1"); offered.Add("workspace.read.v1"); } // Optional; the daemon owner must opt in with --workspace.
+        if(chat && ideTools) { offered.Add("ide.tools.v1"); offered.Add("ide.catalog.v1"); }
+        if(chat && editorSuggestions) { offered.Add("editor.suggestions.v1"); offered.Add("editor.context.v1"); }
+        if (chat) { offered.Add("chat.sessions.v1"); offered.Add("chat.usage.v1"); offered.Add("workspace.read.v1"); offered.Add("workspace.git.v1"); } // Optional; the daemon owner must opt in with --workspace.
         if (writes) { if (!chat) throw new ArgumentException("Writes require chat"); offered.Add("workspace.edit.v1"); offered.Add("workspace.edit.batch.v1"); }
         var result = await CallAsync("adapter.hello", new JObject {
             ["protocolVersions"] = new JArray(1), ["capabilities"] = offered,

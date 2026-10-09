@@ -1,7 +1,10 @@
 # RAD Studio adapter
 
-현재 0.9.17, 문서 갱신 2026-10-08. 실사용 검증은 RAD13.2 **64-bit**를 대상으로 한다.
+현재 소스 0.11.0 후보, 문서 갱신 2026-10-09. 실사용 검증은 RAD13.2 **64-bit**를 대상으로 한다.
 Win32는 빌드/패키징과 transport 검증을 구분하며 최신 32-bit IDE UI 실사용은 미검증이다.
+기능 목록, 빌드·디버거·DUnitX, 편집기 제안과 VCL/FMX 디자이너 변경·복원 범위는
+[한국어](../../docs/IDE-AGENT-INTEGRATION.md) / [English](../../docs/IDE-AGENT-INTEGRATION.en.md)를 따른다.
+Current source: 0.11.0 candidate. The bilingual integration guide distinguishes native IDE operations, external runner results and unsupported backends. Local C++Builder compilers are absent, so C++Builder acceptance is not claimed.
 
 Delphi design-time BPL은 **View → PiAgent** 또는 **Tools → PiAgent**에서 Vcl.Edge
 WebView2 채팅 창을 연다. VS와 같은 TypeScript UI로 채팅, 승인·복원, 저장 대화 재개 및 사용량을 표시한다.
@@ -25,8 +28,8 @@ IDE metadata의 ideVersion은 현재 Delphi compiler version이다.
 루트에서 `scripts/build-adapters.ps1`을 실행한다. `-BdsRoot`로 설치본을 지정할 수 있다.
 requires는 rtl, vcl, vcledge, designide이며 이 PC의 RAD Studio 13.2/Delphi 37.0 결과는 다음과 같다.
 
-- bin/Win32/0.9.17/PiAgent370.bpl + WebView2Loader.dll + ui/
-- bin/Win64/0.9.17/PiAgent370.bpl + WebView2Loader.dll + ui/
+- bin/Win32/0.11.0/PiAgent370.bpl + WebView2Loader.dll + ui/
+- bin/Win64/0.11.0/PiAgent370.bpl + WebView2Loader.dll + ui/
 - 각 디렉터리의 PipeSmoke.exe / ChatSmoke.exe 테스트 harness
 
 현재 사용자에게 설치된 WebView2 Runtime을 사용한다. loader는 package 폴더의 절대 경로로 로드한다.
@@ -44,6 +47,20 @@ IDE와 같은 bitness의 BPL만 Component → Install Packages에서 설치한�
 [INSTALLATION.md](../../docs/INSTALLATION.md)를 따른다. RADAgent source/package/설정은 수정하지 않는다.
 
 ## Validation
+
+Delphi personality/원본 프로젝트 식별 수정을 포함한 서명 0.11.0 `ide-dev-release011b`
+후보를 그대로 복사한 RAD13.2 Win64 격리 프로필에서 VCL/FMX 각각
+디자이너 6단계, 네이티브 IDE 26단계, 인증 Core 승인 경로 8개 시나리오를 통과했다.
+생성·이벤트 연결·삭제 후 보존한 프로젝트 여섯 개도 각각 빌드했다.
+두 fixture의 실제 외부 `Fixture.dpr` 별칭 빌드와 진단에서 원본 `Fixture.dproj` 및
+`Delphi.Personality` 일치를 확인했다. 외부 백엔드는 활성 원본 `.dpr`/`.dproj`와
+Delphi personality를 먼저 확인하고 구성/platform/원본 경로를 재검사한다.
+`.cbproj`, `.dpk`, 다른 personality의 같은 이름 `.dproj` sidecar는 지원하지 않는다.
+서명 유효 BPL SHA256: Win64 `598202985DF8705A441F4BD694C97B24F89C05A6B830A87D39256CAE359A2275`,
+Win32 `E099084DDA176B30814FEC9FB38947B4D57E36127AFAABEC62B908BD5E4A9147`.
+후보 `final-acceptance.receipt.json`에 결과를 보존했으며 UI 104개 파일 해시도 서명 출력과 일치한다.
+별도 VCL20 4시간 soak는 원래 0.10.0 바이너리 식별자를 유지하며 아직 완료로 기록하지 않는다.
+Win32/Win64 채팅·전송 검사는 별도로 통과했으며 아래 과거 화면 검증과 구분한다.
 
 Win32/Win64 BPL과 두 harness를 빌드했다. 실제 secure Named Pipe 통합 테스트에서 두 bitness의
 worker가 다중 파일 승인·적용·복원, 세션 교체·재개와 사용량을 검증했다.

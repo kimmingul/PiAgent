@@ -2,8 +2,8 @@
 
 [한국어 README](../README.md) · [English README](../README.en.md)
 
-현재 버전: **0.10.0**. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
-Current version: **0.10.0**. The main user guides below are available in Korean and English.
+소스 버전: **0.11.0 후보**, 서명/게시와 최종 설치·4시간 soak 대기 중. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
+Source version: **0.11.0 candidate**, signing/publication, final installation and four-hour soak pending. Main guides are available in Korean and English.
 
 | 문서 / Guide | 한국어 | English |
 |---|---|---|
@@ -12,8 +12,11 @@ Current version: **0.10.0**. The main user guides below are available in Korean 
 | Windows 설치 / Windows installation | [설치 안내](INSTALLATION.md) | [Installation](INSTALLATION.en.md) |
 | 통합 설치파일 / Unified installer | [통합 설치](UNIFIED-INSTALLER.ko.md) | [Unified installer](UNIFIED-INSTALLER.md) |
 | VS IDE 도구·코드 제안 / VS tools and suggestions | [사용 안내](VS-INTELLIGENCE.md) | [User guide](VS-INTELLIGENCE.en.md) |
+| IDE 전체 활용 개발 계획 / Comprehensive IDE integration plan | [단계·병렬 개발·검증 기준](IDE-AGENT-ROADMAP.md) | [Milestones, parallel development and acceptance](IDE-AGENT-ROADMAP.en.md) |
+| IDE 통합 개발 후보 사용 / IDE integration candidate usage | [가용성·승인·복구·범위](IDE-AGENT-INTEGRATION.md) | [Availability, approval, recovery and scope](IDE-AGENT-INTEGRATION.en.md) |
 | 언어 설정 / Language settings | [언어 지원](LOCALIZATION.md) | [Language support](LOCALIZATION.en.md) |
-| 최신 릴리즈 / Current release | [0.10.0](RELEASE-0.10.0.md) | [0.10.0](RELEASE-0.10.0.en.md) |
+| 미출시 후보 / Unreleased candidate | [0.11.0](RELEASE-0.11.0.md) | [0.11.0](RELEASE-0.11.0.en.md) |
+| 이전 릴리즈 / Previous release | [0.10.0](RELEASE-0.10.0.md) | [0.10.0](RELEASE-0.10.0.en.md) |
 | 이전 장시간 대화 수정 / Previous long-running chat fixes | [0.9.20](RELEASE-0.9.20.md) | [0.9.20](RELEASE-0.9.20.en.md) |
 | 이전 언어 지원 / Previous language support | [0.9.19](RELEASE-0.9.19.md) | [0.9.19](RELEASE-0.9.19.en.md) |
 | 이전 디자이너 수정 / Previous designer fixes | [0.9.18](RELEASE-0.9.18.md) | [0.9.18](RELEASE-0.9.18.en.md) |

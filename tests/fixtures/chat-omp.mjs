@@ -60,6 +60,16 @@ lines.on('line', line => {
   }
   if (command.type !== 'prompt') { response({}); return; }
   active = true; emit({ type: 'agent_start' });
+  if(command.message.includes('PIAGENT_GIT_TOOL:')){
+    const args=JSON.parse(command.message.slice(command.message.lastIndexOf('PIAGENT_GIT_TOOL:')+'PIAGENT_GIT_TOOL:'.length));
+    response({});emit({type:'host_tool_call',id:randomUUID(),toolName:'workspace_git',arguments:args});return;
+  }
+  if(command.message.includes('PIAGENT_HOST_READ:')){
+    const args=JSON.parse(command.message.slice(command.message.lastIndexOf('PIAGENT_HOST_READ:')+'PIAGENT_HOST_READ:'.length));
+    previousMessages.push(command.message);if(sessionFile)appendFileSync(sessionFile,JSON.stringify(command.message)+'\n');
+    response({});emit({type:'host_tool_call',id:randomUUID(),toolName:'workspace_read_file',arguments:args});return;
+  }
+  if(command.message.includes('PIAGENT_RECALL')){response({});emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:previousMessages.join('|')}});emit({type:'agent_end',isTerminal:true});return;}
   if(command.message.includes('PIAGENT_IDE_CONTEXT')){
     response({});
     if(!tools.some(tool=>tool.name==='ide_context')){emit({type:'agent_end',isTerminal:true});return;}
@@ -121,10 +131,10 @@ lines.on('line', line => {
   const prior=previousMessages.slice(); previousMessages.push(command.message);
   if(sessionFile) appendFileSync(sessionFile,JSON.stringify(command.message)+'\n');
   if(command.message==='recall') {emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:prior.join('|')}});emit({type:'agent_end',isTerminal:true});return;}
-  // RAD advertises designer support, so Core prefixes its workflow instructions.
-  // Keep this batch fixture exercising the requested edit through that real path.
+  // New RAD also advertises IDE tools; its IDE prelude wraps the designer prelude.
+  // Match the requested fixture command while retaining production instructions.
   if (command.message === 'propose-batch' ||
-      (command.message.startsWith('PiAgent GUI development workflow:') && command.message.endsWith('\n\npropose-batch'))) {
+      ((command.message.startsWith('PiAgent GUI development workflow:') || command.message.startsWith('PiAgent connected IDE workflow:')) && command.message.endsWith('\n\npropose-batch'))) {
     toolMode='propose-batch'; emit({type:'host_tool_call',id:'host-edit',toolCallId:'edit-1',toolName:'workspace_propose_changes',arguments:{files:[{path:'Example.cs',content:'updated first\r\n'},{path:'Second.cs',content:'updated second\n'}],reason:'Update two files'}});return;
   }
   if (command.message === 'propose-edit') {
@@ -134,7 +144,9 @@ lines.on('line', line => {
       arguments:{path:'Example.cs',content:'int Double(int value) { return value * 3; }\r\n',reason:'Test edit: multiply by three'}}); return;
   }
   if (command.message.startsWith('workspace-')) {
-    if (tools.length !== 2 || !tools.some(t => t.name === 'workspace_read_file') || !tools.some(t => t.name === 'workspace_search')) process.exit(8);
+    // Additive negotiation can also supply workspace_git. Require the exercised
+    // read tools by identity rather than rejecting every additional capability.
+    if (!tools.some(t => t.name === 'workspace_read_file') || !tools.some(t => t.name === 'workspace_search')) process.exit(8);
     toolMode = command.message;
     emit({ type: 'host_tool_call', id: 'host-read', toolCallId: 'read-1', toolName: 'workspace_read_file',
       arguments: { path: toolMode === 'workspace-deny' ? '../outside.txt' : 'Example.cs', startLine: 2, maxLines: 1 } });

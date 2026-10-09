@@ -1,8 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects></PropertyGroup>
   <ItemGroup>
+    <Compile Remove="fixtures/**/*.cs" />
     <Compile Include="../PiAgent.Vsix/IdeTools.cs" Link="IdeTools.cs" />
     <Compile Include="../PiAgent.Vsix/OwnedProcess.cs" Link="OwnedProcess.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeCatalog.cs" Link="IdeCatalog.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeContextTools.cs" Link="IdeContextTools.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeBuildTools.cs" Link="IdeBuildTools.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeRefactoringTools.cs" Link="IdeRefactoringTools.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeTestTools.cs" Link="IdeTestTools.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeDebugTools.cs" Link="IdeDebugTools.cs" />
+    <Compile Include="../PiAgent.Vsix/EditorContextWindow.cs" Link="EditorContextWindow.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeProfileTools.cs" Link="IdeProfileTools.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeRunTools.cs" Link="IdeRunTools.cs" />
+    <Compile Include="../PiAgent.Vsix/DesignerTools.cs" Link="DesignerTools.cs" />
+    <Compile Include="../PiAgent.Vsix/XamlStructureEdits.cs" Link="XamlStructureEdits.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeDesignerChanges.cs" Link="IdeDesignerChanges.cs" />
+    <Compile Include="../PiAgent.Vsix/DesignerRequestRetirement.cs" Link="DesignerRequestRetirement.cs" />
+    <Compile Include="../PiAgent.Vsix/IdeAcceptanceFixtureGuard.cs" Link="IdeAcceptanceFixtureGuard.cs" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.Windows.Forms" />
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" />
     <PackageReference Include="Microsoft.VisualStudio.LanguageServices" Version="4.14.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />

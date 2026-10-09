@@ -33,8 +33,9 @@ internal sealed class EditorSuggestions : IWpfTextViewCreationListener
     internal static readonly object StateKey=new object();
     public void TextViewCreated(IWpfTextView view)
     {
-        if(Documents.TryGetTextDocument(view.TextBuffer,out var document)&&new[]{".cs",".vb",".cpp",".c",".h",".hpp",".xaml"}.Contains(Path.GetExtension(document.FilePath),StringComparer.OrdinalIgnoreCase))
-            view.Properties.AddProperty(StateKey,new EditorState(view,document,Suggestions,Undo));
+        Documents.TryGetTextDocument(view.TextBuffer,out var document);
+        if(new[]{".cs",".vb",".cpp",".c",".h",".hpp",".xaml"}.Contains(Path.GetExtension(document?.FilePath??""),StringComparer.OrdinalIgnoreCase)||new[]{"CSharp","Basic","C/C++","XAML"}.Any(type=>view.TextBuffer.ContentType.IsOfType(type)))
+            view.Properties.AddProperty(StateKey,new EditorState(view,document,Documents,Suggestions,Undo));
     }
     internal static async Task CommandAsync(string command,CancellationToken token)
     {
@@ -52,7 +53,9 @@ internal sealed class EditorSuggestions : IWpfTextViewCreationListener
 internal sealed class EditorState : SuggestionProviderBase
 {
     private readonly IWpfTextView view;
-    private readonly ITextDocument document;
+    private ITextDocument? document;
+    private readonly ITextDocumentFactoryService documents;
+    private readonly string unsavedId=Guid.NewGuid().ToString("N");
     private readonly SuggestionServiceBase service;
     private readonly ITextUndoHistoryRegistry undo;
     private readonly Microsoft.VisualStudio.Threading.JoinableTaskCollection jobs;
@@ -63,9 +66,9 @@ internal sealed class EditorState : SuggestionProviderBase
     private readonly Queue<JObject> edits=new Queue<JObject>();
     private bool closed,composing,enabled=true,accepting;
     private int generation;
-    internal EditorState(IWpfTextView view,ITextDocument document,SuggestionServiceBase service,ITextUndoHistoryRegistry undo)
+    internal EditorState(IWpfTextView view,ITextDocument? document,ITextDocumentFactoryService documents,SuggestionServiceBase service,ITextUndoHistoryRegistry undo)
     {
-        this.view=view;this.document=document;this.service=service;this.undo=undo;
+        this.view=view;this.document=document;this.documents=documents;this.service=service;this.undo=undo;
         jobs=ThreadHelper.JoinableTaskContext.CreateCollection();factory=ThreadHelper.JoinableTaskContext.CreateFactory(jobs);
         view.TextBuffer.Changed+=Changed;view.Caret.PositionChanged+=Moved;view.Closed+=Closed;view.LostAggregateFocus+=LostFocus;
         TextCompositionManager.AddPreviewTextInputStartHandler(view.VisualElement,CompositionStarted);
@@ -117,10 +120,14 @@ internal sealed class EditorState : SuggestionProviderBase
             var dte=Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
             var solution=dte?.Solution.FullName;if(string.IsNullOrEmpty(solution)||!File.Exists(solution))throw new IOException("Open a saved solution / 저장된 솔루션을 열어주세요.");
             var root=Path.GetDirectoryName(solution)!;var workspace=new Uri(root+Path.DirectorySeparatorChar).AbsoluteUri;
-            var file=IdeTools.ResolveFile(workspace,document.FilePath);
+            documents.TryGetTextDocument(view.TextBuffer,out document);
+            var documentPath=document?.FilePath;
+            var filePath=documentPath;
+            if(string.IsNullOrWhiteSpace(filePath)||!Path.IsPathRooted(filePath)){var extension=view.TextBuffer.ContentType.IsOfType("Basic")?".vb":view.TextBuffer.ContentType.IsOfType("C/C++")?".cpp":view.TextBuffer.ContentType.IsOfType("XAML")?".xaml":".cs";filePath=Path.Combine(root,"PiAgentUnsaved_"+unsavedId+extension);}
+            var file=IdeTools.ResolveFile(workspace,filePath!,allowMissingFinal:true);
             var snapshot=view.TextSnapshot;var position=view.Caret.Position.BufferPosition;
-            if(position.Snapshot!=snapshot||snapshot.Length>65536)throw new IOException("Editor context exceeds 64 KiB / 편집 문맥이 64 KiB를 초과합니다.");
-            var text=snapshot.GetText();if(Encoding.UTF8.GetByteCount(text)>65536)throw new IOException("Editor context exceeds 64 KiB / 편집 문맥이 64 KiB를 초과합니다.");
+            if(position.Snapshot!=snapshot)throw new IOException("Editor snapshot changed");
+            var text=snapshot.GetText();var window=EditorContextWindow.Create(text,position.Position);
             var options=EditorOptions.Current;
             if(string.IsNullOrWhiteSpace(options.Provider)!=string.IsNullOrWhiteSpace(options.Model))throw new IOException("Set both provider and model, or leave both empty / 제공자와 모델을 함께 지정하거나 함께 비워주세요.");
             var parameters=new JObject{["requestId"]=Guid.NewGuid().ToString("N"),["workspaceUri"]=workspace,["file"]=file.Substring(root.Length+1).Replace('\\','/'),["text"]=text,["position"]=position.Position,["mode"]=mode,["recentEdits"]=new JArray(edits.Select(x=>x.DeepClone()))};
@@ -131,11 +138,17 @@ internal sealed class EditorState : SuggestionProviderBase
             JObject result;
             using(var client=new PipeAdapterClient(pipe)){
                 var hello=await client.InitializeAsync("visual-studio","editor",Guid.NewGuid().ToString("N"),cancellation.Token,chat:true,editorSuggestions:true);
-                if(!(hello["capabilities"] as JArray)!.Values<string>().Contains("editor.suggestions.v1"))throw new IOException("Update PiAgent Core for editor suggestions / 코드 제안을 사용하려면 Core를 업데이트하세요.");
+                var capabilities=(hello["capabilities"] as JArray)!.Values<string>();
+                if(!capabilities.Contains("editor.suggestions.v1"))throw new IOException("Update PiAgent Core for editor suggestions / 코드 제안을 사용하려면 Core를 업데이트하세요.");
+                if(capabilities.Contains("editor.context.v1")){
+                    parameters["text"]=window.Text;parameters["position"]=window.Position;parameters["context"]=new JObject{["start"]=window.Start,["totalLength"]=text.Length,["revision"]=Revision(text)};
+                    parameters["recentEdits"]=new JArray(edits.Where(e=>(int)e["start"]!>=window.Start&&(int)e["start"]!<=window.Start+window.Text.Length).Select(e=>{var shifted=(JObject)e.DeepClone();shifted["start"]=(int)e["start"]!-window.Start;return shifted;}));
+                }else if(Encoding.UTF8.GetByteCount(text)>65536)throw new IOException("Update Core for context windows in large files");
                 result=await client.RequestAsync("editor.suggest",parameters,cancellation.Token);
             }
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellation.Token);
-            if(closed||sequence!=generation||view.TextSnapshot!=snapshot||view.Caret.Position.BufferPosition!=position||composing)return;
+            documents.TryGetTextDocument(view.TextBuffer,out document);
+            if(closed||sequence!=generation||view.TextSnapshot!=snapshot||view.Caret.Position.BufferPosition!=position||composing||document?.FilePath!=documentPath)return;
             if((string?)result["requestId"]!=(string?)parameters["requestId"]||(string?)result["revision"]!=Revision(text))throw new IOException("Stale editor suggestion");
             if((bool?)result["empty"]==true){if(manual)EditorSuggestions.Status("PiAgent: No suggestion / 제안 없음");return;}
             var start=(int?)result["start"]??-1;var length=(int?)result["length"]??-1;var replacement=(string?)result["text"]??throw new IOException("Invalid suggestion text");

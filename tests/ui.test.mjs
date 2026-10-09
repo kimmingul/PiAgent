@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {Controller} from '../ui/dist/controller.js';
+test('IDE capability sheet is scoped to the connected session and only uses reported status',()=>{
+ const sent=[],shown=[];
+ const controller=new Controller(f=>sent.push(f),{emit:f=>shown.push(f),list:()=>{},capabilities:()=>{}});
+ const catalog={schemaVersion:1,capturedAt:'2026-10-09T00:00:00Z',entries:[{tool:'ide_build',availability:'blocked',reason:'Save unsaved files first'},{tool:'ide_symbols',availability:'partial',languages:['C#','VB']}]};
+ controller.receive({type:'session',sessionId:'a',ideCatalogEnabled:true,ideCatalog:catalog});
+ controller.action({t:'runCommand',text:'/ide'});
+ assert.match(shown.at(-1).text,/Save unsaved files first/);assert.match(shown.at(-1).text,/C#, VB/);
+ assert.equal(sent.some(f=>f.action==='prompt'),false);
+ controller.receive({type:'event',data:{sessionId:'other',sequence:1,kind:'omp_event',frame:{type:'ide_catalog',catalog:{entries:[{tool:'injected',availability:'supported'}]}}}});
+ controller.action({t:'ideCapabilities'});assert.doesNotMatch(shown.at(-1).text,/injected/);
+ controller.receive({type:'session',sessionId:'b'});controller.action({t:'ideCapabilities'});assert.doesNotMatch(shown.at(-1).text,/Save unsaved/);
+ controller.receive({type:'disconnected'});controller.action({t:'ideCapabilities'});assert.doesNotMatch(shown.at(-1).text,/C#, VB/);
+});
 function fixture() {
  const sent=[],shown=[];let menu=[];
  const c=new Controller(f=>sent.push(f),{emit:f=>shown.push(f),list:(_t,items)=>{menu=items;},capabilities:()=>{}});

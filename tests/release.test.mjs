@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, cp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -50,7 +50,16 @@ test('release runs outside the workspace without npm install and verifies file h
     let daemon;
     let closed;
     try {
-      await packageCore(output);
+      // Release signing can use an isolated host while the ordinary build DLL
+      // is mapped by a running IDE. Preserve the supplied bytes and hash them.
+      const pipeHostDirectory=join(scratch,'isolated-pipe-host');
+      await mkdir(pipeHostDirectory);
+      for(const suffix of ['dll','deps.json','runtimeconfig.json'])
+        await cp(new URL(`../transport/PiAgent.PipeHost/bin/Release/net8.0-windows/PiAgent.PipeHost.${suffix}`,import.meta.url),join(pipeHostDirectory,`PiAgent.PipeHost.${suffix}`));
+      const isolatedConfig=(await readFile(join(pipeHostDirectory,'PiAgent.PipeHost.runtimeconfig.json'),'utf8'))+'\n';
+      await writeFile(join(pipeHostDirectory,'PiAgent.PipeHost.runtimeconfig.json'),isolatedConfig);
+      await packageCore(output,{pipeHostDirectory});
+      assert.equal(await readFile(join(output,'transport/PiAgent.PipeHost/bin/Release/net8.0-windows/PiAgent.PipeHost.runtimeconfig.json'),'utf8'),isolatedConfig);
       await assert.rejects(packageCore(output), { code: 'EEXIST' });
       const manifest = JSON.parse(await readFile(join(output, 'release-manifest.json'), 'utf8'));
       const {guiHarness}=await import(pathToFileURL(join(output,'node_modules/@piagent/core/dist/gui-harness.js')).href);

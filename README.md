@@ -2,15 +2,19 @@
 
 **한국어** · [English](README.en.md) · [문서 / Documentation](docs/README.md)
 
-현재 버전 **0.10.0** · 서명 사전 릴리즈 **0.10.0** · 문서 갱신일 **2026-10-09 KST**.
+소스 버전 **0.11.0 후보** · 서명/게시 대기 · 문서 갱신일 **2026-10-09 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
-[0.10.0 사전 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.10.0).
-소스와 서명 설치 파일은 공개 저장소 `kimmingul/PiAgent`에서 제공한다.
+[릴리즈 게시 상태](https://github.com/kimmingul/PiAgent/releases).
+공개 저장소 `kimmingul/PiAgent`에서 소스와 이전 서명 릴리즈를 제공한다. 예정된 0.11.0 사전 릴리즈는 아직 게시되지 않았다.
 
-0.10.0은 VS 내부 문맥·진단·심볼 탐색, 빌드·선택 테스트, 디버거 도구, 인라인 코드 완성, 다음 수정 제안·.NET CPU 측정을 추가합니다. 자동 제안은 기본으로 꺼져 있으며, VS2022는 17.14 이상이 필요합니다.
-[사용 방법과 지원 범위](docs/VS-INTELLIGENCE.md) · [변경·검증](docs/RELEASE-0.10.0.md).
+0.11.0은 실제 IDE 기능 카탈로그, 검토한 의미/디자이너 변경과 복구, 제한된 편집기 문맥, 네이티브 빌드/디버거, 검증한 외부 테스트, 실행 성능 분석, 승인한 로컬 publish와 Git stage/commit을 추가한다. 지원은 연결된 adapter·언어/프레임워크·도구 설치 상태를 따른다. 자동 VS 제안은 기본으로 꺼져 있으며 VS2022는 17.14 이상이 필요하다.
+[후보 사용 방법과 지원 범위](docs/IDE-AGENT-INTEGRATION.md) · [미출시 변경·검증](docs/RELEASE-0.11.0.md).
+
+[VS2026·RAD13.2 전체 IDE 활용 개발 계획](docs/IDE-AGENT-ROADMAP.md): 단계별 기능, GPT-6.1 sol 병렬 개발 분담, 검증 기준을 정리했습니다. 계획된 신규 기능은 현재 출시 기능과 구분합니다.
+
+[개발 후보 사용 안내](docs/IDE-AGENT-INTEGRATION.md): `/ide` 기능 상태, 변경 미리보기·승인·복원, VS/RAD 도구별 지원 범위와 문맥 최적화 측정이다. 소스는 0.11.0이며 이전 실제 검증 receipt의 0.10.0 식별자는 유지한다. 서명·최종 설치·4시간 soak는 별도 대기 조건이다.
 
 ## 처음 설치하는 분께
 
@@ -32,8 +36,7 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-서명 설치파일은 `dist/PiAgent-Setup-0.10.0.exe`다. 새 릴리즈 빌드·게시는 실행 중인 IDE를 자동 교체하지 않는다.
-설치 전 IDE를 종료하고 새 설치파일을 실행한다.
+예정 사전 릴리즈 설치파일은 `dist/PiAgent-Setup-0.11.0.exe`이며 서명·게시를 기다린다. 예정 릴리즈 경로는 `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`다. 빌드·게시는 실행 중인 IDE를 자동 교체하지 않으며 게시된 검증 패키지를 설치하기 전에 IDE를 종료한다.
 Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
 [설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.ko.md).
@@ -46,22 +49,32 @@ VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다
 
 0.9.18 검증 당시 RAD receipt는 `0.9.18-20261007162727` release를 가리키며 VS2022/2026와 RAD32/64
 등록을 기록한다. 설치 기록은 실사용 검증 완료를 뜻하지 않는다. 현재 우선 실사용 검증 대상은
-**VS2026와 RAD13.2 64-bit**다. VS2022 최종 검증과 RAD32 UI 검증은 완료로 주장하지 않는다.
+**VS2026와 RAD13.2 64-bit**다. 제한된 VS2022 VB·WinUI3 소스·WinForms fixture도 통과했으나 전체 VS2022 또는 RAD32 UI 인증을 뜻하지 않는다.
 
 ## 언어 선택
 
 **설정 → 표시 → 언어**에서 `자동`, `한국어`, `English`를 선택한다. 기본값 `자동`은 한국어 시스템에서 한국어, 그 외에는 영어다. 직접 선택한 언어는 현재 프로젝트의 비공개 설정에 저장되며 다음 실행에도 적용한다. 설정·계정·모델 역할·실행 제어·Git·승인 안내가 함께 전환된다. 모델의 답변이나 코드, 외부 도구의 원문을 자동 번역하지 않는다.
 설치프로그램 오른쪽 위에서도 한국어/영어를 선택할 수 있다. 홈페이지는 선택을 저장하고 [한국어](https://kimmingul.github.io/PiAgent/?lang=ko) / [English](https://kimmingul.github.io/PiAgent/?lang=en)로 직접 연결할 수 있다.
-[0.10.0 변경 및 검증](docs/RELEASE-0.10.0.md).
+[0.11.0 후보 변경 및 검증](docs/RELEASE-0.11.0.md).
 
 ## 현재 기능과 검증
 
-0.9.18은 RAD 폼 디자이너의 OMP 승인과 실제 IDE 변경 차단을 구분한다. 승인 카드에 작업 범위를
+최신 전체 직렬 Core 검사는 **202 PASS, 실패 0, 선택 receipt skip 1**(총 203개)이다. 오프라인 runtime 문서 링크, 실제 adapter 계약, 중단 세션 복구와 체크포인트 예산 초과의 비치명적 처리도 집중 검증했다. VS 네이티브 검사 **75개**, VS2026 WPF **11/11**·WinForms **8/8**, 제한된 VS2022 VB **5/5**·WinUI3 소스 **7/7**·WinForms **8/8**을 통과했다. WinUI3 생성 단계도 컴파일됐으나 네이티브 visual designer나 실행 앱 검증을 뜻하지 않는다.
+
+RAD wave24 VCL/FMX는 각각 강한 구조 변경 6단계, 네이티브 SDK 26개, 인증 Core 시나리오 8개(승인 4개 포함 receipt 행 12개)를 통과했다. 네이티브 디버거, CPU 비교, Unicode 편집기 수락/Undo와 실제 DUnitX 실패/필터 성공도 통과했다. Win32/Win64 SDK smoke는 아키텍처별 10개 통과이며 RAD32 UI는 별도다.
+
+생성·삭제·이벤트 연결은 검토한 표준 WPF/WinUI3 소스 변경, 공개 in-process .NET Framework WinForms 디자이너 서비스 또는 저장된 표준 Delphi VCL/FMX 폼 조건을 따른다. 완전한 원본 복구 검토와 정확한 파일 hash를 별도로 승인한다. 최신 out-of-process WinForms, 임의 타사/상속 RAD 폼, Delphi 의미 refactor, RAD 네이티브 compiler 메시지 열거는 미지원이다. 일반 workspace 파일 생성/삭제는 미지원이며 의미 rename은 검증한 VS backend를 따른다.
+
+4시간 실제 soak와 최종 0.11.0 서명 패키지/설치/업데이트/복구는 대기 중이다. 정식 Copilot benchmark/Kai 비교는 완료하지 않았고 Kai는 로컬에 없다. 이전 VS2022 C++ fixture 3/3을 통과했으나 C++Builder compiler와 VS2026 C++ workload가 없어 해당 host의 C++ 검증은 없다. 서명 0.11.0 VS2026 WPF 11/11과 RAD VCL/FMX 각각 디자이너 6/네이티브 SDK 26/Core 8 시나리오를 통과했고 최종 서명 WebView 검사 79개(전환 포함)도 통과했다. [검증 이력](docs/VALIDATION.md)을 따른다.
+
+### 이전 릴리즈 근거
+
+0.9.18은 RAD 폼 디자이너의 OMP 승인과 실제 IDE 변경 차단을 구분했다. 승인 카드에 작업 범위를
 표시하고, 미저장 변경·읽기 전용 소스·변경 서비스 부재의 구체적인 복구 이유를 전달한다.
 [0.9.18 변경 및 검증](docs/RELEASE-0.9.18.md) · [RAD 원인과 사용 안내](docs/RAD-DESIGNER-DIAGNOSTICS.md).
 전체 회귀 **143/143**, C#/Delphi adapter 통합 **17/17**을 통과했다.
 RAD13.2 64-bit의 VCL·FMX에서 실제 모델의 기존 폼 속성 변경·저장·재조회와 빌드·실행 화면을 확인했다.
-컨트롤 생성·삭제와 이벤트 처리기 생성은 네이티브 도구의 지원 범위 밖이며 승인된 소스 편집이 필요하다.
+생성·삭제·이벤트 생성은 해당 이전 릴리즈의 네이티브 도구 범위 밖이었다. 현재 0.11.0 후보의 지원 범위는 위 설명을 따른다.
 
 0.9.17은 이전 실행의 저장 세션 잠금이 남아 마지막 대화를 열지 못하던 문제를 수정한다.
 실제 중복 접속은 막고, 소유 Core/OMP가 종료된 세션을 안전하게 복구한다. 세션 시작 실패와

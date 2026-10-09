@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
+import { spawn,execFile } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { isAbsolute } from 'node:path';
+import { isAbsolute,join } from 'node:path';
 import { TextDecoder } from 'node:util';
 import { isObject, MAX_FRAME_BYTES } from '@piagent/protocol';
 import { JsonlDecoder } from './jsonl.js';
@@ -53,6 +53,7 @@ export class OmpProcess extends EventEmitter {
   private readonly pending = new Map<string, Pending>();
   private closed: Promise<void> = Promise.resolve();
   private stopping: Promise<void> | undefined;
+  private forceStopping:Promise<void>|undefined;
   private readyResolve: ((frame: Record<string, unknown>) => void) | undefined;
   private readyReject: ((error: Error) => void) | undefined;
   private readyTimer: NodeJS.Timeout | undefined;
@@ -193,9 +194,34 @@ export class OmpProcess extends EventEmitter {
     const failed = this.currentState === 'failed';
     if (!failed) this.currentState = 'stopping';
     this.child?.stdin.end();
-    const timer = setTimeout(() => this.child?.kill(), this.options.shutdownTimeoutMs);
-    try { await this.closed; }
-    finally { clearTimeout(timer); if (!failed) this.currentState = 'stopped'; }
+    if(!await this.waitForClose(this.options.shutdownTimeoutMs))await this.forceStopChild();
+    if(this.forceStopping)await this.forceStopping;
+    if(!await this.waitForClose(2000)){
+      this.child?.stdout.destroy();this.child?.stderr.destroy();this.child?.stdin.destroy();
+      this.emit('diagnostic',new Error('OMP shutdown outcome is uncertain; inspect owned processes before resuming'));
+      throw new Error('OMP shutdown did not finish within the cleanup deadline');
+    }
+    if(!failed)this.currentState='stopped';
+  }
+  private async waitForClose(ms:number):Promise<boolean>{
+    let timer:NodeJS.Timeout|undefined;
+    try{return await Promise.race([this.closed.then(()=>true),new Promise<boolean>(resolve=>{timer=setTimeout(()=>resolve(false),ms);})]);}
+    finally{clearTimeout(timer);}
+  }
+  /** Only escalate an exact still-live child created by this manager; never target a retired PID. */
+  private forceStopChild():Promise<void>{
+    if(this.forceStopping)return this.forceStopping;
+    const child=this.child;
+    if(!child?.pid||child.exitCode!==null||child.signalCode!==null||child.killed)return Promise.resolve();
+    this.forceStopping=(async()=>{
+      if(process.platform==='win32')await new Promise<void>(resolve=>{
+        // No shell, process-name matching, remote targets or replay after the owning child exits.
+        execFile(join(process.env['SystemRoot']??'C:\\Windows','System32','taskkill.exe'),['/PID',String(child.pid),'/T','/F'],{windowsHide:true,timeout:5000,maxBuffer:8192},error=>{
+          if(error&&child.exitCode===null&&child.signalCode===null&&!child.killed)child.kill();resolve();
+        });
+      });
+      else if(child.exitCode===null&&child.signalCode===null&&!child.killed)child.kill();
+    })();return this.forceStopping;
   }
 
   private onLine(line: Buffer): void {
@@ -248,7 +274,7 @@ export class OmpProcess extends EventEmitter {
     this.readyReject = undefined;
     this.rejectAll(error);
     this.emit('diagnostic', error);
-    this.child?.kill();
+    void this.forceStopChild();
   }
 
   private rejectAll(error: Error): void {

@@ -25,6 +25,8 @@ internal static class DesignerTools
         var document = dte.ActiveDocument ?? throw new IOException("Open the target form or XAML document first");
         CheckWorkspace(document.FullName, workspaceUri);
         if (operation == "inspect") return Bounded(Inspect(document));
+        if (new[] { "previewChange", "applyChange", "previewRestoreChange", "restoreChange" }.Contains(operation))
+            return Bounded(IdeDesignerChanges.Execute(operation, args, workspaceUri!, dte, document));
         if (operation != "setProperty") throw new IOException("Unsupported designer operation");
         if (!document.Saved || !string.Equals(document.FullName, (string?)args["document"], StringComparison.OrdinalIgnoreCase)) throw new IOException("Designer document changed or has unsaved edits; inspect again");
         var snapshot = Inspect(document);
@@ -42,6 +44,7 @@ internal static class DesignerTools
     private static void CheckWorkspace(string path, string? workspaceUri)
     {
         if (workspaceUri == null) throw new IOException("Workspace unavailable");
+        IdeTools.ResolveFile(workspaceUri,path);
         var root = Path.GetFullPath(new Uri(workspaceUri).LocalPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new IOException("Active designer is outside the Core workspace; connect Core to this project first");
         for (var current = Path.GetFullPath(path); !string.IsNullOrEmpty(current); current = Path.GetDirectoryName(current))
@@ -53,9 +56,9 @@ internal static class DesignerTools
             if (type.FullName == "System.Windows.Forms.Control") return true;
         return false;
     }
-    private static JObject Bounded(JObject result)
+    internal static JObject Bounded(JObject result)
     {
-        if (Encoding.UTF8.GetByteCount(result.ToString(Newtonsoft.Json.Formatting.None)) > 220 * 1024) throw new IOException("Designer snapshot exceeds limit; narrow the document first");
+        if (Encoding.UTF8.GetByteCount(result.ToString(Newtonsoft.Json.Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>())) > 220 * 1024) throw new IOException("Designer snapshot exceeds limit; narrow the document first");
         return result;
     }
     private static string Hash(string text)
@@ -65,11 +68,11 @@ internal static class DesignerTools
     private static XDocument Xml(string text)
     {
         using var reader = XmlReader.Create(new StringReader(text), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 1024 * 1024 });
-        return XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+        return XDocument.Load(reader, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
     }
-    private static TextDocument Text(Document document) { ThreadHelper.ThrowIfNotOnUIThread(); return document.Object("TextDocument") as TextDocument ?? throw new IOException("Text buffer unavailable"); }
-    private static string Read(Document document) { ThreadHelper.ThrowIfNotOnUIThread(); var buffer = Text(document); return buffer.StartPoint.CreateEditPoint().GetText(buffer.EndPoint); }
-    private static IDesignerHost? Host(Document document)
+    internal static TextDocument Text(Document document) { ThreadHelper.ThrowIfNotOnUIThread(); return document.Object("TextDocument") as TextDocument ?? throw new IOException("Text buffer unavailable"); }
+    internal static string Read(Document document) { ThreadHelper.ThrowIfNotOnUIThread(); var buffer = Text(document); return buffer.StartPoint.CreateEditPoint().GetText(buffer.EndPoint); }
+    internal static IDesignerHost? Host(Document document)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
         try { return document.ActiveWindow.Object as IDesignerHost; } catch { return null; }
@@ -90,7 +93,7 @@ internal static class DesignerTools
         var path = document.ProjectItem?.ContainingProject?.FullName;
         return !string.IsNullOrEmpty(path) && File.Exists(path) && Xml(File.ReadAllText(path)).Descendants().Any(x => x.Name.LocalName == "UseWindowsForms" && x.Value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase));
     }
-    private static JObject Inspect(Document document)
+    internal static JObject Inspect(Document document)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
         var components = new JArray(); var result = new JObject { ["schemaVersion"] = 2, ["supportedOperations"] = new JArray(), ["document"] = document.FullName, ["components"] = components, ["canSetProperty"] = false };
@@ -109,11 +112,17 @@ internal static class DesignerTools
                     ["namespace"] = element.Name.NamespaceName, ["nodeKind"] = element.Name.LocalName.Contains(".") ? "property-element" : "object-element",
                     ["parentId"] = element.Parent == null ? "" : Array.IndexOf(elements, element.Parent).ToString(CultureInfo.InvariantCulture),
                     ["references"] = new JArray(element.Attributes().Where(a => a.Name.LocalName == "Command" || a.Value.StartsWith("{", StringComparison.Ordinal)).Select(a => new JObject { ["name"] = a.Name.ToString(), ["expression"] = a.Value, ["writable"] = false })),
-                    ["allowedParentIds"] = new JArray(), ["properties"] = properties });
+                    ["allowedParentIds"] = new JArray(), ["events"] = new JArray(XamlStructureEdits.Events(element.Name.LocalName)), ["properties"] = properties });
             }
             result["framework"] = framework; result["revision"] = Hash(text); result["canSetProperty"] = document.Saved && framework != "unknown-xaml";
             result["hierarchyKind"] = "xaml-syntax-tree";
-            if ((bool)result["canSetProperty"]!) result["supportedOperations"] = new JArray("setProperty");
+            if ((bool)result["canSetProperty"]!) {
+                result["supportedOperations"] = new JArray("setProperty", "createComponent", "deleteComponent", "previewChange", "applyChange", "previewRestoreChange", "restoreChange");
+                if (File.Exists(document.FullName + ".cs")) ((JArray)result["supportedOperations"]!).Add("bindEvent");
+                result["creatableTypes"] = new JArray(XamlStructureEdits.Types.Where(t => framework != "winui3-xaml" || !new[] { "DockPanel", "WrapPanel" }.Contains(t)));
+                result["recovery"] = new JObject { ["supported"] = true, ["scope"] = "source_and_form", ["backend"] = "XAML and C# source journal" };
+            }
+            result["backend"] = "XAML source buffer";
             result["mode"] = framework == "winui3-xaml" ? "XAML buffer + Hot Reload/Live Visual Tree; no visual designer API" : "XAML buffer + designer reload"; return result;
         }
         var host = Host(document);
@@ -139,21 +148,42 @@ internal static class DesignerTools
                     try { references.Add(new JObject { ["name"] = property.Name, ["target"] = (property.GetValue(component) as IComponent)?.Site?.Name ?? "", ["writable"] = false }); } catch { }
             components.Add(new JObject { ["id"] = component.Site?.Name, ["type"] = component.GetType().FullName, ["parentId"] = parent?.Site?.Name ?? "", ["references"] = references, ["allowedParentIds"] = new JArray(), ["properties"] = properties });
         }
-        result["framework"] = "winforms-framework"; result["hierarchyKind"] = "designer-component-parentage"; result["revision"] = Hash(components.ToString(Newtonsoft.Json.Formatting.None)); result["canSetProperty"] = document.Saved && !host.Loading;
-        if ((bool)result["canSetProperty"]!) result["supportedOperations"] = new JArray("setProperty"); return result;
+        result["framework"] = "winforms-framework"; result["hierarchyKind"] = "designer-component-parentage"; result["revision"] = Hash(components.ToString(Newtonsoft.Json.Formatting.None, System.Array.Empty<Newtonsoft.Json.JsonConverter>())); result["canSetProperty"] = document.Saved && !host.Loading;
+        var stem=Path.ChangeExtension(document.FullName,null);
+        var journalAvailable=Path.GetExtension(document.FullName).Equals(".cs",StringComparison.OrdinalIgnoreCase) && !stem.EndsWith(".Designer",StringComparison.OrdinalIgnoreCase) && IdeDesignerChanges.CanReviewNativeRecovery(document.FullName);
+        if(!journalAvailable)result["structuralUnavailableReason"]="Saved source/form/resource originals must fit the bounded complete restoration review";
+        if ((bool)result["canSetProperty"]!) result["supportedOperations"] = new JArray("setProperty");
+        if ((bool)result["canSetProperty"]! && journalAvailable) {
+            result["supportedOperations"] = new JArray("setProperty", "createComponent", "deleteComponent", "previewChange", "applyChange", "previewRestoreChange", "restoreChange");
+            if (host.GetService(typeof(IEventBindingService)) != null) ((JArray)result["supportedOperations"]!).Add("bindEvent");
+            result["creatableTypes"] = new JArray(IdeDesignerChanges.NativeTypes);
+            result["recovery"] = new JObject { ["supported"] = true, ["scope"] = "source_and_form", ["backend"] = "saved source/form/resx journal" };
+        }
+        result["backend"] = "public IDesignerHost"; return result;
     }
     private static void SetXaml(DTE dte, Document document, string component, string property, string value)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
-        var xml = Xml(Read(document));
-        if (!int.TryParse(component, out var index) || index < 0) throw new IOException("Invalid XAML component");
-        var target = xml.Root!.DescendantsAndSelf().ElementAtOrDefault(index) ?? throw new IOException("XAML component disappeared");
-        target.SetAttributeValue(property, value);
+        var replacement=ReplaceXamlAttribute(Read(document),component,property,value);
         if (dte.UndoContext.IsOpen) throw new IOException("Another IDE edit transaction is active");
         dte.UndoContext.Open("PiAgent designer property");
-        try { var text = Text(document); text.StartPoint.CreateEditPoint().ReplaceText(text.EndPoint, xml.ToString(SaveOptions.DisableFormatting), (int)vsEPReplaceTextOptions.vsEPReplaceTextKeepMarkers); document.Save(); }
+        try { var text = Text(document); text.StartPoint.CreateEditPoint().ReplaceText(text.EndPoint, replacement, (int)vsEPReplaceTextOptions.vsEPReplaceTextKeepMarkers); document.Save(); }
         catch { dte.UndoContext.SetAborted(); throw; }
         finally { dte.UndoContext.Close(); }
+    }
+    internal static string ReplaceXamlAttribute(string source,string component,string property,string value)
+    {
+        XmlConvert.VerifyXmlChars(value);var xml=Xml(source);
+        if(!int.TryParse(component,out var index)||index<0)throw new IOException("Invalid XAML component");
+        var target=xml.Root!.DescendantsAndSelf().ElementAtOrDefault(index)??throw new IOException("XAML component disappeared");
+        var attribute=target.Attribute(property)??throw new IOException("Only an existing scalar XAML attribute can be changed");
+        if(attribute.Value.StartsWith("{",StringComparison.Ordinal))throw new IOException("Binding/resource expressions cannot be overwritten by scalar edits");
+        var info=(IXmlLineInfo)attribute;if(!info.HasLineInfo())throw new IOException("Attribute source position is unavailable");
+        var position=0;for(var line=1;line<info.LineNumber;line++){position=source.IndexOf('\n',position);if(position<0)throw new IOException("Attribute source line disappeared");position++;}position+=info.LinePosition-1;
+        var match=System.Text.RegularExpressions.Regex.Match(source.Substring(position),"^"+System.Text.RegularExpressions.Regex.Escape(property)+"\\s*=\\s*(['\"])(.*?)\\1",System.Text.RegularExpressions.RegexOptions.Singleline);
+        if(!match.Success)throw new IOException("Attribute source span could not be verified");
+        var group=match.Groups[2];var escaped=value.Replace("&","&amp;").Replace("<","&lt;").Replace("\r","&#xD;").Replace("\n","&#xA;").Replace("\t","&#x9;");escaped=match.Groups[1].Value=="\""?escaped.Replace("\"","&quot;"):escaped.Replace("'","&apos;");
+        return source.Remove(position+group.Index,group.Length).Insert(position+group.Index,escaped);
     }
     private static void SetNative(Document document, string componentId, string propertyName, string value)
     {
@@ -162,7 +192,7 @@ internal static class DesignerTools
         var component = host.Container.Components[componentId] ?? throw new IOException("Component disappeared");
         var property = TypeDescriptor.GetProperties(component)[propertyName] ?? throw new IOException("Property disappeared");
         using var transaction = host.CreateTransaction("PiAgent designer property");
-        try { property.SetValue(component, property.Converter.ConvertFromInvariantString(value)); document.Save(); transaction.Commit(); }
+        try { var changes=host.GetService(typeof(IComponentChangeService)) as IComponentChangeService;var before=property.GetValue(component);changes?.OnComponentChanging(component,property);property.SetValue(component, property.Converter.ConvertFromInvariantString(value));changes?.OnComponentChanged(component,property,before,property.GetValue(component));document.Save(); transaction.Commit(); }
         catch { transaction.Cancel(); throw; }
     }
 }

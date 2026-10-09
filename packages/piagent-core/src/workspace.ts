@@ -13,6 +13,13 @@ export const workspaceTools = [
 
 const denied = (name: string): boolean => /^(\.git|\.svn|\.hg|\.ssh|\.aws|\.azure|node_modules|\.tools|artifacts|bin|obj)$/i.test(name)
   || /^(\.env($|\.)|credentials($|\.)|secrets($|\.))/i.test(name) || /\.(pem|key|pfx|p12|kdbx)$/i.test(name);
+/** Shared path exclusions for restricted workspace tools, including Git content reviews. */
+export function workspacePathParts(value:unknown):string[]{
+  if(typeof value!=='string'||!value||Buffer.byteLength(value)>4096||/[:\0]/.test(value)||isAbsolute(value))throw new Error('Expected a relative workspace path');
+  const parts=value.split(/[\\/]/);
+  if(parts.some(part=>!part||part==='.'||part==='..'||denied(part)||/[. ]$/.test(part)||/^(con|prn|aux|nul|com[1-9]|lpt[1-9])($|\.)/i.test(part)))throw new Error('Path is excluded');
+  return parts;
+}
 const integer = (value: unknown, fallback: number, max: number): number => {
   if (value === undefined) return fallback;
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > max) throw new Error('Invalid numeric limit');
@@ -29,10 +36,7 @@ export class WorkspaceReader {
   }
   private async path(value: unknown, allowRoot = false): Promise<string> {
     if (allowRoot && (value === undefined || value === '')) return this.root;
-    if (typeof value !== 'string' || !value || Buffer.byteLength(value) > 4096 || /[:\0]/.test(value) || isAbsolute(value)) throw new Error('Expected a relative workspace path');
-    const parts = value.split(/[\\/]/);
-    if (parts.some(part => !part || part === '.' || part === '..' || denied(part) || /[. ]$/.test(part)
-      || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])($|\.)/i.test(part))) throw new Error('Path is excluded');
+    const parts=workspacePathParts(value);
     let current = this.root;
     for (const part of parts) { current = join(current, part); if ((await lstat(current)).isSymbolicLink()) throw new Error('Links are excluded'); }
     const canonical = await realpath(current);
@@ -86,6 +90,16 @@ export class WorkspaceReader {
   async snapshot(value: unknown, signal: AbortSignal): Promise<{ absolute: string; bytes: Buffer }> {
     const absolute = await this.path(value);
     return { absolute, bytes: await this.bytes(absolute, signal) };
+  }
+  /** Validate an IDE buffer identity without reading disk or creating an unsaved document. */
+  async validateEditorPath(value:unknown):Promise<string>{
+    const parts=workspacePathParts(value),parent=await this.path(parts.slice(0,-1).join('/'),true);
+    if(!(await lstat(parent)).isDirectory())throw new Error('Editor parent is not a directory');
+    const absolute=join(parent,parts.at(-1)!);
+    const stat=await lstat(absolute).catch(error=>{if(isObject(error)&&error['code']==='ENOENT')return undefined;throw error;});
+    if(stat&&(!stat.isFile()||stat.isSymbolicLink()||stat.nlink>1))throw new Error('Editor file links and non-files are excluded');
+    if(stat)await this.path(value);
+    return relative(this.root,absolute).replaceAll('\\','/');
   }
   async execute(name: string, args: unknown, signal: AbortSignal): Promise<Record<string, unknown>> {
     if (!isObject(args)) throw new Error('Invalid tool arguments');
