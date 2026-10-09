@@ -15,7 +15,8 @@ try {
     # Existing IDEs can hold the normal build output open. Sign an isolated copy
     # before packaging so release-manifest.json hashes the final signed bytes.
     $pipeHostOutput = Join-Path $stage 'pipe-host'
-    & dotnet build transport/PiAgent.PipeHost -c Release -o $pipeHostOutput
+    $pipeHostArtifacts = Join-Path $stage 'transport-build'
+    & dotnet build transport/PiAgent.PipeHost -c Release --artifacts-path $pipeHostArtifacts -o $pipeHostOutput
     if ($LASTEXITCODE -ne 0) { throw 'Isolated pipe host build failed.' }
     if (!$NoSign) { & "$PSScriptRoot/sign-artifacts.ps1" -Directory $pipeHostOutput -AssembliesOnly }
     $packageScript = Join-Path $workspacePath 'scripts/package-core.mjs'

@@ -205,22 +205,29 @@ IME/다른 공급자 공존, 취소 결과를 기록한다.
 이 검사들은 결정적 OMP fixture를 사용한다.
 Git 회귀 3개를 추가해 승인 전 보호 파일 내용, 보호 경로의 스테이징 커밋,
 이름 변경/삭제 양쪽 경로와 literal pathspec 처리를 검사했다. 집중 Git/워크스페이스
-검사는 15/15를 통과했다. 확장된 전체 검사는 총 206개, 205 PASS, 0 FAIL,
-선택 네이티브 RAD receipt 검사 1개 skip으로 완료됐다(147,544.6771 ms).
-최종 어댑터 통합은 18/18, skip 0개를 통과했다. 서명 어댑터 검증은 최종 DLL의
+검사는 15/15를 통과했다. 확장된 전체 검사는 총 209개, 208 PASS, 0 FAIL,
+선택 네이티브 RAD receipt 검사 1개 skip으로 완료됐다(148,986.8872 ms,
+`full-test-0.11.0-guidance.log`). 최종 양 아키텍처 어댑터 통합은 18/18,
+skip 0개를 통과했다(`adapter-test-0.11.0-final-guidance-both.log`). 서명 어댑터 검증은 최종 DLL의
 VS2022 WinForms 8/8·C++ 3/3, VS2026 WPF 11/11·생성 단계 빌드 3개와 실제
-실행 컨트롤을 포함한다. 보호 Git 수정을 반영해 다시 만든 서명 설치파일은 전체
+실행 컨트롤을 포함한다. 보호 Git·RAD 대상 식별 수정·승인 안내를 반영한 서명 설치파일은 전체
 payload 해시, ARM64/x64 번들 runtime·정책 검사를 통과했다
-(`setup-20261009-125725`, `test-installer-0.11.0-protected-git.log`). 영어→한국어
-전환 중 IDE 선택도 보존됐다. 이후 RAD Delphi personality/원본 프로젝트 식별 수정을
+(`setup-20261009-134700`, `test-installer-0.11.0-final-guidance.log`). 영어→한국어
+전환 중 IDE 선택도 보존됐다. RAD Delphi personality/원본 프로젝트 식별 수정을
 포함한 새 서명 `ide-dev-release011b`에서 VCL/FMX 각각 디자이너 6·네이티브 SDK 26·
 인증 Core 8 시나리오(receipt 12행)와 생성 단계 여섯 개 빌드를 통과했다.
 두 실제 외부 `Fixture.dpr` 별칭 빌드와 진단은 원본 `Fixture.dproj`/Delphi 식별자를
 유지했다. BPL SHA256은 Win64
 `598202985DF8705A441F4BD694C97B24F89C05A6B830A87D39256CAE359A2275`,
 Win32 `E099084DDA176B30814FEC9FB38947B4D57E36127AFAABEC62B908BD5E4A9147`이며
-두 서명이 유효하고 복사한 UI 104개 파일 해시도 서명 출력과 일치한다.
-교체 설치파일 검증은 남아 있으며 이전 receipt 식별자는 유지한다.
+두 BPL 서명은 유효하며 바이너리는 그대로다. 네이티브 검증 후 공유 UI JavaScript
+두 파일만 갱신했다. 공유 WebView 별도 검증은 전환 12회와 승인 label/원래 응답 값
+보존 회귀 3개를 포함해 82개를 통과했다. UI만 다시 넣은 VSIX SHA256은
+`CADA2441F1DEE303B25DDEE37E9C05A8CB2F949317EDB754911E18B0E2797A7A`이며
+네이티브 DLL(SHA256 시작 6A3141)은 그대로다. PipeHost 출력과 중간 경로를 격리한
+`--artifacts-path` 빌드는 로드된 원본 DLL을 유지하며 통과했다(`isolated-host-build.log`).
+구현 commit `24c51e7`은 로컬이며 push하지 않았다. 실제 설치/업데이트/복구와
+4시간 soak는 남아 있고 이전 receipt 식별자는 유지한다.
 릴리즈나 soak 완료를 주장하지 않는다.
 결정적 실제 파이프 수명 검사도 서로 다른 프로젝트 전환/저장 대화 재개 10회,
 네 가지 접근 모드의 전환 10회, 취소/정상 완료 주기 30회, 격리 편집기 요청 100회를

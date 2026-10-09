@@ -6,8 +6,9 @@ Status as of 2026-10-09: **development candidate; not a published 0.11.0 distrib
 Source now reports 0.11.0 candidate. Earlier live acceptance and running-soak
 receipts retain their actual 0.10.0 binary identities; final 0.11.0 acceptance is
 separate. This document records the proposed release's implementation and evidence.
-The M0–M6 plan is not complete. The four-hour soak, final regression/package gates
-and formal comparative evaluation remain separate requirements.
+The M0–M6 plan is not complete. Current regression/package gates passed; actual
+installation/update/recovery, four-hour soaks and formal comparative evaluation
+remain separate requirements. Implementation commit `24c51e7` is local, not pushed.
 
 The candidate expands the existing Core/OMP/Named Pipe architecture with actual
 IDE context, reviewed changes, runtime evidence and recovery. SDK calls remain in
@@ -83,14 +84,14 @@ secret redaction is not claimed. Protected changes require manual resolution.
 
 ## Recorded validation
 
-- Latest full TypeScript/serial Node run after three protected-path Git regressions: **205 PASS, 0 FAIL, 1 optional native-RAD receipt skip** (206 total; 147,544.6771 ms). The focused Git/workspace run passed **15/15, zero skips**. Final adapter integration passed **18/18, zero skips** after fixture-only compatibility fixes.
+- Latest full TypeScript/serial Node run: **208 PASS, 0 FAIL, 1 optional native-RAD receipt skip** (209 total; 148,986.8872 ms; `full-test-0.11.0-guidance.log`). Focused Git/workspace checks passed **15/15, zero skips**, including three protected-path regressions. Final both-architecture adapter integration passed **18/18, zero skips** (`adapter-test-0.11.0-final-guidance-both.log`).
 - Actual payload/Core replay: **2 PASS, 0 skips** with the production C# result emitter and both captured native RAD VCL/FMX change/restore receipts. Replay verifies concrete consent, exact proposal/checkpoint forwarding and single-use routing; SDK mutations are simulated in this test.
 - Actual VS2026 isolated profiles: **WPF 11/11 PASS** and **.NET Framework WinForms 8/8 PASS**, covering context/build, two-file rename/native Undo, stale refusal, debugger and three designer operations with exact restoration. WPF also passed actual VSTest, isolated local publish and attached CPU/GC/comparison.
 - Actual RAD13.2 Win64: VCL and FMX each passed **six strong creation/binding/deletion/reverse-restoration steps**. All six generated project stages built; saved source/resource assertions replaced earlier insufficient returned-success checks. A VCL runtime window was observed. This does not certify general-project compatibility or RAD32 UI operation.
 - Final RAD wave24 VCL and FMX each passed **eight actual authenticated Core→ChatWorker→SDK scenarios** (12 receipt rows including four approval events), including declined build with zero native execution, approved native build, concrete structural consent, exact source/form restoration and consumed-token replay refusal. Native debugger, Windows CPU/comparison and Korean/emoji editor completion/next-edit/Undo/stale scenarios passed. Actual DUnitX returned two tests/one failure with exit 1, and a filtered single passing test with exit 0.
 - Real-pipe deterministic lifecycle run: ten distinct project switches/resumes, ten mode switches, thirty cancellation/normal-completion cycles and one hundred editor requests passed. All **131 process instances** exited; instance IDs handle Windows PID reuse. This roughly 27-second fixture run is not the four-hour live soak.
-- Current VSIX contains the diagnostics EXE/config and its complete runtime dependency set, with package/license inventory. Signing/verification scripts parse cleanly and include exact packaged first-party EXE verification. Signed 0.11.0 VSIX/companion signatures are valid, and its final WebView check passed 79 (including transitions). Signed 0.11.0 VS2026 WPF passed 11/11. Signed RAD VCL/FMX each passed designer 6/native SDK 26/Core 8 scenarios and all six generated stages built. This is not final unified-installer publication or four-hour soak completion.
-- Final signed VS2022 acceptance passed **WinForms 8/8 and C++ 3/3** with the final DLL (SHA256 begins 6A3141); signed VS2026 WPF also passed three generated stage builds and actual runtime controls. The signed installer rebuilt with protected Git passed complete payload hashes, ARM64/x64 bundled-runtime and policy checks (`setup-20261009-125725`, `test-installer-0.11.0-protected-git.log`); English-to-Korean switching preserved IDE selection. The subsequent RAD Delphi personality/original-project identity fix passed fresh signed release011b acceptance (details below); replacement-package verification remains pending. Prior RAD/installer evidence retains its original identity.
+- Current VSIX contains the diagnostics EXE/config, complete runtime dependencies and package/license inventory; packaged first-party EXE signatures were verified. Shared WebView validation passed **82**, including twelve transitions and three approval-label/raw-value checks. The guidance UI-only repack SHA256 is `CADA2441F1DEE303B25DDEE37E9C05A8CB2F949317EDB754911E18B0E2797A7A`; native DLL bytes remain unchanged. RAD release011b BPLs are also unchanged; two shared UI JavaScript files were updated after native acceptance and covered separately by the shared UI checks.
+- Final signed VS2022 passed **WinForms 8/8 and C++ 3/3** with the final DLL (SHA256 begins 6A3141); signed VS2026 WPF passed **11/11**, three generated stage builds and actual runtime controls. Post-identity-fix signed RAD release011b VCL/FMX each passed designer **6**, native SDK **26**, Core **8 scenarios/12 rows** and all six generated stages. The final guidance installer passed complete payload hashes, ARM64/x64 runtime and policy checks (`setup-20261009-134700`, `test-installer-0.11.0-final-guidance.log`); English-to-Korean switching preserved IDE selection. Isolated PipeHost output/intermediates (`--artifacts-path`) built with the loaded original DLL preserved (`isolated-host-build.log`). Actual installation and publication remain pending; earlier receipts retain their original identities.
 
 New focused regressions cover abrupt ChatSession interruption/resume without prompt
 replay, nonfatal 256 KiB checkpoint-budget overflow, editor refusal to spawn a
@@ -110,8 +111,9 @@ context sizes in this candidate, not installed 0.10.0 versus 0.11.0.
 ## Pending release gates
 
 VS and RAD 240-minute native context/catalog/build soaks are underway; completion is
-not recorded here. Remaining M6 work includes final full Core/adapter/UI checks
-against frozen binaries, busy-UI cancellation/disconnect fault acceptance, broader
+not recorded here. Current full Core/adapter/UI and signed payload checks passed.
+Remaining M6 work includes actual installation/update/recovery, busy-UI
+cancellation/disconnect fault acceptance, broader
 RAD runtime/editor/nested-property scenarios and broader VS project/IME scenarios. Scoped VS2022 fixtures passed;
 RAD32 and physical x64 coverage must be stated separately from the primary
 VS2026/RAD13.2 Win64 acceptance environment.
@@ -121,16 +123,15 @@ authoring excludes binary/undecodable source/form resources. Final wave24 VCL/FM
 raw restore payloads both passed Core replay with these guards; this establishes
 the verified fixture scope, not arbitrary-project compatibility.
 
-The protected-Git installer passed payload/runtime/policy checks, but is superseded
-pending a replacement package. The signed RAD identity fix passed fresh
+The final guidance installer passed payload/runtime/policy checks with protected Git
+and the RAD identity fix. The signed RAD identity fix passed fresh
 `ide-dev-release011b` VCL/FMX designer 6/native SDK 26/Core 8 scenarios each and
 all six generated stage builds. Actual external `.dpr` alias builds/diagnostics
 preserved original `.dproj`/Delphi identity. Both BPL signatures are valid:
 Win64 SHA256 `598202985DF8705A441F4BD694C97B24F89C05A6B830A87D39256CAE359A2275`,
 Win32 `E099084DDA176B30814FEC9FB38947B4D57E36127AFAABEC62B908BD5E4A9147`.
 External builds require active original `.dpr`/`.dproj` plus `Delphi.Personality`;
-`.cbproj`, `.dpk` and non-Delphi sidecars are unsupported. Final
-package verification, clean installation,
+`.cbproj`, `.dpk` and non-Delphi sidecars are unsupported. Actual clean installation,
 update and prior-version recovery are pending. The repository version must not be
 treated as a released distribution until that release is prepared. No formal Copilot/Kai superiority
 claim is made. Matched model/settings/tasks, independently evaluated correctness,

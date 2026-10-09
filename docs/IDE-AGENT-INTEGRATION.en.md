@@ -225,22 +225,31 @@ files/Git state and permitting the next turn. These use deterministic OMP fixtur
 Three Git regressions additionally cover protected contents before consent,
 staged protected commits, rename/deletion endpoints and literal pathspec handling.
 The focused Git/workspace run passed 15/15. The expanded full run completed:
-206 total, 205 PASS, 0 FAIL and one optional native-RAD receipt skip (147,544.6771 ms).
-Final adapter integration passed 18/18 with zero skips. Signed adapter acceptance
+209 total, 208 PASS, 0 FAIL and one optional native-RAD receipt skip (148,986.8872 ms,
+`full-test-0.11.0-guidance.log`). Final both-architecture adapter integration passed
+18/18 with zero skips (`adapter-test-0.11.0-final-guidance-both.log`). Signed adapter acceptance
 includes VS2022 WinForms 8/8 and C++ 3/3 using the final DLL, VS2026 WPF 11/11 and
 three generated WPF stage builds, plus actual runtime controls. The signed installer
-rebuilt with the protected-Git fix passed complete payload hashes, bundled ARM64/x64
-runtime and policy checks (`setup-20261009-125725`,
-`test-installer-0.11.0-protected-git.log`); English-to-Korean switching preserved IDE
-selection. The subsequent RAD Delphi personality/original-project identity fix passed
+containing protected Git, the RAD target-identity fix and approval guidance passed complete
+payload hashes, bundled ARM64/x64 runtime and policy checks (`setup-20261009-134700`,
+`test-installer-0.11.0-final-guidance.log`); English-to-Korean switching preserved IDE
+selection. The RAD Delphi personality/original-project identity fix passed
 fresh signed `ide-dev-release011b` acceptance: VCL/FMX each passed designer 6, native
 SDK 26 and authenticated Core 8 scenarios (12 rows), plus all six generated stage
 builds. Both actual external `Fixture.dpr` alias builds and diagnostics retained the
 original `Fixture.dproj`/Delphi identity. Win64 BPL SHA256 is
 `598202985DF8705A441F4BD694C97B24F89C05A6B830A87D39256CAE359A2275`;
 Win32 is `E099084DDA176B30814FEC9FB38947B4D57E36127AFAABEC62B908BD5E4A9147`.
-Both signatures are valid; 104 copied UI hashes match release output. Replacement
-installer verification remains pending; older receipts retain their original identities.
+Both BPL signatures remain valid and unchanged. Two shared UI JavaScript files were
+updated after native acceptance; shared WebView validation separately passed 82 checks,
+including twelve transitions and three approval-label/raw-value preservation checks.
+The UI-only VSIX repack has SHA256
+`CADA2441F1DEE303B25DDEE37E9C05A8CB2F949317EDB754911E18B0E2797A7A`;
+the native DLL (SHA256 begins 6A3141) is unchanged. Isolated PipeHost output and
+intermediate directories (`--artifacts-path`) built successfully while preserving the
+loaded original DLL (`isolated-host-build.log`). Implementation commit `24c51e7`
+is local, not pushed. Actual installation/update/recovery and four-hour soaks remain
+pending; older receipts retain their original identities.
 No release or completed soak is claimed.
 The deterministic real-pipe lifecycle soak additionally exercises ten distinct
 project switches and saved-session resumes, ten mode switches across all four
