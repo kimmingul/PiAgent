@@ -1,5 +1,23 @@
 # PiAgent validation history
 
+## Published 0.11.0 scoped prerelease — 2026-10-10 KST
+
+[GitHub release](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.0) was published
+as a prerelease. Final setup SHA-256 is
+`7af9b27a265a4a7643c108887b66a7d3602928a844924623ff11197b884758c2`.
+The final documentation repack passed signature/timestamp, complete payload hash,
+ARM64/x64 runtime, policy and language checks, then actual same-version repair in
+normal VS2022/2026 and RAD32/64 registrations. All 1,056 payload files and preserved
+Core settings passed verification. The earlier full upgrade/rollback/restoration
+cycle below retains its own installer identity.
+
+Normal-profile VS2026 startup then displayed PiAgent 0.11.0, automatically connected
+to Core from installed release `0.11.0-20261009165859`, rendered Korean with automatic
+system language, and retained Opus 5.5/high and Always ask. No inference or settings
+change was performed in this startup check. All five GitHub release asset digests
+matched their local files. Both strict four-hour failures and the remaining M6
+comparison/coverage gates below still apply; publication does not mark them complete.
+
 Installer hash `8A3A…FD09` identifies the cycle-tested upgrade/rollback/restoration package, not a later repack. Repacked bytes require separate verification; download hashes accompany GitHub release assets (`.exe.sha256`).
 
 ## 0.11.0 scoped prerelease (latest evidence 2026-10-10 KST)
