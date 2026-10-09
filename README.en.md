@@ -2,12 +2,12 @@
 
 [한국어](README.md) · **English** · [Documentation / 문서](docs/README.md)
 
-Source version **0.11.0 signed candidate** · recovery/installation/rollback passed; publication pending · strict four-hour soak unmet · documentation updated **2026-10-10 KST**.
+Source version **0.11.0 prerelease** · recovery/installation/rollback passed · strict four-hour soak unmet · documentation updated **2026-10-10 KST**.
 Developer: **Min-Gul Kim (김민걸)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [Product website](https://kimmingul.github.io/PiAgent/?lang=en) ·
 [Release availability](https://github.com/kimmingul/PiAgent/releases).
-The public `kimmingul/PiAgent` repository contains source and earlier signed releases. The planned 0.11.0 prerelease is not yet published.
+The public `kimmingul/PiAgent` repository contains source and earlier signed releases. Check GitHub Releases for 0.11.0 installer availability.
 
 0.11.0 adds a live IDE capability catalog, reviewed semantic/designer changes and recovery, bounded editor context, native build/debugger integration, verified external tests, runtime profiling, reviewed local publish and local Git stage/commit. Support follows the connected adapter, language/framework and available tools. Automatic VS suggestions default to off; VS2022 requires 17.14 or later.
 [Candidate usage and scope](docs/IDE-AGENT-INTEGRATION.en.md) · [Unreleased changes and validation](docs/RELEASE-0.11.0.en.md).
@@ -37,7 +37,7 @@ It preserves RADAgent's WebView UI/UX; the RADAgent repository is not modified.
 
 ## Current use and installation
 
-The local signed prerelease candidate is `dist/PiAgent-Setup-0.11.0.exe`; package/runtime/policy checks passed. Actual 0.11.0 upgrade → 0.10.0 rollback → 0.11.0 restoration passed. The strict four-hour requirement remains unmet; publication is being prepared. Its planned release path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`. Building or publishing a release does not automatically replace an installation in a running IDE. Close the target IDEs before installing an available verified package.
+The local signed prerelease candidate is `dist/PiAgent-Setup-0.11.0.exe`; package/runtime/policy checks passed. Actual 0.11.0 upgrade → 0.10.0 rollback → 0.11.0 restoration passed. The strict four-hour requirement remains unmet. Its release asset path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`. Building or publishing a release does not automatically replace an installation in a running IDE. Close the target IDEs before installing an available verified package.
 Select Core, RAD13.2 32/64-bit, VS2022/2026, and optional OMP installation if OMP is absent.
 [Installation guide](docs/INSTALLATION.en.md) · [Unified installer](docs/UNIFIED-INSTALLER.md).
 

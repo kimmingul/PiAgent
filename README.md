@@ -2,12 +2,12 @@
 
 **한국어** · [English](README.en.md) · [문서 / Documentation](docs/README.md)
 
-소스 버전 **0.11.0 서명 후보** · 복구·설치·롤백 검증 통과 / 게시 대기 · 엄격한 4시간 soak 미통과 · 문서 갱신일 **2026-10-10 KST**.
+소스 버전 **0.11.0 사전 릴리즈** · 복구·설치·롤백 검증 통과 · 엄격한 4시간 soak 미통과 · 문서 갱신일 **2026-10-10 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
 [릴리즈 게시 상태](https://github.com/kimmingul/PiAgent/releases).
-공개 저장소 `kimmingul/PiAgent`에서 소스와 이전 서명 릴리즈를 제공한다. 예정된 0.11.0 사전 릴리즈는 아직 게시되지 않았다.
+공개 저장소 `kimmingul/PiAgent`에서 소스와 이전 서명 릴리즈를 제공한다. 0.11.0 설치파일의 배포 상태는 GitHub Releases에서 확인한다.
 
 0.11.0은 실제 IDE 기능 카탈로그, 검토한 의미/디자이너 변경과 복구, 제한된 편집기 문맥, 네이티브 빌드/디버거, 검증한 외부 테스트, 실행 성능 분석, 승인한 로컬 publish와 Git stage/commit을 추가한다. 지원은 연결된 adapter·언어/프레임워크·도구 설치 상태를 따른다. 자동 VS 제안은 기본으로 꺼져 있으며 VS2022는 17.14 이상이 필요하다.
 [후보 사용 방법과 지원 범위](docs/IDE-AGENT-INTEGRATION.md) · [미출시 변경·검증](docs/RELEASE-0.11.0.md).
@@ -36,7 +36,7 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-로컬 서명 사전 릴리즈 후보는 `dist/PiAgent-Setup-0.11.0.exe`이며 패키지/runtime/정책 검사를 통과했다. 실제 0.11.0 업그레이드 → 0.10.0 롤백 → 0.11.0 재설치는 통과했다. 엄격한 4시간 조건은 미통과이며 게시를 준비 중이다. 예정 릴리즈 경로는 `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`다. 빌드·게시는 실행 중인 IDE를 자동 교체하지 않으며 게시된 검증 패키지를 설치하기 전에 IDE를 종료한다.
+로컬 서명 사전 릴리즈 후보는 `dist/PiAgent-Setup-0.11.0.exe`이며 패키지/runtime/정책 검사를 통과했다. 실제 0.11.0 업그레이드 → 0.10.0 롤백 → 0.11.0 재설치는 통과했다. 엄격한 4시간 조건은 미통과다. 릴리즈 파일 경로는 `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`다. 빌드·게시는 실행 중인 IDE를 자동 교체하지 않으며 게시된 검증 패키지를 설치하기 전에 IDE를 종료한다.
 Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
 [설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.ko.md).
