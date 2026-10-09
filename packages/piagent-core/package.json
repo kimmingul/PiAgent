@@ -1,6 +1,6 @@
 {
   "name": "@piagent/core",
-  "version": "0.9.20",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,8 +10,8 @@
     }
   },
   "dependencies": {
-    "@piagent/omp": "0.9.20",
-    "@piagent/protocol": "0.9.20",
+    "@piagent/omp": "0.10.0",
+    "@piagent/protocol": "0.10.0",
     "yaml": "^2.9.1"
   }
 }

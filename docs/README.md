@@ -2,8 +2,8 @@
 
 [한국어 README](../README.md) · [English README](../README.en.md)
 
-현재 버전: **0.9.20**. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
-Current version: **0.9.20**. The main user guides below are available in Korean and English.
+현재 버전: **0.10.0**. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
+Current version: **0.10.0**. The main user guides below are available in Korean and English.
 
 | 문서 / Guide | 한국어 | English |
 |---|---|---|
@@ -11,8 +11,10 @@ Current version: **0.9.20**. The main user guides below are available in Korean 
 | 처음 설치 / First-time setup | [순서 도식·단계별 안내](GETTING-STARTED.ko.md) | [Diagram and step-by-step guide](GETTING-STARTED.en.md) |
 | Windows 설치 / Windows installation | [설치 안내](INSTALLATION.md) | [Installation](INSTALLATION.en.md) |
 | 통합 설치파일 / Unified installer | [통합 설치](UNIFIED-INSTALLER.ko.md) | [Unified installer](UNIFIED-INSTALLER.md) |
+| VS IDE 도구·코드 제안 / VS tools and suggestions | [사용 안내](VS-INTELLIGENCE.md) | [User guide](VS-INTELLIGENCE.en.md) |
 | 언어 설정 / Language settings | [언어 지원](LOCALIZATION.md) | [Language support](LOCALIZATION.en.md) |
-| 최신 릴리즈 / Current release | [0.9.20](RELEASE-0.9.20.md) | [0.9.20](RELEASE-0.9.20.en.md) |
+| 최신 릴리즈 / Current release | [0.10.0](RELEASE-0.10.0.md) | [0.10.0](RELEASE-0.10.0.en.md) |
+| 이전 장시간 대화 수정 / Previous long-running chat fixes | [0.9.20](RELEASE-0.9.20.md) | [0.9.20](RELEASE-0.9.20.en.md) |
 | 이전 언어 지원 / Previous language support | [0.9.19](RELEASE-0.9.19.md) | [0.9.19](RELEASE-0.9.19.en.md) |
 | 이전 디자이너 수정 / Previous designer fixes | [0.9.18](RELEASE-0.9.18.md) | [0.9.18](RELEASE-0.9.18.en.md) |
 | RAD 디자이너 승인·차단 / RAD designer approval and restrictions | [진단·복구](RAD-DESIGNER-DIAGNOSTICS.md) | [Diagnosis and recovery](RAD-DESIGNER-DIAGNOSTICS.en.md) |

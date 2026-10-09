@@ -1,5 +1,20 @@
 # PiAgent validation history
 
+## 0.10.0 VS IDE intelligence (2026-10-09)
+
+- 전체 Core 회귀: **161/161 PASS**. Named Pipe 기능 협상, IDE 단일 승인·거절·계획 모드·취소·오래된 응답, 도구 없는 편집기 추론, UTF-16/Unicode, 문서 revision, 빠른 요청 교체를 포함한다.
+- C# native 도구 콘솔: **17 PASS**. 경로 제한, TRX 실패·건너뛰기 전용 결과·카운터 부재·XXE, Unicode 인자, 출력 제한, 취소와 소유한 하위 프로세스 정리, Roslyn 참조·호출자·미저장 진단.
+- C#/Delphi adapter 통합 **17/17 PASS**, 최종 서명 VSIX 내부 채팅 화면 **75 PASS** 및 12회 도킹·탭·숨김 전환 PASS.
+- 서명 통합 설치파일과 전체 내장 payload 해시, ARM64/x64 번들 Node 인증 연결·기능 협상·ping, 설치 정책 보존과 VS 버전 경계 검사 PASS. Setup·VSIX·내부 DLL·RAD32/64 BPL·PipeHost의 서명과 타임스탬프를 확인했다.
+- 실제 VS2026 18.10.3, 별도 `PiAgentIntelligence` 프로필, 독립 .NET8/xUnit fixture에서 기본 도구 요청→Core→native SDK→결과 흐름을 직접 확인했다. 시험용 OMP 공급자는 결정적으로 도구를 호출하며 실제 VS 결과를 바꾸지 않는다.
+- 솔루션의 프로젝트 2개, `Add` 참조 3개, VS build 완료 성공, 미저장 오류 `CS1525`/`CS1002`, 필터 테스트 실패 1개와 원인, 실행 취소 후 통과 1개를 확인했다.
+- 인라인 회색 텍스트→Tab 수락→Ctrl+Z, 다음 수정 marker→Tab 위치 이동→Tab 수락→저장 시 `a - b`→실행 취소 후 `a + b`를 확인했다. 포커스와 위치 이동 취소 문제를 이 검증 중 수정했다.
+- 디버거 중단점·시작·중단 상태 stack/locals·Step Over·`value` 평가 **5**·계속·종료를 실행했다. VS에 연결된 fixture 프로세스의 CPU **2초** 추적과 상위 **9개** 함수 보고서를 확인했다.
+- 실제 설치 OMP와 기본 모델의 별도 도구 없는 추론에서 **2.4초** 만에 유효한 인라인 JSON 제안을 받았다. 이는 deterministic 공급자 검증과 별도로 실행했다.
+- 한국어·영어 문서 링크/명령 일치 및 홈페이지 버전·언어 선택·테마 검증 PASS.
+
+실제 UI 검증과 자동 fixture 검증을 구분한다. 새 기능의 VS2022 전체 UI, VB/C++ 전체 언어별 사용과 한글 IME 조합은 추가 수동 검증 대상이다. Native C++/.NET Framework CPU, 메모리 분석, Test Explorer 상태 조작, 다중 문서 next-edit는 지원 범위 밖이다. RAD VCL/FMX 기존 검증 이력은 아래에 유지한다.
+
 ## 최신 상태 (2026-10-08)
 
 제품 버전 0.9.19. 언어 지원 검증은 [한국어](LOCALIZATION.md) / [English](LOCALIZATION.en.md)에 정리한다.

@@ -39,7 +39,7 @@ https://kimmingul.github.io/NanumCsvViewer/. The PiAgent IDE UI is not redesigne
 - Body text, metadata, accessibility labels and documentation links switch together; switching also works with blocked storage.
 - System/light/dark appearance, responsive layouts, keyboard focus and reduced-motion support.
 - No analytics, external fonts, runtime API requests or build dependencies.
-- Illustrative preview is labeled; features and validation limits reflect PiAgent 0.9.20, including session recovery and Korean/English UI support.
+- Illustrative preview is labeled; features and validation limits reflect PiAgent 0.10.0, including session recovery and Korean/English UI support.
 - Public source, releases and website repository: `kimmingul/PiAgent`.
 - Canonical homepage: https://kimmingul.github.io/PiAgent/.
 - Signed installer downloads are public and do not require repository access.

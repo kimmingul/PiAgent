@@ -1,6 +1,12 @@
 # PiAgent architecture
 
-현재 상태: 2026-10-08, PiAgent 0.9.17. Node/TypeScript Core, IDE adapter, 공유 WebView 경계를 유지한다.
+현재 상태: 2026-10-09, PiAgent 0.10.0. Node/TypeScript Core, IDE adapter, 공유 WebView 경계를 유지한다.
+VS adapter는 `ide.tools.v1`으로 DTE/Roslyn/선택 테스트·디버거·CPU 도구를 제공한다.
+Core의 IdeBridge는 연결별 승인·상관 ID·취소·응답 크기를 관리하고 OMP host tool로 노출한다.
+`editor.suggestions.v1`은 채팅과 별도 연결/도구 없는 임시 OMP로 추론하며, 문서 revision과 UTF-16
+범위를 검증한 뒤 VS 기본 SuggestionService에 미리보기를 표시한다. 수락은 undo transaction으로
+현재 버퍼만 변경한다. 자동 제안은 기본 off이며 한글 조합 중에는 요청·수락을 피한다.
+VS2022는 native suggestion API가 제공되는 17.14 이상을 요구한다. [사용 범위](docs/VS-INTELLIGENCE.md).
 현재는 초기 vertical slice를 넘어 native OMP 실행 제어·역할/설정·BTW·메시지 timeline·GUI harness까지
 구현했다. 아래 버전별 설명은 확장 이력이며 초기 restricted profile 제약을 native profile에 적용하지 않는다.
 전체/미구현 범위는 [OMP 진행표](docs/OMP-FEATURE-IMPLEMENTATION.md)를 따른다.

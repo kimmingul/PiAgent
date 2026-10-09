@@ -48,7 +48,7 @@ public sealed class PipeAdapterClient : IDisposable
         this.pipeName = pipeName;
         pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
     }
-    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false, bool writes = false, bool designers = false)
+    public async Task<JObject> InitializeAsync(string kind, string ideVersion, string instanceId, CancellationToken cancellation, bool chat = false, bool selectionContext = false, bool writes = false, bool designers = false, bool ideTools = false, bool editorSuggestions = false)
     {
         if (ready) throw new InvalidOperationException("Already initialized");
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation))
@@ -65,6 +65,8 @@ public sealed class PipeAdapterClient : IDisposable
         var required = (JArray)offered.DeepClone();
         if(chat) { offered.Add("chat.btw.v1"); offered.Add("chat.preferences.v1");offered.Add("chat.timeline.v1"); offered.Add("omp.controls.v1"); offered.Add("workspace.bind.v1"); offered.Add("chat.approval.v1"); }
         if(chat && designers) offered.Add("ide.designer.v1");
+        if(chat && ideTools) offered.Add("ide.tools.v1");
+        if(chat && editorSuggestions) offered.Add("editor.suggestions.v1");
         if (chat) { offered.Add("chat.sessions.v1"); offered.Add("chat.usage.v1"); offered.Add("workspace.read.v1"); } // Optional; the daemon owner must opt in with --workspace.
         if (writes) { if (!chat) throw new ArgumentException("Writes require chat"); offered.Add("workspace.edit.v1"); offered.Add("workspace.edit.batch.v1"); }
         var result = await CallAsync("adapter.hello", new JObject {
@@ -119,9 +121,9 @@ public sealed class PipeAdapterClient : IDisposable
     }
     public Task<JObject> RequestAsync(string method, JObject parameters, CancellationToken cancellation)
     {
-        if (!ready || !new[] { "designer.reply", "designer.decide", "omp.respond", "omp.control", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "chat.setApproval", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "sessions.deleteEmpty", "chat.git", "chat.usage" }.Contains(method))
+        if (!ready || !new[] { "ide.reply", "editor.suggest", "editor.cancel", "designer.reply", "designer.decide", "omp.respond", "omp.control", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "chat.setApproval", "chat.open", "chat.prompt", "chat.cancel", "chat.close", "changes.decide", "changes.list", "changes.previewRestore", "changes.restore", "sessions.list", "sessions.deleteEmpty", "chat.git", "chat.usage" }.Contains(method))
             throw new InvalidOperationException("Unsupported request or handshake required");
-        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "chat.prompt", "chat.close", "chat.git", "sessions.deleteEmpty", "chat.open", "chat.usage", "chat.setApproval", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
+        return CallAsync(method, parameters, cancellation, method.StartsWith("changes.", StringComparison.Ordinal) ? 60000 : new[] { "editor.suggest", "chat.prompt", "chat.close", "chat.git", "sessions.deleteEmpty", "chat.open", "chat.usage", "chat.setApproval", "btw.ask","btw.list","btw.cancel","btw.delete","chat.preferences","workspace.files","chat.addFolder","chat.proceedPlan","chat.export","chat.previewMessageRestore","chat.restoreMessage","chat.extensions", "sessions.list", "omp.control" }.Contains(method) ? 60000 : 5000);
     }
     private async Task<JObject> CallAsync(string method, JObject parameters, CancellationToken cancellation, int timeout = 5000)
     {

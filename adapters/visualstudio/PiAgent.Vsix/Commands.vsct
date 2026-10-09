@@ -4,10 +4,13 @@
   <Commands package="guidPackage">
     <Groups><Group guid="guidCommands" id="ConnectionGroup" priority="0x0600"><Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" /></Group></Groups>
     <Buttons><Button guid="guidCommands" id="CheckConnection" priority="0x0100" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Check Core Connection</ButtonText></Strings></Button>
-    <Button guid="guidCommands" id="OpenChat" priority="0x0101" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Icon guid="guidIcons" id="ChatIcon"/><Strings><ButtonText>PiAgent: Open Chat</ButtonText></Strings></Button></Buttons>
+    <Button guid="guidCommands" id="OpenChat" priority="0x0101" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Icon guid="guidIcons" id="ChatIcon"/><Strings><ButtonText>PiAgent: Open Chat</ButtonText></Strings></Button>    <Button guid="guidCommands" id="CompleteCode" priority="0x0102" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Suggest Code / 코드 제안</ButtonText></Strings></Button>
+    <Button guid="guidCommands" id="NextEdit" priority="0x0103" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Suggest Next Edit / 다음 수정 제안</ButtonText></Strings></Button>
+    <Button guid="guidCommands" id="AcceptSuggestion" priority="0x0104" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Accept Suggestion / 제안 수락</ButtonText></Strings></Button>
+    <Button guid="guidCommands" id="DismissSuggestion" priority="0x0105" type="Button"><Parent guid="guidCommands" id="ConnectionGroup"/><Strings><ButtonText>PiAgent: Dismiss Suggestion / 제안 닫기</ButtonText></Strings></Button></Buttons>
   <Bitmaps><Bitmap guid="guidIcons" href="Resources\MenuIcon.png" usedList="ChatIcon"/></Bitmaps>
   </Commands>
-  <Symbols><GuidSymbol name="guidIcons" value="{1BD7BF12-2078-41E7-BDB4-BDFE239548D6}"><IDSymbol name="ChatIcon" value="1"/></GuidSymbol><GuidSymbol name="guidPackage" value="{38557171-e01d-4d7b-9842-3b435c5eed83}"/><GuidSymbol name="guidCommands" value="{e648642e-3b01-454a-a5f5-77ab0b763a90}"><IDSymbol name="ConnectionGroup" value="0x1020"/><IDSymbol name="CheckConnection" value="0x0100"/><IDSymbol name="OpenChat" value="0x0101"/></GuidSymbol></Symbols>
+  <Symbols><GuidSymbol name="guidIcons" value="{1BD7BF12-2078-41E7-BDB4-BDFE239548D6}"><IDSymbol name="ChatIcon" value="1"/></GuidSymbol><GuidSymbol name="guidPackage" value="{38557171-e01d-4d7b-9842-3b435c5eed83}"/><GuidSymbol name="guidCommands" value="{e648642e-3b01-454a-a5f5-77ab0b763a90}"><IDSymbol name="ConnectionGroup" value="0x1020"/><IDSymbol name="CheckConnection" value="0x0100"/><IDSymbol name="OpenChat" value="0x0101"/><IDSymbol name="CompleteCode" value="0x0102"/><IDSymbol name="NextEdit" value="0x0103"/><IDSymbol name="AcceptSuggestion" value="0x0104"/><IDSymbol name="DismissSuggestion" value="0x0105"/></GuidSymbol></Symbols>
 </CommandTable>
 
 

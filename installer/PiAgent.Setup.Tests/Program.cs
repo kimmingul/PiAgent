@@ -10,6 +10,11 @@ void MustReject(Action action, string test)
 }
 try
 {
+    foreach (var version in new[] { "17.14.0", "17.15.0", "18.0.0", "18.10.0" })
+        if (!InstallerEngine.SupportsVisualStudio(Version.Parse(version))) throw new Exception("Supported editor rejected: " + version);
+    foreach (var version in new[] { "16.11.0", "17.0.0", "17.13.9", "19.0.0" })
+        if (InstallerEngine.SupportsVisualStudio(Version.Parse(version))) throw new Exception("Unsupported editor admitted: " + version);
+    Console.WriteLine("PASS Visual Studio suggestion API version boundaries");
     foreach (var system in new[] {"en-US", "ja-JP", "de-DE", "fr-FR", ""})
         if (L.Resolve("auto", system) != "en") throw new Exception("Non-Korean default must be English");
     if (L.Resolve("auto", "ko-KR") != "ko" || L.Resolve("en", "ko-KR") != "en" || L.Resolve("ko", "en-US") != "ko") throw new Exception("Locale override failed");

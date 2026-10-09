@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 const pairs=[['README.md','README.en.md'],['docs/INSTALLATION.md','docs/INSTALLATION.en.md'],['docs/UNIFIED-INSTALLER.ko.md','docs/UNIFIED-INSTALLER.md'],['docs/RAD-DESIGNER-DIAGNOSTICS.md','docs/RAD-DESIGNER-DIAGNOSTICS.en.md'],['docs/RELEASE-0.9.18.md','docs/RELEASE-0.9.18.en.md'],['docs/RELEASE-0.9.19.md','docs/RELEASE-0.9.19.en.md'],['docs/LOCALIZATION.md','docs/LOCALIZATION.en.md']];
 pairs.push(['docs/GETTING-STARTED.ko.md','docs/GETTING-STARTED.en.md']);
 pairs.push(['docs/RELEASE-0.9.20.md','docs/RELEASE-0.9.20.en.md']);
+pairs.push(['docs/RELEASE-0.10.0.md','docs/RELEASE-0.10.0.en.md']);
+pairs.push(['docs/VS-INTELLIGENCE.md','docs/VS-INTELLIGENCE.en.md']);
 for(const pair of pairs){
  const blocks=[];
  for(const file of pair){
@@ -12,7 +14,7 @@ for(const pair of pairs){
    if(/^[a-z]+:|^#/i.test(target))continue;
    assert.ok(existsSync(resolve(dirname(file),target.split('#')[0])),`${file}: ${target}`);
   }
-  blocks.push([...text.matchAll(/```(?:powershell|bash|sh|json)?\n([\s\S]*?)```/g)].map(m=>m[1].split(/\r?\n/).filter(line=>line.trim()&&!/^\s*#/.test(line)).join('\n')));
+  blocks.push([...text.matchAll(/^```([^\n]*)\n([\s\S]*?)^```[ \t]*$/gm)].filter(m=>/^(powershell|bash|sh|json)?$/.test(m[1])).map(m=>m[2].split(/\r?\n/).filter(line=>line.trim()&&!/^\s*#/.test(line)).join('\n')));
  }
  assert.deepEqual(blocks[0],blocks[1],`Command examples differ: ${pair.join(' / ')}`);
 }

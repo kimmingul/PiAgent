@@ -60,6 +60,11 @@ lines.on('line', line => {
   }
   if (command.type !== 'prompt') { response({}); return; }
   active = true; emit({ type: 'agent_start' });
+  if(command.message.includes('PIAGENT_IDE_CONTEXT')){
+    response({});
+    if(!tools.some(tool=>tool.name==='ide_context')){emit({type:'agent_end',isTerminal:true});return;}
+    emit({type:'host_tool_call',id:randomUUID(),toolName:'ide_context',arguments:{}});return;
+  }
   if(command.message==='busy-prompt'||command.message==='busy-queue-failure') {
     toolMode='busy-prompt';emit({type:'response',id:command.id,command:'prompt',success:false,error:'Agent is already streaming. Specify streamingBehavior.'});
     timers.push(setTimeout(()=>emit({type:'prompt_result',id:command.id,agentInvoked:false,status:'error',sessionSettled:false,error:{message:'Agent is already streaming'}}),0));return;

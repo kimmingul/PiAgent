@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.IO;
 using System.Reflection;
 using System.Diagnostics;
@@ -34,6 +35,7 @@ public sealed class ChatControl : UserControl, IDisposable
     private JObject? approval, restorePreview, messageRestorePreview;
     private string? workspaceUri;
     private string currentApprovalMode="always-ask";
+    private readonly System.Collections.Generic.Dictionary<string,CancellationTokenSource> ideOperations = new();
     private EnvDTE.SolutionEvents? solutionEvents;
     private bool workspaceBinding, approvalModes;
     private bool initialized, connecting, pageReady, disposed;
@@ -344,6 +346,20 @@ public sealed class ChatControl : UserControl, IDisposable
                         catch(Exception error) { reply["error"] = error.Message; }
                         await active.RequestAsync("designer.reply",reply,lifetime.Token); return;
                     }
+                    if ((string?)data["kind"] == "omp_event" && data["frame"] is JObject ideFrame) {
+                        var requestId=(string?)ideFrame["id"];
+                        if ((string?)ideFrame["type"]=="ide_cancel" && requestId!=null && ideOperations.TryGetValue(requestId,out var cancelled)) {cancelled.Cancel();return;}
+                        if ((string?)ideFrame["type"]=="ide_request" && requestId!=null) {
+                            using var operation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                            ideOperations[requestId]=operation;
+                            var reply=new JObject {["sessionId"]=sessionId,["requestId"]=requestId};
+                            try {var result=await IdeTools.ExecuteAsync((string)ideFrame["operation"]!,ideFrame["args"] as JObject??new JObject(),workspaceUri!,operation.Token);if(System.Text.Encoding.UTF8.GetByteCount(result.ToString(Newtonsoft.Json.Formatting.None))>240*1024)throw new IOException("IDE snapshot exceeds 240 KiB; narrow the query");reply["result"]=result;}
+                            catch(Exception error) {reply["error"]=error is OperationCanceledException?"IDE operation cancelled":error.Message;}
+                            finally {ideOperations.Remove(requestId);}
+                            if(!operation.IsCancellationRequested&&ReferenceEquals(client,active))await active.RequestAsync("ide.reply",reply,lifetime.Token);
+                            return;
+                        }
+                    }
                     switch ((string?)data["kind"]) {
                         case "started": turnId = (string?)data["turnId"]; break;
                         case "approval_requested": approval = data["approval"] as JObject; break;
@@ -360,7 +376,7 @@ public sealed class ChatControl : UserControl, IDisposable
                     if (!disposed && ReferenceEquals(client, active)) { Disconnect(error.Message); await RecoverAsync(); }
                 }).FileAndForget("PiAgent/ChatDisconnect");
             };
-            var hello = await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true, selectionContext: true, writes: true, designers:true);
+            var hello = await active.InitializeAsync("visual-studio", "VS-Chat", Guid.NewGuid().ToString("N"), lifetime.Token, chat: true, selectionContext: true, writes: true, designers:true, ideTools:true);
             workspaceBinding = (hello["capabilities"] as JArray)?.ToString().Contains("workspace.bind.v1") == true;
             approvalModes = (hello["capabilities"] as JArray)?.ToString().Contains("chat.approval.v1") == true;
             await OpenAsync(resumeLast:true); heartbeat.Start();
@@ -411,6 +427,7 @@ public sealed class ChatControl : UserControl, IDisposable
     }
     private void Disconnect(string message)
     {
+        foreach(var operation in ideOperations.Values.ToArray())operation.Cancel();
         heartbeat.Stop(); sessionId = null; turnId = null;
         approval = null; restorePreview = null;messageRestorePreview=null; workspaceUri = null;
         var previous = client; client = null; previous?.Dispose();
@@ -421,6 +438,7 @@ public sealed class ChatControl : UserControl, IDisposable
         ThreadHelper.ThrowIfNotOnUIThread();
         if (disposed) return; disposed = true; heartbeat.Stop(); lifetime.Cancel();
         SystemEvents.PowerModeChanged -= PowerChanged;
+        foreach(var operation in ideOperations.Values)operation.Cancel();
         if(solutionEvents!=null){solutionEvents.Opened-=SolutionOpened;solutionEvents.BeforeClosing-=SolutionClosing;}
         var previous = client; client = null; previous?.Dispose(); browser.Dispose(); jobs.JoinTillEmptyAsync().FileAndForget("PiAgent/ChatShutdown");
     }

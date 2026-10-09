@@ -15,7 +15,7 @@
         <CheckBox x:Name="CoreChoice" IsChecked="True" IsEnabled="False" Margin="0,0,0,10"/>
         <CheckBox x:Name="Rad32" Margin="0,0,0,10"/>
         <CheckBox x:Name="Rad64" Margin="0,0,0,10"/>
-        <CheckBox x:Name="Vs22" Content="Visual Studio 2022" Margin="0,0,0,10"/>
+        <CheckBox x:Name="Vs22" Content="Visual Studio 2022 (17.14+)" Margin="0,0,0,10"/>
         <CheckBox x:Name="Vs26" Content="Visual Studio 2026"/>
       </StackPanel></GroupBox>
       <GroupBox Header="OMP" Padding="14" Margin="0,0,0,12"><StackPanel>

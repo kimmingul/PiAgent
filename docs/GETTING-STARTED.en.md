@@ -2,7 +2,7 @@
 
 [한국어](GETTING-STARTED.ko.md) · **English** · [Documentation](README.md)
 
-For Windows x64/ARM64 and PiAgent **0.9.20**. Checked **2026-10-09 KST**.
+For Windows x64/ARM64 and PiAgent **0.10.0**. Checked **2026-10-09 KST**.
 This guide is for people who have never used OMP or an AI coding tool.
 
 **Start with one IDE and one AI connection.** PiAgent provides chat inside your IDE.
@@ -36,9 +36,9 @@ You can also install and authenticate OMP separately before installing PiAgent.
 
 | Development environment | What the current PiAgent setup supports | What to prepare |
 |---|---|---|
-| Visual Studio 2022 / 2026 | Registers PiAgent in an installed IDE | This is a different product from Visual Studio Code. For C# WinForms/WPF, choose the `.NET desktop development` workload; other languages need their project's workloads. |
+| Visual Studio 2022 (17.14+) / 2026 | Registers PiAgent in an installed IDE | This is a different product from Visual Studio Code. For C# WinForms/WPF, choose the `.NET desktop development` workload; other languages need their project's workloads. |
 | RAD Studio 13.2 / Delphi 37.0 | Registers packages for 32-bit / 64-bit IDEs | Prepare Delphi/C++Builder and the VCL/FMX environment you use, then build a project. |
-| RAD Studio 11 / 12 and other RAD compiler versions | Not automatically registered by the current 0.9.20 setup | Build the PiAgent BPL separately with the target version's SDK. Do not install the 13.2 BPL unchanged. |
+| RAD Studio 11 / 12 and other RAD compiler versions | Not automatically registered by the current 0.10.0 setup | Build the PiAgent BPL separately with the target version's SDK. Do not install the 13.2 BPL unchanged. |
 
 You do not need both IDE families. Current live testing prioritizes VS2026 and RAD13.2 64-bit.
 Installation/build support for VS2022 and RAD32 does not mean complete live validation.
@@ -62,7 +62,7 @@ excluding build outputs, passwords and API keys. Checking chat connectivity and 
 
 ## 3. Install PiAgent and OMP
 
-1. Download `PiAgent-Setup-0.9.20.exe` from the [PiAgent 0.9.20 release](https://github.com/kimmingul/PiAgent/releases/tag/v0.9.20).
+1. Download `PiAgent-Setup-0.10.0.exe` from the [PiAgent 0.10.0 release](https://github.com/kimmingul/PiAgent/releases/tag/v0.10.0).
 2. Close Visual Studio and RAD Studio.
 3. Run setup. Select Korean/English at the top right if needed.
 4. Select **Core** and the IDE components you will use. For RAD, match the **IDE's own bitness**;

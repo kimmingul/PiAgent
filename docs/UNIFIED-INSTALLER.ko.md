@@ -2,13 +2,13 @@
 
 **한국어** · [English](UNIFIED-INSTALLER.md) · [문서](README.md)
 
-문서 갱신: 2026-10-09. 현재 제품 버전은 0.9.20다.
+문서 갱신: 2026-10-09. 현재 제품 버전은 0.10.0다.
 이전 0.9.18에서 Core와 RAD32/64를 업데이트하고 중복 RAD BPL 등록을 정리했다.
 설치 기록과 실제 IDE 검증은 구분한다. VS2026와 RAD13.2 64-bit를 우선 검증하며,
 VS2022와 RAD32의 최종 UI 검증은 완료로 주장하지 않는다.
 [세션 복구](SESSION-RECOVERY-FIX.md)와 [검증 기록](VALIDATION.md)을 참고한다.
 
-출력 파일은 `dist/PiAgent-Setup-0.9.20.exe`다. 하나의 독립 실행 설치파일로
+출력 파일은 `dist/PiAgent-Setup-0.10.0.exe`다. 하나의 독립 실행 설치파일로
 Windows x64와 ARM64를 지원한다. ARM64에서는 설치파일이 x64 호환 실행되며,
 설치되는 Node.js, .NET, OMP는 시스템의 네이티브 아키텍처를 사용한다.
 시스템 PATH나 기존 런타임을 교체하지 않는다.

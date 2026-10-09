@@ -34,6 +34,7 @@ public static class InstallerEngine
             throw new IOException(L.Text("기존 Core 설정이 올바르지 않습니다. 설정을 보존하기 위해 업데이트를 중단합니다."));
         return settings with { node = node, omp = settings.omp ?? detectedOmp };
     }
+    public static bool SupportsVisualStudio(Version version) => version.Major == 18 || version.Major == 17 && version.Minor >= 14;
     public static Detection Detect()
     {
         using var bds = Registry.CurrentUser.OpenSubKey(BdsKey);
@@ -47,8 +48,9 @@ public static class InstallerEngine
             foreach (var item in data.RootElement.EnumerateArray())
             {
                 var path = item.GetProperty("installationPath").GetString()!;
-                var major = int.Parse(item.GetProperty("installationVersion").GetString()!.Split('.')[0]);
-                if (major is 17 or 18 && File.Exists(Path.Combine(path, @"Common7\IDE\VSIXInstaller.exe")))
+                var version = Version.Parse(item.GetProperty("installationVersion").GetString()!);
+                var major = version.Major;
+                if (SupportsVisualStudio(version) && File.Exists(Path.Combine(path, @"Common7\IDE\VSIXInstaller.exe")))
                     vs.Add(new(item.GetProperty("instanceId").GetString()!, path, major));
             }
         }
@@ -136,7 +138,7 @@ public static class InstallerEngine
                 throw new IOException(L.Text("기존 설치 기록이 올바르지 않습니다."));
         }
         Directory.CreateDirectory(Root);
-        var release = Path.Combine(Root, "releases", "0.9.20-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
+        var release = Path.Combine(Root, "releases", "0.10.0-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
         var selectedVs = detected.VisualStudio.Where(v => (v.Major == 17 && selection.Vs22) || (v.Major == 18 && selection.Vs26)).ToList();
         var receipt = new Receipt(Product, Root, release, previous?.VisualStudio.ToList() ?? new(), previous?.RadKeys.ToList() ?? new(), previous?.PreviousRad.ToList() ?? new());
         try
@@ -190,7 +192,7 @@ public static class InstallerEngine
             if (omp != null) CreateShortcut(L.Text("OMP 실행 (로그인 및 설정)"), omp, "");
             CreateShortcut(L.Text("PiAgent 제거"), setup, "--uninstall --language " + L.Language);
             using var uninstall = Registry.CurrentUser.CreateSubKey(UninstallKey);
-            uninstall.SetValue("DisplayName", "PiAgent"); uninstall.SetValue("DisplayVersion", "0.9.20");
+            uninstall.SetValue("DisplayName", "PiAgent"); uninstall.SetValue("DisplayVersion", "0.10.0");
             uninstall.SetValue("Publisher", "Nanum Space Co., Ltd."); uninstall.SetValue("InstallLocation", Root);
             uninstall.SetValue("UninstallString", "\"" + setup + "\" --uninstall --language " + L.Language); uninstall.SetValue("DisplayIcon", setup);
             uninstall.SetValue("NoModify", 1, RegistryValueKind.DWord); uninstall.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -223,7 +225,7 @@ public static class InstallerEngine
     private static string DownloadOmp()
     {
         using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("PiAgent-Setup/0.9.20");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("PiAgent-Setup/0.10.0");
         var text = http.GetStringAsync("https://api.github.com/repos/can1357/oh-my-pi/releases/latest").GetAwaiter().GetResult();
         using var data = JsonDocument.Parse(text);
         var name = "omp-windows-" + Architecture + ".exe";
@@ -260,7 +262,7 @@ public static class InstallerEngine
         }
         if (!receipt.RadKeys.Contains(keyName)) receipt.RadKeys.Add(keyName); SaveReceipt(receipt);
         foreach (var name in key.GetValueNames().Where(n => Path.GetFileName(n).Equals("PiAgent370.bpl", StringComparison.OrdinalIgnoreCase))) key.DeleteValue(name, false);
-        key.SetValue(path, "PiAgent 0.9.20");
+        key.SetValue(path, "PiAgent 0.10.0");
     }
     private static void SaveReceipt(Receipt receipt) => File.WriteAllText(Path.Combine(Root, "install-receipt.json"), JsonSerializer.Serialize(receipt, Json));
     private static void CreateShortcut(string name, string target, string arguments)

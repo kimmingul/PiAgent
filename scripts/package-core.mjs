@@ -36,7 +36,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await mkdir(join(output, 'docs'));
   for(const document of ['GETTING-STARTED.ko.md','GETTING-STARTED.en.md']) await cp(join(repository,'docs',document),join(output,'docs',document));
   await cp(join(repository,'docs/images'),join(output,'docs/images'),{recursive:true});
-  for(const document of ['README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md','RELEASE-0.9.19.md','RELEASE-0.9.19.en.md',`RELEASE-${version}.en.md`])
+  for(const document of ['VS-INTELLIGENCE.md','VS-INTELLIGENCE.en.md','README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md','RELEASE-0.9.19.md','RELEASE-0.9.19.en.md','RELEASE-0.9.20.md','RELEASE-0.9.20.en.md',`RELEASE-${version}.en.md`])
     await cp(join(repository,'docs',document),join(output,'docs',document));
   await mkdir(join(output,'website'));
   await cp(join(repository,'website/README.md'),join(output,'website/README.md'));
@@ -57,7 +57,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
     'Stop with Ctrl+C. OMP requires a separately installed executable.\n\n' +
     'The default CLI uses a local-only, current-user pipe and mutual HMAC authentication. See docs/SECURITY.md.\n' +
     (adapters ? 'Adapter installers and installation instructions are in adapters/.\n' : '') +
-    'This release implements VS/RAD WebView chat, durable OMP sessions, usage and opt-in approved file changes. See docs/INSTALLATION.md.\n' +
+    'This release adds VS IDE tools, inline completion and next edits. See docs/VS-INTELLIGENCE.en.md. VS2022 requires 17.14 or later.\n' +
     'Add --workspace C:\\project to enable bounded file reading/search. See docs/WORKSPACE-TOOLS.md.\n' +
     'Add --allow-writes for single/multi-file diff approval and checkpoint restore. Git is required; see docs/APPROVED-CHANGES.md.\n' +
     'For VS Chat: Tools > PiAgent: Open Chat (connects automatically). For RAD: View > PiAgent or Tools > PiAgent.\n' +
@@ -71,7 +71,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
     '--workspace C:\\project는 제한된 파일 읽기/검색, --allow-writes는 diff 승인과 checkpoint 복원을 사용합니다. 쓰기에는 Git이 필요합니다.\n\n'+
     'VS: Tools → PiAgent: Open Chat. RAD: View/Tools → PiAgent. 통합 설치한 adapter는 Core를 자동 시작합니다. WebView2 Runtime이 필요합니다.\n'+
     '설정 → 표시 → 언어에서 한국어/English를 선택합니다. 자동 기본값은 한국어 시스템에서 한국어, 그 외에는 영어입니다.\n'+
-    '세부 설치·지원 범위는 docs/INSTALLATION.md, 언어 지원은 docs/LOCALIZATION.md를 참고하세요.\n');
+    'VS IDE 도구·코드 제안은 docs/VS-INTELLIGENCE.md를 참고하세요. VS2022는 17.14 이상이 필요합니다.\n세부 설치·지원 범위는 docs/INSTALLATION.md, 언어 지원은 docs/LOCALIZATION.md를 참고하세요.\n');
   if (adapters) {
     for (const ide of ['visualstudio', 'radstudio']) {
       const target = join(output, 'adapters', ide);

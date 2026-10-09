@@ -2,7 +2,7 @@
   <ItemGroup><Reference Include="System.Windows.Forms" /></ItemGroup>
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.9.20</Version>
+    <TargetFramework>net472</TargetFramework><LangVersion>latest</LangVersion><Nullable>enable</Nullable><UseWPF>true</UseWPF><Version>0.10.0</Version>
     <AssemblyName>PiAgent.Vsix</AssemblyName><RootNamespace>PiAgent.Vsix</RootNamespace>
     <GeneratePkgDefFile>true</GeneratePkgDefFile><IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CreateVsixContainer>true</CreateVsixContainer><DeployExtension>false</DeployExtension>
@@ -11,9 +11,12 @@
   <ItemGroup>
     <Content Include="Resources\PiAgent.png"><IncludeInVSIX>true</IncludeInVSIX></Content>
     <Reference Include="System.Design" />
+    <Reference Include="System.ComponentModel.Composition" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.LanguageServices" Version="4.14.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.Language" Version="17.14.249" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
     <ProjectReference Include="../PiAgent.Transport/PiAgent.Transport.csproj"><IncludeOutputGroupsInVSIX>BuiltProjectOutputGroup</IncludeOutputGroupsInVSIX></ProjectReference>
     <VSCTCompile Include="Commands.vsct"><ResourceName>Menus.ctmenu</ResourceName></VSCTCompile>

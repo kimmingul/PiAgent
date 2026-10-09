@@ -561,3 +561,28 @@ set_interrupt_mode {mode:immediate|wait}. Native compact returns `{accepted:true
 reports the result. Events may precede acknowledgement. Running maintenance excludes prompts/other controls;
 chat.close retires the owning process; 5-minute compaction timeout retires it too. Late events cannot affect new sessions.
 Subagent snapshots are bounded and omit raw progress/private paths. All commands retain owner session checks.
+
+## Visual Studio IDE and editor extensions (0.10.0)
+
+`hello` negotiates `ide.tools.v1` and `editor.suggestions.v1` independently. RAD and older adapters
+do not receive VS host tools. Seven OMP tools are registered: `ide_context`, `ide_diagnostics`,
+`ide_symbols`, `ide_build`, `ide_tests`, `ide_debug`, `ide_profile`. See [scope](docs/VS-INTELLIGENCE.en.md).
+`chat.event` frames `ide_request {id,operation,args}` and `ide_cancel {id}` route to
+the owning native adapter, using its current bound workspace. It responds through `ide.reply {sessionId,requestId,result?,error?}`.
+Results must correlate with a pending request on that connection; late/cancelled replies are ignored.
+Read operations have 30-second limits, execution 180 seconds, and results are bounded to 240 KiB.
+At most four requests can be pending. Actual execution deadlines start after approval.
+Build/tests/profile and debugger actions other than snapshot require per-action approval through the
+existing `designer_approval` / `designer.decide` / `designer_resolved` UI. Plan/read-only mode blocks them.
+Approval waiting has no arbitrary dialog expiry; abort, disconnect and session changes retire it.
+
+`editor.suggest {requestId,workspaceUri,file,text,position,mode,recentEdits?,provider?,model?}` needs
+the editor capability but no `chat.open`. Mode is `completion|next-edit`; provider/model must be paired.
+The workspace is canonically bound and the file passes workspace read exclusions before unsaved text
+is used. Context is limited to 64 KiB UTF-8. `position`, `start`, `length` are UTF-16 code units.
+Result is `{requestId,revision,start,length,text}` or `{requestId,revision,empty:true}`; revision is
+SHA-256 of the original UTF-8 text. Completion can only insert at the original caret. Surrogate splits,
+out-of-range edits and oversized output are rejected. `editor.cancel {requestId}` cancels the owned
+request. Superseding requests retire pending work; close joins the owned temporary process.
+Inference disables tools/extensions/skills/rules/LSP/session/title/PTY; it cannot approve or edit files.
+The native adapter checks the request/revision/snapshot/caret again before showing a proposal.

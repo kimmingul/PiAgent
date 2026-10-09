@@ -13,6 +13,8 @@ namespace PiAgent.Vsix;
 [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
 [ProvideMenuResource("Menus.ctmenu", 1)]
 [ProvideToolWindow(typeof(ChatToolWindow))]
+[ProvideOptionPage(typeof(EditorOptions),"PiAgent","Editor Suggestions",0,0,true)]
+[ProvideAutoLoad(UIContextGuids80.SolutionExists,PackageAutoLoadFlags.BackgroundLoad)]
 [Guid("38557171-e01d-4d7b-9842-3b435c5eed83")]
 public sealed class PiAgentPackage : AsyncPackage
 {
@@ -22,8 +24,14 @@ public sealed class PiAgentPackage : AsyncPackage
     protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
     {
         await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+        ((EditorOptions)GetDialogPage(typeof(EditorOptions))).LoadSettingsFromStorage();
         if (await GetServiceAsync(typeof(IMenuCommandService)) is OleMenuCommandService commands)
         {
+            var editorCommands=new[]{"completion","next-edit","accept","dismiss"};
+            for(var index=0;index<editorCommands.Length;index++){
+                var action=editorCommands[index];
+                commands.AddCommand(new MenuCommand((sender,args)=>JoinableTaskFactory.RunAsync(async()=>await EditorSuggestions.CommandAsync(action,lifetime.Token)).FileAndForget("PiAgent/EditorCommand"),new CommandID(new Guid("e648642e-3b01-454a-a5f5-77ab0b763a90"),0x0102+index)));
+            }
             commands.AddCommand(new MenuCommand((sender, args) =>
             {
                 if (Interlocked.CompareExchange(ref running, 1, 0) == 0)
