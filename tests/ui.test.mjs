@@ -116,10 +116,41 @@ test('reference CSS, icons and renderer modules retain the recorded source bytes
  const hashes=JSON.parse(await readFile(new URL('../ui/reference-files.json',import.meta.url),'utf8'));
  for(const [name,hash] of Object.entries(hashes)) {
   // Integration changes are documented in ui/README.md; retain original provenance hashes.
-  if(['chat.html','chat.js','composer.js','clicks.js','plusmenu.js','btw.js','checkpoints.js','approval.js','markdown.js','activity.js','activity.css'].includes(name)||name.startsWith('lang/'))continue;
+  if(['chat.html','chat.js','composer.js','clicks.js','plusmenu.js','btw.js','checkpoints.js','approval.js','markdown.js','activity.js','activity.css','topbar.js'].includes(name)||name.startsWith('lang/'))continue;
   const bytes=await readFile(new URL('../ui/src/'+name,import.meta.url));
   assert.equal(createHash('sha256').update(bytes).digest('hex'),hash,name);
  }
+});
+test('closed OMP session exposes explicit reconnect, retires pending UI and never replays a prompt',()=>{
+ const f=fixture();
+ f.action({t:'submit',id:'request',text:'inspect only'});f.event('started');
+ f.event('omp_event',{frame:{type:'login_status',state:'pending'}});
+ f.event('approval_requested',{approval:{proposalId:'pending',diff:'review'}});
+ const before=f.sent.length;
+ f.event('closed',{text:'working session ended'});
+ const status=f.shown.filter(m=>m.t==='status').at(-1);
+ assert.equal(status.connected,false);assert.equal(status.busy,false);assert.equal(status.reconnectAvailable,true);
+ assert.equal(f.shown.filter(m=>m.t==='turnEnd').length,1);
+ f.action({t:'approval',id:'pending',ok:true});f.action({t:'submit',id:'retry',text:'must not replay'});
+ f.action({t:'newSession'});f.action({t:'sessions'});
+ assert.equal(f.sent.length,before);
+ f.action({t:'connect'});f.action({t:'connect'});
+ assert.deepEqual(f.sent.slice(before),[{action:'connect'}]);
+ f.receive({type:'operationError',action:'connect',message:'temporary connection failure'});
+ assert.equal(f.shown.filter(m=>m.t==='status').at(-1).reconnectAvailable,true);
+ f.action({t:'connect'});f.receive({type:'session',sessionId:'resumed',sessionsEnabled:true});
+ assert.equal(f.shown.filter(m=>m.t==='status').at(-1).reconnectAvailable,false);
+ f.action({t:'sessions'});assert.equal(f.sent.at(-1).action,'listSessions');
+ assert.equal(f.sent.filter(m=>m.action==='prompt').length,1);
+});
+test('normal session switching does not offer a competing reconnect or duplicate completed turn',()=>{
+ const f=fixture();f.action({t:'submit',id:'request',text:'inspect'});f.event('started');f.event('cancelled');
+ f.action({t:'newSession'});f.event('closed');
+ const status=f.shown.filter(m=>m.t==='status').at(-1);
+ assert.equal(status.reconnectAvailable,false);assert.equal(status.busy,true);
+ f.action({t:'connect'});assert.equal(f.sent.filter(m=>m.action==='connect').length,0);
+ assert.equal(f.shown.filter(m=>m.t==='turnEnd').length,1);
+ f.receive({type:'session',sessionId:'new'});assert.equal(f.shown.filter(m=>m.t==='status').at(-1).connected,true);
 });
 
 test('file references cover both IDE families without matching extension prefixes',async()=>{

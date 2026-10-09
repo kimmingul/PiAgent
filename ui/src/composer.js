@@ -4,7 +4,7 @@
   // The message box and the line under it: send/stop, / command menu, input history, context
   // chips, + menu, approval mode, model, thinking level, context ring. The IDE does the work.
   const MaxHistory = 100;
-  let input, sendBtn, slash;
+  let input, sendBtn, abortBtn, slash;
   let commands = [];
   let files = null;
   let fileFailure = false;
@@ -50,6 +50,9 @@
       state.busy ? T('page.composer.steerTitle') : T('page.composer.sendTitle');
     sendBtn.disabled = stop ? false : !(input.value.trim().startsWith('/btw') ||
       (state.connected && (input.value.trim() || attachments.length)));
+    abortBtn.hidden = !state.busy || stop;
+    abortBtn.title = T('page.composer.stopTitle');
+    abortBtn.setAttribute('aria-label', abortBtn.title);
   }
 
   // followUp: while omp works, send after the turn instead of at its next step.
@@ -194,7 +197,7 @@
     if (e.key === 'Escape') {
       if (global.ChatPlusMenu.isOpen()) global.ChatPlusMenu.close();
       else if (global.ChatPanels.isOpen()) return;
-      else if (state.busy && !input.value.trim()) post({ t: 'abort' });
+      else if (state.busy) post({ t: 'abort' });
       e.preventDefault();
       return;
     }
@@ -302,12 +305,14 @@
   function wire() {
     input = $('input');
     sendBtn = $('send-btn');
+    abortBtn = $('abort-btn');
     slash = $('slash-menu');
     input.addEventListener('input', () => { if (fileFailure) { files = null; fileFailure = false; } active = 0; autosize(); updateSlash(); refreshSend(); });
     input.addEventListener('click', () => updateSlash());
     input.addEventListener('keydown', onKeyDown);
     input.addEventListener('blur', () => { setTimeout(() => { slash.hidden = true; }, 150); });
     sendBtn.addEventListener('click', () => { if (stopMode()) post({ t: 'abort' }); else submit(false); });
+    abortBtn.addEventListener('click', () => { if (state.busy) post({ t: 'abort' }); });
     $('thinking-select').addEventListener('change', e => post({ t: 'setThinking', value: e.target.value }));
     $('approval-select').addEventListener('change', e => post({ t: 'setApproval', value: e.target.value }));
     input.focus();

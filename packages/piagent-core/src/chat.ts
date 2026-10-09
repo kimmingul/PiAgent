@@ -710,7 +710,9 @@ export class ChatSession {
       // child exists or leave a late-acquired lease behind after cleanup returns.
       if(this.openingDone)await this.openingDone;
       if(this.promptSetup)await this.promptSetup;
-      if(this.planSaving)await this.planSaving;
+      // Finishing a file checkpoint can start the timeline persistence stage in
+      // its finally callback. Retain ownership until every chained stage settles.
+      while(this.planSaving)await this.planSaving;
       const omp=this.omp;
       await this.login?.cancel();this.login=undefined;
       if(this.turn&&omp?.state==='ready'){
@@ -722,7 +724,7 @@ export class ChatSession {
           finally{clearTimeout(deadline);}
         }
       }
-      this.finish('cancelled');if(this.planSaving)await this.planSaving;
+      this.finish('cancelled');while(this.planSaving)await this.planSaving;
       this.omp=undefined;this.controlOperation=undefined;const btw=this.btw;this.btw=undefined;
       this.interactions?.clear();this.interactions=undefined;this.designer.close();this.ide.close();this.gitTools?.close();this.gitTools=undefined;
       clearInterval(this.progressTimer);this.progressTimer=undefined;this.progress=undefined;

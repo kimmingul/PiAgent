@@ -1,5 +1,12 @@
 # RADAgent UI compatibility
 
+0.11.0 adds a conditional Retry connection action inside the existing connection
+banner after an OMP session ends or the transport disconnects. `topbar.js` joins
+the integration exceptions; its original reference hash remains unchanged.
+Reconnecting uses the native host's saved-session recovery and never resubmits a
+prompt. The unsent draft stays intact, and session/model controls remain disabled
+until the host confirms a new session.
+
 0.9.19 localizes PiAgent's added TypeScript screens through `i18n.ts` and `messages.en.ts`.
 Settings → Display → Language defaults to automatic Korean on Korean Windows, English elsewhere;
 explicit saved preferences override the native host locale. Bound labels update without rebuilding
@@ -65,6 +72,11 @@ Original provenance hashes remain in `reference-files.json`; this integration ch
 The bridge replays current status/capability gates after preference translations so dynamic titles and busy state survive settings.
 
 ## Verification
+
+An independent Stop control remains visible beside steering when a turn is busy
+and the composer contains a draft. Escape stops after closing any active menu or
+panel. Both paths preserve the unsent draft; neither submits it. A closed session
+offers explicit reconnection through the existing native Connect operation.
 
 Settings use a scoped `settings.css` and retain the original five areas. Horizontal accessible tabs,
 scrolling content and footer actions are checked in real WebView2 at 100/150/200% zoom. Core supplies

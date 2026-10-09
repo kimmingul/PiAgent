@@ -87,10 +87,10 @@ test('MCP toggles wait for admitted slash handler completion and return the pers
  }finally{client?.close();await daemon?.close();await rm(root,{recursive:true,force:true});}
 });
 
-test('all 33 original renderer actions have Controller routes and unknown actions cannot cross the bridge',async()=>{
+test('original renderer and explicit reconnect actions have Controller routes and reject unknown actions',async()=>{
  const {rendererActions}=await import('../ui/dist/contracts.js');const source=await readFile(new URL('../ui/src/controller.ts',import.meta.url),'utf8');assert.equal(rendererActions.length,33);assert.equal(new Set(rendererActions).size,33);
- const extracted=new Set();for(const file of await readdir(new URL('../ui/src',import.meta.url))){if(!file.endsWith('.js')&&!file.endsWith('.html'))continue;const text=await readFile(new URL('../ui/src/'+file,import.meta.url),'utf8');for(const match of text.matchAll(/\bt\s*:\s*[\x27\x22]([A-Za-z]+)[\x27\x22]/g))extracted.add(match[1]);for(const match of text.matchAll(/data-action="([A-Za-z]+)"/g))extracted.add(match[1]);}assert.deepEqual([...extracted].sort(),[...rendererActions].sort());
- for(const name of rendererActions)assert.ok(source.includes("case '"+name+"':"),name+' has no handler');
+ const extracted=new Set();for(const file of await readdir(new URL('../ui/src',import.meta.url))){if(!file.endsWith('.js')&&!file.endsWith('.html'))continue;const text=await readFile(new URL('../ui/src/'+file,import.meta.url),'utf8');for(const match of text.matchAll(/\bt\s*:\s*[\x27\x22]([A-Za-z]+)[\x27\x22]/g))extracted.add(match[1]);for(const match of text.matchAll(/data-action="([A-Za-z]+)"/g))extracted.add(match[1]);}assert.deepEqual([...extracted].sort(),[...rendererActions,'connect'].sort());
+ for(const name of [...rendererActions,'connect'])assert.ok(source.includes("case '"+name+"':"),name+' has no handler');
  const f=ui(),count=f.sent.length;f.controller.action({t:'arbitrary-rpc',method:'switch_session'});assert.equal(f.sent.length,count);
 });
 test('stale replies and unrelated errors cannot unlock pending model change or discard main draft',()=>{

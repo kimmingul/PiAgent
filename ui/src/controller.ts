@@ -28,6 +28,7 @@ export interface View {
 export class Controller {
   private lastTurnError = '';
   private connected = false;
+  private reconnectAvailable = false;
   private busy = false;
   private switching = false;
   private session = '';
@@ -66,7 +67,7 @@ export class Controller {
   private notice(text: string): void { this.emit('notice', {level: 'info', text:hostText(text)}); }
   private status(state = t("연결됨"), error = false): void {
     state=hostText(state);
-    this.emit('status', {connected: this.connected, busy: this.busy || this.switching || this.controlPending || !!this.review || this.loginBusy,
+    this.emit('status', {connected: this.connected, reconnectAvailable:this.reconnectAvailable&&!this.switching, busy: this.busy || this.switching || this.controlPending || !!this.review || this.loginBusy,
       state, error, activity: state, model: this.model, thinking:this.thinking, title: this.title, cwd: this.workspace, queueEnabled: this.busy&&!!this.turn&&!this.switching&&!this.review&&!this.controlPending&&this.features['ompProfile']==='native'&&this.features['ompControlsEnabled']===true,
       project: decodeURIComponent(this.workspace.replace(/\/$/,'').split(/[\\/]/).filter(Boolean).at(-1)??''), approval: this.approvalMode, context: this.context});
     this.view.capabilities({...this.features,connected:this.connected,busy:this.busy||this.switching||this.controlPending||!!this.review||this.loginBusy});
@@ -142,7 +143,7 @@ export class Controller {
       case 'setThinking':
         if(this.idle()&&this.features['ompControlsEnabled']){this.controlPending=true;this.status(t("추론 수준 변경 중…"));this.post({action:'ompControl',command:'set_thinking_level',fields:{level:msg['value']}});}break;
       case 'ready': this.post({action: 'ready'}); this.status(t("연결 중…")); this.post({action: 'connect'}); break;
-      case 'connect': if (!this.connected && !this.switching) { this.switching = true; this.status(t("연결 중…")); this.post({action: 'connect'}); } break;
+      case 'connect': if (!this.connected && !this.switching) { this.reconnectAvailable=false;this.switching = true; this.status(t("연결 중…")); this.post({action: 'connect'}); } break;
       case 'newSession': if (this.idle()) { this.switching = true; this.status(t("새 대화 준비 중…")); this.post({action: 'reset'}); } break;
       case 'sessions': if (this.idle() && this.features['sessionsEnabled']) this.post({action: 'listSessions'}); break;
       case 'usage': if (this.idle()) this.refresh(); break;
@@ -231,7 +232,7 @@ export class Controller {
         this.view.clearInteractions?.();this.emit('files',{items:null});this.emit('context',{});
         this.workspace=String(frame['workspaceUri']??'');this.status(this.workspace?t("프로젝트 다시 연결 중…"):t("열린 프로젝트가 없습니다."));break;
       case 'workspaceDisconnected':
-        this.connected=false;this.switching=this.busy=false;this.status(t("프로젝트를 열면 자동으로 연결합니다."));break;
+        this.reconnectAvailable=false;this.connected=false;this.switching=this.busy=false;this.status(t("프로젝트를 열면 자동으로 연결합니다."));break;
       case 'messageRestorePreview':this.showReview(object(frame['data']),true,false);break;
       case 'folderAdded':this.notice(t("OMP 작업영역에 폴더를 추가했습니다: ")+String(frame['path']??''));break;
       case 'buildResult':this.notice(frame['success']?t("빌드 완료"):t("빌드 실패 · IDE 오류 목록을 확인해 주세요."));break;
@@ -281,7 +282,7 @@ export class Controller {
         for(const id of this.btwSubmissions)this.emit('submitted',{id,ok:false});this.btwSubmissions.clear();
         for(const id of this.queueSubmissions.keys())this.emit('submitted',{id,ok:false});this.queueSubmissions.clear();this.queue={};
         this.view.clearInteractions?.();this.models=[];this.levels=[];this.thinking='';
-        this.connected = true; this.busy = this.switching = this.controlPending = false; this.submission = undefined;
+        this.reconnectAvailable=false;this.connected = true; this.busy = this.switching = this.controlPending = false; this.submission = undefined;
         this.session = String(frame['sessionId']); this.turn = ''; this.sequence = 0; this.features = frame;
         this.approvalMode=String(frame['approvalMode']??'always-ask');this.turnApproved=false;
         this.workspace = String(frame['workspaceUri'] ?? ''); this.model = ''; this.resolve(false);
@@ -351,6 +352,7 @@ export class Controller {
         if(!frame['action']||frame['action']==='ompControl'&&(!frame['command']||['set_model','set_thinking_level'].includes(String(frame['command']))))this.controlPending=false;
         if ((!frame['action']||frame['action']==='prompt')&&this.submission) {this.cancelAfterStart=false;this.emit('submitted', {id: this.submission['id'], ok: false});this.submission = undefined;}
         if (!this.turn) this.busy = this.switching = false;
+        if(frame['action']==='connect'&&!this.connected)this.reconnectAvailable=true;
         if (this.review&&(!frame['action']||['decideChange','designerDecide','restoreChange','restoreMessage'].includes(String(frame['action'])))) { const {data, restore} = this.review; this.resolve(false); this.turnApproved=false; this.showReview(data, restore,false); }
         this.status(hostText(frame['message']), true); break;
       case 'disconnected':
@@ -364,7 +366,7 @@ export class Controller {
         if (this.submission) this.emit('submitted', {id: this.submission['id'], ok: false}); this.submission = undefined;
         for(const id of this.btwSubmissions)this.emit('submitted',{id,ok:false});this.btwSubmissions.clear();this.features={};this.controlPending=false;
         for(const id of this.queueSubmissions.keys())this.emit('submitted',{id,ok:false});this.queueSubmissions.clear();this.queue={};
-        this.connected = this.busy = this.switching = false; this.turn = ''; this.resolve(false); this.status(String(frame['message'] ?? t("연결 종료 · 설정에서 다시 연결할 수 있습니다.")), true); break;
+        this.reconnectAvailable=true;this.connected = this.busy = this.switching = false; this.turn = ''; this.resolve(false); this.status(String(frame['message'] ?? t("연결 종료 · 설정에서 다시 연결할 수 있습니다.")), true); break;
       case 'event': this.event(object(frame['data'])); break;
     }
   }
@@ -401,7 +403,14 @@ export class Controller {
     }
     if (kind === 'warning') { this.notice(String(data['text'])); return; }
     if (kind === 'closed') {
-      this.view.clearInteractions?.(); this.connected = this.busy = false; this.turn = ''; this.controlPending=false;this.resolve(false);
+      this.view.clearInteractions?.();this.view.clearAccount?.();this.view.clearRoles?.();this.view.clearExecution?.();
+      if(this.turn){this.emit('assistantEnd');this.emit('turnEnd',{started:this.started,ended:Date.now(),stopped:true});}
+      if(this.submission)this.emit('submitted',{id:this.submission['id'],ok:false});this.submission=undefined;
+      for(const id of this.btwSubmissions)this.emit('submitted',{id,ok:false});this.btwSubmissions.clear();
+      for(const id of this.queueSubmissions.keys())this.emit('submitted',{id,ok:false});this.queueSubmissions.clear();this.queue={};
+      this.executionRequests.clear();this.completedOperations.clear();this.loginBusy=false;this.cancelAfterStart=false;
+      this.reconnectAvailable=!this.switching;
+      this.connected = this.busy = false; this.turn = ''; this.controlPending=false;this.resolve(false);
       this.status(this.switching ? t("대화 준비 중…") : String(data['text']??(this.lastTurnError||t("작업 세션이 종료되었습니다. 설정에서 다시 연결할 수 있습니다."))),!!this.lastTurnError); return;
     }
     if (kind === 'started') {

@@ -31,6 +31,18 @@
     banner.hidden = msg.connected && !msg.error;
     banner.textContent = msg.state || '';
     banner.classList.toggle('error', !!msg.error);
+    if (!msg.connected && msg.reconnectAvailable && !msg.busy) {
+      const reconnect = document.createElement('button');
+      reconnect.id = 'reconnect-btn';
+      reconnect.className = 'icon-btn';
+      reconnect.dataset.i18n = 'page.topbar.reconnect';
+      reconnect.textContent = T('page.topbar.reconnect');
+      reconnect.addEventListener('click', () => {
+        reconnect.disabled = true;
+        global.chatPost({ t: 'connect' });
+      });
+      banner.append(' ', reconnect);
+    }
 
     const log = $('log');
     if (!working) {

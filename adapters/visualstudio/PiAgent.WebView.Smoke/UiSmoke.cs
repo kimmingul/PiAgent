@@ -236,6 +236,28 @@ internal static class UiSmoke
         core.PostWebMessageAsJson("""{"type":"session","sessionId":"legacy-no-catalog"}""");await Task.Delay(100);
         await core.ExecuteScriptAsync("document.getElementById('sheet').hidden=true;ChatComposer.setInput('/ide');document.getElementById('send-btn').click()");await Task.Delay(100);
         await Check(core,"document.getElementById('sheet-body').textContent.includes('has not reported its capabilities yet') && !document.getElementById('sheet-body').textContent.includes('fixture-2')","reconnecting an older adapter never retains previous IDE capabilities");
+        core.PostWebMessageAsJson("""{"type":"session","sessionId":"recoverable","sessionsEnabled":true,"ompProfile":"native","ompControlsEnabled":true}""");await Task.Delay(100);
+        await core.ExecuteScriptAsync("document.getElementById('sheet').hidden=true;ChatComposer.setInput('unsent recovery draft')");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"recoverable","turnId":"recovery-turn","sequence":1,"kind":"started"}}""");await Task.Delay(100);
+        await Check(core,"!document.getElementById('abort-btn').hidden && !document.getElementById('send-btn').classList.contains('stop')","busy draft retains independent Stop beside steering");
+        sent.Clear();await core.ExecuteScriptAsync("document.getElementById('abort-btn').click()");await Task.Delay(100);
+        if(sent.FindAll(message=>message.Contains("\"action\":\"cancel\"")).Count!=1 || sent.Exists(message=>message.Contains("\"action\":\"prompt\"")))throw new Exception("Draft Stop must abort once without submitting draft");
+        await Check(core,"document.getElementById('input').value==='unsent recovery draft'","Stop preserves unsent draft");
+        sent.Clear();await core.ExecuteScriptAsync("document.getElementById('input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))");await Task.Delay(100);
+        if(sent.FindAll(message=>message.Contains("\"action\":\"cancel\"")).Count!=1 || sent.Exists(message=>message.Contains("\"action\":\"prompt\"")))throw new Exception("Escape must abort with a nonempty draft without submitting it");
+        await Check(core,"document.getElementById('input').value==='unsent recovery draft'","Escape preserves unsent draft");
+        core.PostWebMessageAsJson("""{"type":"event","data":{"sessionId":"recoverable","sequence":2,"kind":"closed","text":"OMP working session ended"}}""");await Task.Delay(100);
+        await Check(core,"document.getElementById('abort-btn').hidden","Stop is hidden after session closure");
+        await Check(core,"document.getElementById('reconnect-btn').textContent==='Retry connection' && document.getElementById('new-btn').disabled && document.getElementById('title-btn').disabled && document.getElementById('input').value==='unsent recovery draft'","closed session offers explicit reconnect and preserves unsent draft");
+        core.PostWebMessageAsJson("""{"type":"preferences","values":{"language":"ko","fontSize":13}}""");await Task.Delay(100);
+        await Check(core,"document.getElementById('reconnect-btn').textContent==='연결 다시 시도'","reconnect control follows language change while disconnected");
+        sent.Clear();await core.ExecuteScriptAsync("document.getElementById('reconnect-btn').click()");await Task.Delay(100);
+        if(sent.FindAll(message=>message.Contains("\"action\":\"connect\"")).Count!=1 || sent.Exists(message=>message.Contains("\"action\":\"prompt\"")))throw new Exception("Recovery must request one reconnect without replaying a model prompt");
+        await Check(core,"!document.getElementById('reconnect-btn') && document.getElementById('new-btn').disabled","reconnect suppresses duplicate clicks until host response");
+        core.PostWebMessageAsJson("""{"type":"operationError","action":"connect","message":"temporary connection failure"}""");await Task.Delay(100);
+        await Check(core,"!!document.getElementById('reconnect-btn') && !document.getElementById('reconnect-btn').disabled","failed reconnect remains retryable");
+        core.PostWebMessageAsJson("""{"type":"session","sessionId":"recovered","sessionsEnabled":true}""");await Task.Delay(100);
+        await Check(core,"!document.getElementById('reconnect-btn') && !document.getElementById('new-btn').disabled && !document.getElementById('title-btn').disabled && document.getElementById('input').value==='unsent recovery draft'","host-confirmed recovery re-enables session controls without sending draft");
         await Check(core, "smokeErrors.length === 0", "no JavaScript or CSP errors: " + await core.ExecuteScriptAsync("smokeErrors"));
         await core.ExecuteScriptAsync("document.getElementById('sheet').hidden=true;window.marker=42;ChatComposer.setInput('도킹 전 초안');");
     }
