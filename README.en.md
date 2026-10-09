@@ -2,7 +2,7 @@
 
 [한국어](README.md) · **English** · [Documentation / 문서](docs/README.md)
 
-Source version **0.11.0 candidate** · signing/publication pending · documentation updated **2026-10-09 KST**.
+Source version **0.11.0 signed candidate** · installation acceptance/soak/publication pending · documentation updated **2026-10-09 KST**.
 Developer: **Min-Gul Kim (김민걸)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [Product website](https://kimmingul.github.io/PiAgent/?lang=en) ·
@@ -14,7 +14,7 @@ The public `kimmingul/PiAgent` repository contains source and earlier signed rel
 
 [VS2026/RAD13.2 comprehensive IDE integration plan](docs/IDE-AGENT-ROADMAP.en.md): milestones, GPT-6.1 sol parallel ownership and acceptance criteria. Planned features are distinguished from current released functionality.
 
-[Candidate implementation guide](docs/IDE-AGENT-INTEGRATION.en.md): `/ide` availability, reviewed changes and recovery, VS/RAD backend scope and context measurements. Source is 0.11.0; earlier live receipts retain their actual 0.10.0 identities. Signing, final installation and four-hour soak remain separate pending gates.
+[Candidate implementation guide](docs/IDE-AGENT-INTEGRATION.en.md): `/ide` availability, reviewed changes and recovery, VS/RAD backend scope and context measurements. Source is 0.11.0; earlier live receipts retain their actual 0.10.0 identities. Signed candidate package checks passed; actual installation/update/recovery, four-hour soaks and publication remain separate pending gates.
 
 ## First-time setup
 
@@ -37,7 +37,7 @@ It preserves RADAgent's WebView UI/UX; the RADAgent repository is not modified.
 
 ## Current use and installation
 
-The planned prerelease installer is `dist/PiAgent-Setup-0.11.0.exe`; signing and publication are pending. Its planned release path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`. Building or publishing a release does not automatically replace an installation in a running IDE. Close the target IDEs before installing an available verified package.
+The local signed prerelease candidate is `dist/PiAgent-Setup-0.11.0.exe`; package/runtime/policy checks passed. Actual installation/update/recovery, four-hour soaks and publication remain pending. Its planned release path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`. Building or publishing a release does not automatically replace an installation in a running IDE. Close the target IDEs before installing an available verified package.
 Select Core, RAD13.2 32/64-bit, VS2022/2026, and optional OMP installation if OMP is absent.
 [Installation guide](docs/INSTALLATION.en.md) · [Unified installer](docs/UNIFIED-INSTALLER.md).
 
@@ -59,13 +59,13 @@ The installer also offers Korean/English selection at the top right. The website
 
 ## Current features and validation
 
-The latest full serial Core run passed **202 tests, 0 failures, 1 optional receipt skip** (203 total). Focused checks also verify offline runtime links, actual captured adapter contracts, interrupted-session recovery and nonfatal checkpoint-budget overflow. VS native checks passed **75**. VS2026 WPF **11/11** and WinForms **8/8**, scoped VS2022 VB **5/5**, WinUI3 source **7/7** and WinForms **8/8** passed. WinUI3 generated stages compiled; no native visual-designer or runtime-app claim follows.
+The latest full serial Core run passed **208 tests, 0 failures, 1 optional receipt skip** (209 total). Focused checks also verify offline runtime links, actual captured adapter contracts, interrupted-session recovery and nonfatal checkpoint-budget overflow. VS native checks passed **75**. VS2026 WPF **11/11** and WinForms **8/8**, scoped VS2022 VB **5/5**, WinUI3 source **7/7** and WinForms **8/8** passed. WinUI3 generated stages compiled; no native visual-designer or runtime-app claim follows.
 
-RAD wave24 VCL/FMX each passed six strong structural steps, 26 native SDK cases and eight authenticated Core scenarios (12 receipt rows with four approvals). Native debugger, CPU comparison, Unicode editor acceptance/Undo and actual failing/filtered-passing DUnitX runs passed. Win32/Win64 SDK smoke passed ten checks per architecture; RAD32 UI remains separate.
+Signed RAD `release011b`, including the original Delphi project identity fix, passed six strong structural steps, 26 native SDK cases and eight authenticated Core scenarios per VCL/FMX fixture (12 receipt rows with four approvals), plus all six generated stage builds. Actual external `.dpr` alias builds and diagnostics preserved the original Delphi project identity. Native debugger, CPU comparison, Unicode editor acceptance/Undo and actual failing/filtered-passing DUnitX runs passed. Win32/Win64 SDK smoke passed ten checks per architecture; RAD32 UI remains separate.
 
 Supported creation/deletion/event binding uses reviewed standard WPF/WinUI3 source edits, public in-process .NET Framework WinForms designer services, or guarded saved standard Delphi VCL/FMX forms. Complete-original restore reviews and exact file hashes precede separate consent. Modern out-of-process WinForms, arbitrary third-party/inherited RAD forms, Delphi semantic refactoring and native RAD compiler-message enumeration are unavailable. General workspace file creation/deletion is unavailable; semantic rename follows the verified VS backend.
 
-Four-hour live soaks and final 0.11.0 signed-package/install/update/recovery gates are pending. No formal Copilot benchmark or Kai comparison has been completed; Kai is absent locally. An earlier VS2022 C++ fixture passed 3/3; installed C++Builder compilers and the VS2026 C++ workload are absent, so those hosts have no C++ acceptance. Signed 0.11.0 VS2026 WPF 11/11 and RAD VCL/FMX designer 6/native SDK 26/Core 8 scenarios each passed; the final signed WebView check passed 79 (including its transitions). See [validation history](docs/VALIDATION.md).
+The final signed candidate passed full Core checks, both-architecture adapter integration 18/18, package hashes, ARM64/x64 runtime and policy checks. Four-hour automated native context/catalog/build soaks, actual installation/update/recovery and publication remain pending. No formal Copilot benchmark or Kai comparison has been completed; Kai is absent locally. An earlier VS2022 C++ fixture passed 3/3; installed C++Builder compilers and the VS2026 C++ workload are absent, so those hosts have no C++ acceptance. Signed 0.11.0 VS2026 WPF 11/11 and RAD VCL/FMX designer 6/native SDK 26/Core 8 scenarios each passed; shared WebView checks passed 82 (including twelve transitions and three approval-guidance/raw-value preservation checks). See [validation history](docs/VALIDATION.md).
 
 ### Earlier release evidence
 
