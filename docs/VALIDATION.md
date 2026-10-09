@@ -12,6 +12,8 @@
 - 디버거 중단점·시작·중단 상태 stack/locals·Step Over·`value` 평가 **5**·계속·종료를 실행했다. VS에 연결된 fixture 프로세스의 CPU **2초** 추적과 상위 **9개** 함수 보고서를 확인했다.
 - 실제 설치 OMP와 기본 모델의 별도 도구 없는 추론에서 **2.4초** 만에 유효한 인라인 JSON 제안을 받았다. 이는 deterministic 공급자 검증과 별도로 실행했다.
 - 한국어·영어 문서 링크/명령 일치 및 홈페이지 버전·언어 선택·테마 검증 PASS.
+- 이 PC의 VS2026/VS2022와 RAD32/64에 서명 0.10.0을 설치하고 등록 버전을 확인했다. 기존 Core 접근 정책·OMP·workspace 설정을 보존했으며 최신 .NET Framework 진단 실행파일로 설치 Core의 새 시작과 재연결을 확인했다.
+- VS2022 **17.14.37411.7**에서 실제 메뉴 4개와 `Editor Suggestions` 설정 페이지 로드, 자동 제안 두 항목 `False`, 지연 **1000 ms**, 빈 provider/model 기본값을 추가 확인했다. VS2022 전체 기능 검증 완료를 의미하지 않는다.
 
 실제 UI 검증과 자동 fixture 검증을 구분한다. 새 기능의 VS2022 전체 UI, VB/C++ 전체 언어별 사용과 한글 IME 조합은 추가 수동 검증 대상이다. Native C++/.NET Framework CPU, 메모리 분석, Test Explorer 상태 조작, 다중 문서 next-edit는 지원 범위 밖이다. RAD VCL/FMX 기존 검증 이력은 아래에 유지한다.
 

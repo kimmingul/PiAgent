@@ -1,0 +1,49 @@
+name: Assemble verified PiAgent 0.10.0 installer
+
+on:
+  push:
+    branches: [codex/release-upload-0.10.0]
+    paths: [.github/workflows/assemble-signed-release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: signed-release-0.10.0
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: kimmingul/PiAgent
+    steps:
+      - name: Download temporary installer parts from the draft release
+        run: gh release download v0.10.0 --pattern 'PiAgent-Setup-0.10.0.exe.part-*' --dir parts
+      - name: Reassemble and verify the original signed bytes
+        shell: python
+        run: |
+          import hashlib
+          import pathlib
+          import shutil
+          root = pathlib.Path('parts')
+          expected = [f'PiAgent-Setup-0.10.0.exe.part-{i:03}' for i in range(51)]
+          assert sorted(p.name for p in root.iterdir()) == expected, 'Missing or unexpected parts'
+          output = pathlib.Path('PiAgent-Setup-0.10.0.exe')
+          with output.open('xb') as target:
+              for index, name in enumerate(expected):
+                  part = root / name
+                  expected_size = 4194304 if index < 50 else 1220640
+                  assert part.stat().st_size == expected_size, f'Invalid size: {name}'
+                  with part.open('rb') as source:
+                      shutil.copyfileobj(source, target)
+          assert output.stat().st_size == 210935840, 'Installer size mismatch'
+          with output.open('rb') as source:
+              digest = hashlib.file_digest(source, 'sha256').hexdigest()
+          assert digest == 'ae4554cac94a46b6bfb2c90cea97dbac85df7461112a217c0be65a8e2ea9e1b5', 'Installer SHA-256 mismatch'
+          print('PASS original signed installer bytes / SHA-256', digest)
+      - name: Upload the verified installer without publishing the draft
+        run: gh release upload v0.10.0 PiAgent-Setup-0.10.0.exe
