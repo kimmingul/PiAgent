@@ -23,8 +23,8 @@ jobs:
     steps:
       - name: Fetch the original signed installer from the temporary transfer endpoint
         env:
-          SOURCE_URL: https://sources-answered-painting-student.trycloudflare.com/PiAgent-Setup-0.10.0.exe
-        run: curl --fail --location --retry 4 --connect-timeout 30 --max-time 1200 --output PiAgent-Setup-0.10.0.exe "$SOURCE_URL"
+          SOURCE_URL: https://scenarios-liked-eric-personality.trycloudflare.com/PiAgent-Setup-0.10.0.exe
+        run: curl --http1.1 --fail --location --retry 4 --retry-all-errors --continue-at - --connect-timeout 30 --max-time 1200 --output PiAgent-Setup-0.10.0.exe "$SOURCE_URL"
       - name: Verify the original signed bytes
         shell: python
         run: |
