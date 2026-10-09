@@ -1,4 +1,4 @@
-name: Assemble verified PiAgent 0.10.0 installer
+name: Transfer verified PiAgent 0.10.0 installer
 
 on:
   push:
@@ -21,25 +21,16 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: kimmingul/PiAgent
     steps:
-      - name: Download temporary installer parts from the draft release
-        run: gh release download v0.10.0 --pattern 'PiAgent-Setup-0.10.0.exe.part-*' --dir parts
-      - name: Reassemble and verify the original signed bytes
+      - name: Fetch the original signed installer from the temporary transfer endpoint
+        env:
+          SOURCE_URL: https://sources-answered-painting-student.trycloudflare.com/PiAgent-Setup-0.10.0.exe
+        run: curl --fail --location --retry 4 --connect-timeout 30 --max-time 1200 --output PiAgent-Setup-0.10.0.exe "$SOURCE_URL"
+      - name: Verify the original signed bytes
         shell: python
         run: |
           import hashlib
           import pathlib
-          import shutil
-          root = pathlib.Path('parts')
-          expected = [f'PiAgent-Setup-0.10.0.exe.part-{i:03}' for i in range(51)]
-          assert sorted(p.name for p in root.iterdir()) == expected, 'Missing or unexpected parts'
           output = pathlib.Path('PiAgent-Setup-0.10.0.exe')
-          with output.open('xb') as target:
-              for index, name in enumerate(expected):
-                  part = root / name
-                  expected_size = 4194304 if index < 50 else 1220640
-                  assert part.stat().st_size == expected_size, f'Invalid size: {name}'
-                  with part.open('rb') as source:
-                      shutil.copyfileobj(source, target)
           assert output.stat().st_size == 210935840, 'Installer size mismatch'
           with output.open('rb') as source:
               digest = hashlib.file_digest(source, 'sha256').hexdigest()
