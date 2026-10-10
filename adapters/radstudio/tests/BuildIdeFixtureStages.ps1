@@ -1,4 +1,5 @@
-param([Parameter(Mandatory)][string]$FixtureRoot)
+param([Parameter(Mandatory)][string]$FixtureRoot,
+ [ValidateSet('Win64','Win32')][string]$Platform='Win64')
 $ErrorActionPreference='Stop'
 $fixturePath=[IO.Path]::GetFullPath($FixtureRoot)
 if(([IO.File]::ReadAllText((Join-Path $fixturePath '.piagent-rad-fixture'))).Trim() -ne 'piagent-rad-fixture-v1'){throw 'Explicit prepared RAD fixture required'}
@@ -10,15 +11,16 @@ $bdsRoot='C:\Program Files (x86)\Embarcadero\Studio\37.0'
 $msbuild=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe'
 if(-not(Test-Path -LiteralPath $msbuild)){$msbuild=Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\MSBuild.exe'}
 $results=[Collections.Generic.List[object]]::new()
-foreach($stage in 'createComponent','bindEvent','deleteComponent'){
+foreach($stage in 'createComponent','setScalarProperty','setCollectionProperty','bindEvent','deleteComponent'){
   $directory=Join-Path $stageRoot $stage
+  if($stage -eq 'setCollectionProperty' -and -not (Test-Path -LiteralPath $directory)){continue}
   $project=Join-Path $directory 'Fixture.dproj'
   $log=Join-Path $directory 'msbuild.log'
   $start=[Diagnostics.ProcessStartInfo]::new($msbuild)
   $start.UseShellExecute=$false;$start.CreateNoWindow=$true
   $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
   $start.WorkingDirectory=$directory;$start.Environment['BDS']=$bdsRoot
-  foreach($argument in @($project,'/nologo','/v:normal','/t:Build','/p:Config=Debug','/p:Platform=Win64',('/p:BDS='+$bdsRoot),'/fileLogger',('/fileLoggerParameters:LogFile='+$log+';Encoding=UTF-8;Verbosity=normal'))){$start.ArgumentList.Add($argument)}
+  foreach($argument in @($project,'/nologo','/v:normal','/t:Build','/p:Config=Debug',("/p:Platform="+$Platform),('/p:BDS='+$bdsRoot),'/fileLogger',('/fileLoggerParameters:LogFile='+$log+';Encoding=UTF-8;Verbosity=normal'))){$start.ArgumentList.Add($argument)}
   $process=[Diagnostics.Process]::new();$process.StartInfo=$start
   try{
     if(-not $process.Start()){throw 'Cannot start installed MSBuild'}

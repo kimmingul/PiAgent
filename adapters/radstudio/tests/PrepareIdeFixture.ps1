@@ -1,12 +1,15 @@
 param([ValidateSet('VCL','FMX')][string]$Framework='VCL',
+ [ValidateSet('Win64','Win32')][string]$Platform='Win64',
  [ValidatePattern('^ide-dev(?:-[a-z0-9]+)?$')][string]$CandidateName='ide-dev', [switch]$Launch, [switch]$Autorun, [switch]$SdkAutorun,
  [ValidateRange(0,240)][int]$SoakMinutes=0,[switch]$CoreAutorun,[switch]$PreserveCandidateAssets)
 $ErrorActionPreference='Stop'
 $adapterRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$candidateRoot=Join-Path $adapterRoot "bin\Win64\$CandidateName"
+$candidateRoot=Join-Path $adapterRoot "bin\$Platform\$CandidateName"
 $fixtureRoot=Join-Path $candidateRoot "sdk-fixture-$Framework"
 $bdsRoot='C:\Program Files (x86)\Embarcadero\Studio\37.0'
-$profileName="PiAgentSDKFixture$Framework"+$CandidateName.Replace('-','')
+$profileName="PiAgentSDKFixture$Framework"+$(if($Platform -eq 'Win32'){'Win32'}else{''})+$CandidateName.Replace('-','')
+$ideBin=if($Platform -eq 'Win64'){'bin64'}else{'bin'}
+$knownPackages=if($Platform -eq 'Win64'){'Known Packages x64'}else{'Known Packages'}
 $profileRoot="HKCU:\Software\Embarcadero\$profileName\37.0"
 function Copy-RegistryTree([Microsoft.Win32.RegistryKey]$Source,[Microsoft.Win32.RegistryKey]$Destination) {
   foreach($valueName in $Source.GetValueNames()) {
@@ -20,21 +23,25 @@ function Copy-RegistryTree([Microsoft.Win32.RegistryKey]$Source,[Microsoft.Win32
     finally { $destinationChild.Dispose(); $sourceChild.Dispose() }
   }
 }
-if (-not (Test-Path -LiteralPath (Join-Path $candidateRoot 'PiAgent370.bpl'))) { throw 'Build the candidate Win64 BPL first' }
+if (-not (Test-Path -LiteralPath (Join-Path $candidateRoot 'PiAgent370.bpl'))) { throw "Build the candidate $Platform BPL first" }
 New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $fixtureRoot '.piagent-rad-fixture'),'piagent-rad-fixture-v1',[Text.UTF8Encoding]::new($false))
 $uses=if($Framework -eq 'VCL'){'Vcl.Forms'}else{'FMX.Forms'}
-$unitUses=if($Framework -eq 'VCL'){'Vcl.Forms, Vcl.Controls, Vcl.StdCtrls'}else{'FMX.Forms, FMX.Types, FMX.Controls, FMX.StdCtrls'}
+$unitUses=if($Framework -eq 'VCL'){'Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls'}else{'FMX.Forms, FMX.Types, FMX.Controls, FMX.StdCtrls'}
 $resourceExt=if($Framework -eq 'VCL'){'dfm'}else{'fmx'}
+$formDeclaration=if($Framework -eq 'VCL'){"`r`n    AgentFixtureListView: TListView;"}else{''}
+$formChildren=if($Framework -eq 'VCL'){"  object AgentFixtureListView: TListView`r`n    Left = 12`r`n    Top = 72`r`n    Width = 240`r`n    Height = 120`r`n    Columns = <`r`n      item`r`n        Caption = 'Before'`r`n        Width = 120`r`n      end>`r`n  end`r`n"}else{''}
+$win32Enabled=if($Platform -eq 'Win32'){'True'}else{'False'}
+$win64Enabled=if($Platform -eq 'Win64'){'True'}else{'False'}
 $bootstrap=if($Framework -eq 'VCL'){'  Application.MainFormOnTaskbar := True;'}else{''}
 $showMain=if($Framework -eq 'VCL'){'  MainForm.Show;'}else{''}
 $files=@{
   'Fixture.dpr'="program Fixture;`r`n`r`nuses`r`n  $uses,`r`n  Main in 'Main.pas' {MainForm};`r`n`r`n{`$R *.res}`r`n`r`nbegin`r`n  Application.Initialize;`r`n$bootstrap`r`n  Application.CreateForm(TMainForm, MainForm);`r`n$showMain`r`n  Application.Run;`r`nend.`r`n"
-  'Main.pas'="unit Main;`r`n`r`ninterface`r`n`r`nuses`r`n  System.Classes, $unitUses;`r`n`r`ntype`r`n  TMainForm = class(TForm)`r`n  private`r`n  public`r`n  end;`r`n`r`nvar`r`n  MainForm: TMainForm;`r`n`r`nimplementation`r`n`r`n{`$R *.$resourceExt}`r`n`r`nend.`r`n"
-  "Main.$resourceExt"="object MainForm: TMainForm`r`n  Caption = 'PiAgent $Framework SDK Fixture'`r`n  ClientHeight = 300`r`n  ClientWidth = 500`r`nend`r`n"
+  'Main.pas'="unit Main;`r`n`r`ninterface`r`n`r`nuses`r`n  System.Classes, $unitUses;`r`n`r`ntype`r`n  TMainForm = class(TForm)$formDeclaration`r`n  private`r`n  public`r`n  end;`r`n`r`nvar`r`n  MainForm: TMainForm;`r`n`r`nimplementation`r`n`r`n{`$R *.$resourceExt}`r`n`r`nend.`r`n"
+  "Main.$resourceExt"="object MainForm: TMainForm`r`n  Caption = 'PiAgent $Framework SDK Fixture'`r`n  ClientHeight = 300`r`n  ClientWidth = 500`r`n$formChildren"+"end`r`n"
   'Fixture.dproj'=@"
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
- <PropertyGroup><ProjectGuid>{164670F3-9B93-446E-A111-C7D2C622C242}</ProjectGuid><MainSource>Fixture.dpr</MainSource><ProjectName>Fixture</ProjectName><ProjectVersion>20.5</ProjectVersion><Base>True</Base><AppType>Application</AppType><FrameworkType>$Framework</FrameworkType><TargetedPlatforms>3</TargetedPlatforms><Config Condition="'`$(Config)'==''">Debug</Config><Platform Condition="'`$(Platform)'==''">Win64</Platform></PropertyGroup>
+ <PropertyGroup><ProjectGuid>{164670F3-9B93-446E-A111-C7D2C622C242}</ProjectGuid><MainSource>Fixture.dpr</MainSource><ProjectName>Fixture</ProjectName><ProjectVersion>20.5</ProjectVersion><Base>True</Base><AppType>Application</AppType><FrameworkType>$Framework</FrameworkType><TargetedPlatforms>3</TargetedPlatforms><Config Condition="'`$(Config)'==''">Debug</Config><Platform Condition="'`$(Platform)'==''">$Platform</Platform></PropertyGroup>
  <PropertyGroup Condition="'`$(Config)'=='Base' or '`$(Base)'!=''"><Base>true</Base></PropertyGroup>
  <PropertyGroup Condition="('`$(Platform)'=='Win32' and '`$(Base)'=='true') or '`$(Base_Win32)'!=''"><Base_Win32>true</Base_Win32><CfgParent>Base</CfgParent><Base>true</Base></PropertyGroup>
  <PropertyGroup Condition="('`$(Platform)'=='Win64' and '`$(Base)'=='true') or '`$(Base_Win64)'!=''"><Base_Win64>true</Base_Win64><CfgParent>Base</CfgParent><Base>true</Base></PropertyGroup>
@@ -44,13 +51,16 @@ $files=@{
  <PropertyGroup Condition="'`$(Base)'!=''"><DCC_Namespace>System;Winapi;Vcl;FMX;Data</DCC_Namespace><DCC_ExeOutput>build</DCC_ExeOutput><DCC_DcuOutput>build</DCC_DcuOutput></PropertyGroup>
  <PropertyGroup Condition="'`$(Cfg_1)'!=''"><DCC_Define>DEBUG;`$(DCC_Define)</DCC_Define><DCC_DebugInformation>1</DCC_DebugInformation><DCC_LocalDebugSymbols>true</DCC_LocalDebugSymbols><DCC_Optimize>false</DCC_Optimize></PropertyGroup>
  <ItemGroup><DelphiCompile Include="Fixture.dpr"><MainSource>MainSource</MainSource></DelphiCompile><DCCReference Include="Main.pas"><Form>MainForm</Form><FormType>$Framework.Form</FormType></DCCReference><BuildConfiguration Include="Debug"><Key>Cfg_1</Key><CfgParent>Base</CfgParent></BuildConfiguration></ItemGroup>
- <ProjectExtensions><Borland.Personality>Delphi.Personality.12</Borland.Personality><BorlandProject><Delphi.Personality><Source><Source Name="MainSource">Fixture.dpr</Source></Source></Delphi.Personality><Platforms><Platform value="Win32">False</Platform><Platform value="Win64">True</Platform></Platforms></BorlandProject></ProjectExtensions>
+ <ProjectExtensions><Borland.Personality>Delphi.Personality.12</Borland.Personality><BorlandProject><Delphi.Personality><Source><Source Name="MainSource">Fixture.dpr</Source></Source></Delphi.Personality><Platforms><Platform value="Win32">$win32Enabled</Platform><Platform value="Win64">$win64Enabled</Platform></Platforms></BorlandProject></ProjectExtensions>
  <Import Project="`$(BDS)\Bin\CodeGear.Delphi.Targets"/>
 </Project>
 "@
 }
 # Keep a failed acceptance's source/resource available for review and recovery.
 foreach($name in $files.Keys){$target=Join-Path $fixtureRoot $name;if(-not(Test-Path -LiteralPath $target)){[IO.File]::WriteAllText($target,$files[$name],[Text.UTF8Encoding]::new($false))}}
+if($Framework -eq 'VCL' -and -not ([IO.File]::ReadAllText((Join-Path $fixtureRoot 'Main.pas')).Contains('AgentFixtureListView: TListView'))){
+  throw 'Existing VCL fixture predates collection checks; use a fresh CandidateName so its files stay preserved'
+}
 $testRoot=Join-Path $fixtureRoot 'dunitx'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\DUnitXFixture.dpr') -Destination $testRoot -Force
@@ -63,7 +73,7 @@ if(-not(Test-Path -LiteralPath $candidateLoader)){
   $packagePath=[IO.Path]::GetFullPath((Join-Path $adapterRoot '..\..\package.json'))
   $releaseVersion=([IO.File]::ReadAllText($packagePath)|ConvertFrom-Json).version
   if($releaseVersion -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$'){throw 'Current package version is invalid'}
-  $releaseLoader=Join-Path $adapterRoot "bin\Win64\$releaseVersion\WebView2Loader.dll"
+  $releaseLoader=Join-Path $adapterRoot "bin\$Platform\$releaseVersion\WebView2Loader.dll"
   if(-not(Test-Path -LiteralPath $releaseLoader)){throw 'Current release WebView2Loader or pre-copied candidate loader is required'}
   Copy-Item -LiteralPath $releaseLoader -Destination $candidateLoader
 }
@@ -88,20 +98,20 @@ if(-not(Test-Path -LiteralPath $profileRoot)){
   try { Copy-RegistryTree $sourceProfile $destinationProfile }
   finally { $destinationProfile.Dispose(); $sourceProfile.Dispose() }
 }
-$packages=Join-Path $profileRoot 'Known Packages x64'
+$packages=Join-Path $profileRoot $knownPackages
 if(-not(Test-Path -LiteralPath $packages)){throw 'The isolated profile is missing its installed design package registry'}
-$key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Software\Embarcadero\$profileName\37.0\Known Packages x64",$true)
+$key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Software\Embarcadero\$profileName\37.0\$knownPackages",$true)
 $standardPackages=@('dclstd370.bpl','dclfmxstd370.bpl')
 foreach($packageName in $standardPackages){
   $registered=$key.GetValueNames() | Where-Object {[IO.Path]::GetFileName($_) -ieq $packageName}
   if(-not $registered){throw "The isolated profile is missing installed standard package $packageName; prepare a fresh candidate profile"}
-  if(-not(Test-Path -LiteralPath (Join-Path $bdsRoot "bin64\$packageName"))){throw "Installed package $packageName is unavailable"}
+  if(-not(Test-Path -LiteralPath (Join-Path $bdsRoot "$ideBin\$packageName"))){throw "Installed package $packageName is unavailable"}
 }
 foreach($name in $key.GetValueNames()){if($name -match '(?i)PiAgent.*\.bpl$'){$key.DeleteValue($name,$false)}}
 $key.SetValue((Join-Path $candidateRoot 'PiAgent370.bpl'),'PiAgent candidate SDK acceptance',[Microsoft.Win32.RegistryValueKind]::String)
 $designPackageCount=$key.GetValueNames().Count
 $key.Dispose()
-$start=[Diagnostics.ProcessStartInfo]::new((Join-Path $bdsRoot 'bin64\bds.exe'))
+$start=[Diagnostics.ProcessStartInfo]::new((Join-Path $bdsRoot "$ideBin\bds.exe"))
 $start.UseShellExecute=$false
 $start.Arguments="-r$profileName -ns `"$(Join-Path $fixtureRoot 'Fixture.dproj')`""
 $start.EnvironmentVariables['PIAGENT_RAD_FIXTURE_PATH']=$fixtureRoot
@@ -113,4 +123,4 @@ if($SoakMinutes -gt 0){$start.EnvironmentVariables['PIAGENT_RAD_SOAK_MINUTES']=[
 if($CoreAutorun){$start.EnvironmentVariables['PIAGENT_RAD_CORE_AUTORUN']='1'}
 $start.WorkingDirectory=$fixtureRoot
 if($Launch){$process=[Diagnostics.Process]::Start($start);[pscustomobject]@{profile=$profileName;fixture=$fixtureRoot;pid=$process.Id;results=(Join-Path $fixtureRoot 'designer-acceptance.json')}}
-else{[pscustomobject]@{profile=$profileName;fixture=$fixtureRoot;designPackageCount=$designPackageCount;launch="& '$PSCommandPath' -Framework $Framework -CandidateName $CandidateName -Launch";results=(Join-Path $fixtureRoot 'designer-acceptance.json')}}
+else{[pscustomobject]@{profile=$profileName;fixture=$fixtureRoot;platform=$Platform;designPackageCount=$designPackageCount;launch="& '$PSCommandPath' -Framework $Framework -Platform $Platform -CandidateName $CandidateName -Launch";results=(Join-Path $fixtureRoot 'designer-acceptance.json')}}

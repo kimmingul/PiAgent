@@ -24,6 +24,25 @@ begin
   end;
 end;
 
+function WritablePropertyInSnapshot(View: TJSONObject; const ComponentName,PropertyName: string): Boolean;
+var Components,Properties: TJSONArray; Component,PropertyRow: TJSONObject; I,J: Integer;
+begin
+  Result:=False; Components:=View.GetValue<TJSONArray>('components');
+  if Components=nil then Exit;
+  for I:=0 to Components.Count-1 do begin
+    Component:=Components.Items[I] as TJSONObject;
+    if not SameText(Component.GetValue<string>('id',''),ComponentName) then Continue;
+    Properties:=Component.GetValue<TJSONArray>('properties');
+    if Properties=nil then Exit;
+    for J:=0 to Properties.Count-1 do begin
+      PropertyRow:=Properties.Items[J] as TJSONObject;
+      if SameText(PropertyRow.GetValue<string>('name',''),PropertyName) then
+        Exit(PropertyRow.GetValue<Boolean>('writable',False));
+    end;
+    Exit;
+  end;
+end;
+
 function Snapshot(const Module: IOTAModule; const Editor: IOTAFormEditor): TJSONObject;
 var Root,Item: TComponent; Components,Properties: TJSONArray; I: Integer;
   Obj: TJSONObject; Value,Framework,BlockCode,BlockReason: string;
@@ -106,6 +125,7 @@ begin
     finally View.Free; end;
   end;
   if (Operation <> 'setProperty') and (Operation <> 'setReference') and (Operation <> 'reparent') then raise Exception.Create('Unsupported designer operation');
+  ComponentName := Args.GetValue<string>('component',''); PropertyName := Args.GetValue<string>('property','');
   View := Snapshot(Module,Editor);
   try
     if not View.GetValue<Boolean>('canSetProperty',False) then
@@ -113,9 +133,10 @@ begin
     if not SameText(Target,Args.GetValue<string>('document','')) or
       (View.GetValue<string>('revision','') <> Args.GetValue<string>('revision','')) then
       raise Exception.Create('Designer changed or has unsaved edits; inspect and approve again');
+    if (Operation='setProperty') and not WritablePropertyInSnapshot(View,ComponentName,PropertyName) then
+      raise Exception.Create('Property is outside the inspected writable designer schema');
   finally View.Free; end;
   Root := NativeOf(Editor.GetRootComponent);
-  ComponentName := Args.GetValue<string>('component',''); PropertyName := Args.GetValue<string>('property','');
   Value := Args.GetValue<string>('value','');
   if (Length(Value) > 4096) or SameText(PropertyName,'Name') then raise Exception.Create('Unsupported property');
   if SameText(ComponentName,Root.Name) then Item := Root else Item := Root.FindComponent(ComponentName);

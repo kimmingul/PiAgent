@@ -61,6 +61,28 @@ export class Controller {
   private queue:Frame={};
   private preferences:Frame={};
   private cancelAfterStart=false;
+  private interactionEpoch=0;
+  private retireInteractions():void {
+    this.interactionEpoch++;
+    this.view.clearInteractions?.();
+  }
+  private interactionAnswer(requestId:unknown):(answer:Frame)=>void {
+    const owner=this.session,epoch=this.interactionEpoch;
+    return answer=>{
+      if(this.connected&&!this.switching&&owner===this.session&&epoch===this.interactionEpoch)
+        this.post({action:'ompRespond',requestId,answer});
+    };
+  }
+  private retireLiveWork():void {
+    this.retireInteractions();this.view.clearAccount?.();this.view.clearRoles?.();this.view.clearExecution?.();
+    this.executionRequests.clear();this.completedOperations.clear();this.loginBusy=false;this.controlPending=false;this.cancelAfterStart=false;
+    this.settingsOpen=false;if(this.settingsSaving)this.view.settingsResult?.(false,t("대화가 변경되었습니다."));this.settingsSaving=false;
+    for(const id of this.btwSubmissions)this.emit('submitted',{id,ok:false});this.btwSubmissions.clear();
+    for(const id of this.queueSubmissions.keys())this.emit('submitted',{id,ok:false});this.queueSubmissions.clear();this.queue={};
+    if(this.turn){this.emit('assistantEnd');this.emit('turnEnd',{started:this.started,ended:Date.now(),stopped:true});}
+    if(this.submission)this.emit('submitted',{id:this.submission['id'],ok:false});this.submission=undefined;
+    this.connected=false;this.busy=false;this.turn='';this.resolve(false);this.features={};
+  }
   private catalog():void {this.emit('catalog',{models:this.models,levels:this.levels});this.status();}
   constructor(private readonly post: (frame: Frame) => void, private readonly view: View) {}
   private emit(t: string, data: Frame = {}): void { this.view.emit({t, ...data}); }
@@ -223,16 +245,19 @@ export class Controller {
     if (this.review) this.emit('approvalResult', {id: this.review.id, ok}); this.review = undefined;
   }
   receive(frame: Frame): void {
-    if(frame['type']==='event'&&!this.connected&&this.switching)return;
+    if(frame['type']==='event'&&!this.connected)return;
     if(frame['type']!=='session'&&typeof frame['ownerSessionId']==='string'&&frame['ownerSessionId']!==this.session)return;
+    if(!this.connected&&!['session','workspaceChanging','workspaceDisconnected','disconnected','copied','preferences'].includes(String(frame['type']))&&
+      !(['error','operationError'].includes(String(frame['type']))&&['connect','openFile','openUrl','copy'].includes(String(frame['action']))))return;
     switch (frame['type']) {
       case 'workspaceChanging':
-        this.connected=false;this.switching=true;this.busy=false;this.turn='';this.resolve(false);
-        if(this.submission)this.emit('submitted',{id:this.submission['id'],ok:false});this.submission=undefined;
-        this.view.clearInteractions?.();this.emit('files',{items:null});this.emit('context',{});
+        this.retireLiveWork();this.switching=true;
+        this.view.gitStatus?.({},false);this.emit('files',{items:null});this.emit('context',{});
         this.workspace=String(frame['workspaceUri']??'');this.status(this.workspace?t("프로젝트 다시 연결 중…"):t("열린 프로젝트가 없습니다."));break;
       case 'workspaceDisconnected':
-        this.reconnectAvailable=false;this.connected=false;this.switching=this.busy=false;this.status(t("프로젝트를 열면 자동으로 연결합니다."));break;
+        this.retireLiveWork();this.reconnectAvailable=false;this.switching=false;this.workspace='';
+        this.view.gitStatus?.({},false);this.emit('files',{items:null});this.emit('context',{});
+        this.status(t("프로젝트를 열면 자동으로 연결합니다."));break;
       case 'messageRestorePreview':this.showReview(object(frame['data']),true,false);break;
       case 'folderAdded':this.notice(t("OMP 작업영역에 폴더를 추가했습니다: ")+String(frame['path']??''));break;
       case 'buildResult':this.notice(frame['success']?t("빌드 완료"):t("빌드 실패 · IDE 오류 목록을 확인해 주세요."));break;
@@ -243,6 +268,9 @@ export class Controller {
       case 'preferences':
         this.preferences=object(frame['values']);
         this.emit('preferences',{values:frame['values']});
+        // Display preferences such as language are global and can arrive after
+        // the IDE workspace closes. An old settings save/dialog is session-owned.
+        if(!this.connected)break;
         if(this.settingsSaving){this.settingsSaving=false;this.view.settingsResult?.(true);}
         if(this.settingsOpen){this.settingsOpen=false;const owner=this.session;this.view.settings?.({...frame,accountTab:this.accountTab},values=>{if(owner!==this.session||!this.connected){this.view.settingsResult?.(false,t("대화가 변경되었습니다. 설정을 다시 열어 주세요."));return;}if(this.settingsSaving)return;this.settingsSaving=true;this.post({action:'preferences',values});});this.accountTab=false;}break;
       case 'copied':this.emit('copyResult',{id:frame['id'],ok:true});this.notice(t("복사했습니다."));break;
@@ -281,7 +309,7 @@ export class Controller {
         if(this.submission)this.emit('submitted',{id:this.submission['id'],ok:false});
         for(const id of this.btwSubmissions)this.emit('submitted',{id,ok:false});this.btwSubmissions.clear();
         for(const id of this.queueSubmissions.keys())this.emit('submitted',{id,ok:false});this.queueSubmissions.clear();this.queue={};
-        this.view.clearInteractions?.();this.models=[];this.levels=[];this.thinking='';
+        this.retireInteractions();this.models=[];this.levels=[];this.thinking='';
         this.reconnectAvailable=false;this.connected = true; this.busy = this.switching = this.controlPending = false; this.submission = undefined;
         this.session = String(frame['sessionId']); this.turn = ''; this.sequence = 0; this.features = frame;
         this.approvalMode=String(frame['approvalMode']??'always-ask');this.turnApproved=false;
@@ -362,7 +390,8 @@ export class Controller {
         this.view.accountStatus?.([],t("Core 연결이 종료되었습니다. 다시 연결한 뒤 조회해 주세요."));
         this.settingsOpen=false;if(this.settingsSaving)this.view.settingsResult?.(false,t("연결이 종료되었습니다."));this.settingsSaving=false;
         this.cancelAfterStart=false;
-        this.view.clearInteractions?.();
+        this.retireInteractions();
+        if(this.turn){this.emit('assistantEnd');this.emit('turnEnd',{started:this.started,ended:Date.now(),stopped:true});}
         if (this.submission) this.emit('submitted', {id: this.submission['id'], ok: false}); this.submission = undefined;
         for(const id of this.btwSubmissions)this.emit('submitted',{id,ok:false});this.btwSubmissions.clear();this.features={};this.controlPending=false;
         for(const id of this.queueSubmissions.keys())this.emit('submitted',{id,ok:false});this.queueSubmissions.clear();this.queue={};
@@ -372,6 +401,13 @@ export class Controller {
   }
   private event(data: Frame): void {
     if (data['sessionId'] !== this.session || typeof data['sequence'] !== 'number' || data['sequence'] <= this.sequence) return;
+    if(data['kind']==='omp_event'&&typeof data['turnId']==='string'&&data['turnId']!==this.turn)return;
+    if(data['kind']==='omp_event'&&!this.turn){
+      const idleFrame=object(data['frame']);
+      if(idleFrame['type']==='designer_approval'||idleFrame['type']==='designer_resolved')return;
+      if(idleFrame['type']==='extension_ui_request'&&idleFrame['login']!==true&&
+        !['notify','setStatus','cancel'].includes(String(idleFrame['method'])))return;
+    }
     this.sequence = data['sequence']; const kind = data['kind'];
     if(kind==='omp_event') {
       const frame=object(data['frame']);
@@ -386,13 +422,13 @@ export class Controller {
         else if(frame['state']==='completed')this.notice(t("컨텍스트를 압축했습니다."));
         this.view.executionEvent?.(frame);this.status(this.controlPending?t("컨텍스트 압축 중…"):t("연결됨"));if(!this.controlPending)this.refresh();return;
       }
-      if(frame['type']==='extension_ui_request'&&frame['login']===true){this.view.accountEvent?.(frame,answer=>this.post({action:'ompRespond',requestId:frame['id'],answer}));return;}
+      if(frame['type']==='extension_ui_request'&&frame['login']===true){this.view.accountEvent?.(frame,this.interactionAnswer(frame['id']));return;}
       if(frame['type']==='designer_approval'){this.showReview({...frame,designer:true},false);return;}
       if(frame['type']==='designer_resolved'){this.resolve(frame['approved']===true);this.status(t("응답 중…"));return;}
       if(frame['type']==='ui_event'){const event=object(frame['event']);if(event['t']==='queue')this.queue=event;if(event['t']==='commands'){this.commands(event['items']);return;}this.view.emit(event);if(event['t']==='toolEnd'&&this.features['ompControlsEnabled'])this.post({action:'ompControl',command:'get_state'});return;}
       if(frame['type']==='extension_ui_request') {
         const method=frame['method'];
-        if(['select','confirm','input','editor','cancel'].includes(String(method)))this.view.interaction?.(frame,answer=>this.post({action:'ompRespond',requestId:frame['id'],answer}));
+        if(['select','confirm','input','editor','cancel'].includes(String(method)))this.view.interaction?.(frame,this.interactionAnswer(frame['id']));
         else if(method==='notify'||method==='setStatus')this.notice(String(frame['message']??frame['statusText']??''));
         else if(method==='set_editor_text')this.emit('setInput',{text:frame['text']});
         else if(method==='open_url'){const url=String(frame['launchUrl']??frame['url']??'');this.notice(String(frame['instructions']??t("OMP 요청으로 브라우저를 엽니다.")));this.post({action:'openUrl',url});}
@@ -403,7 +439,7 @@ export class Controller {
     }
     if (kind === 'warning') { this.notice(String(data['text'])); return; }
     if (kind === 'closed') {
-      this.view.clearInteractions?.();this.view.clearAccount?.();this.view.clearRoles?.();this.view.clearExecution?.();
+      this.retireInteractions();this.view.clearAccount?.();this.view.clearRoles?.();this.view.clearExecution?.();
       if(this.turn){this.emit('assistantEnd');this.emit('turnEnd',{started:this.started,ended:Date.now(),stopped:true});}
       if(this.submission)this.emit('submitted',{id:this.submission['id'],ok:false});this.submission=undefined;
       for(const id of this.btwSubmissions)this.emit('submitted',{id,ok:false});this.btwSubmissions.clear();
@@ -433,6 +469,7 @@ export class Controller {
       case 'approval_requested': this.showReview(object(data['approval']), false); break;
       case 'approval_resolved': { const result = object(data['approval']); this.resolve(result['approved'] === true); if (result['warning']) this.notice(String(result['warning'])); this.status(t("응답 중…")); break; }
       case 'completed': case 'cancelled': case 'error':
+        this.retireInteractions();
         if(kind==='error'){this.lastTurnError=String(data['text']??t("작업 오류가 발생했습니다."));this.notice(this.lastTurnError);}
         if(kind==='completed'&&this.preferences['notifications'])this.post({action:'notify'});
         this.emit('assistantEnd'); this.emit('turnEnd',{started:this.started,ended:Date.now(),stopped:kind!=='completed'}); this.busy = false; this.turn = ''; this.resolve(false);

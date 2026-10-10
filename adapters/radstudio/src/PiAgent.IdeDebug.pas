@@ -119,7 +119,7 @@ begin
 end;
 function ExecuteIdeDebug(const Workspace: string; Args: TJSONObject): TJSONObject;
 var Services: IOTADebuggerServices; Process: IOTAProcess; Thread: IOTAThread;
-  Operation,Reason,FileName: string; Frames: TJSONArray; I,Count,Line: Integer;
+  Operation,Reason,FileName: string; Frames: TJSONArray; I,Count,Line,FrameIndex: Integer;
   Buffer: array[0..4096] of Char; CanModify: Boolean; Address: TOTAAddress;
   Size,Value: LongWord; Evaluation: TOTAEvaluateResult; Breakpoint,Found: IOTABreakpoint; Id: string; Rows: TJSONArray;
   RunAction: TCustomAction;
@@ -206,7 +206,8 @@ begin
         for I:=1 to Count do begin
           Thread.GetCallPos(I,FileName,Line);
           if FileName<>'' then try FileName:=ResolveIdeFile(Workspace,FileName); except FileName:=''; Line:=0; end;
-          Frames.AddElement(TJSONObject.Create.AddPair('function',Copy(Thread.CallHeaders[I],1,1024))
+          Frames.AddElement(TJSONObject.Create.AddPair('index',TJSONNumber.Create(I-1))
+            .AddPair('function',Copy(Thread.CallHeaders[I],1,1024))
             .AddPair('file',FileName).AddPair('line',TJSONNumber.Create(Line)));
         end;
       finally Thread.EndCallStackAccess; end;
@@ -214,10 +215,16 @@ begin
     end;
     if Operation='evaluate' then begin
       FillChar(Buffer,SizeOf(Buffer),0);
+      FrameIndex:=Args.GetValue<Integer>('frameIndex',0);
+      if FrameIndex<0 then raise Exception.Create('Frame index must be nonnegative');
+      // A source-location overload changes lexical scope, but the public SDK
+      // does not promise selection of the actual runtime frame (e.g. recursion).
+      if FrameIndex<>0 then raise Exception.Create('Non-top frame evaluation is unavailable in RAD ToolsAPI');
       Evaluation:=Thread.Evaluate(Args.GetValue<string>('expression',''),@Buffer[0],Length(Buffer),
         CanModify,False,nil,Address,Size,Value);
       Result.AddPair('executed',TJSONBool.Create(True)).AddPair('valid',TJSONBool.Create(Evaluation=erOK))
         .AddPair('value',string(Buffer)).AddPair('allowSideEffects',TJSONBool.Create(False))
+        .AddPair('frameIndex',TJSONNumber.Create(FrameIndex))
         .AddPair('evaluationState',GetEnumName(TypeInfo(TOTAEvaluateResult),Ord(Evaluation)));
       if Evaluation in [erDeferred,erBusy] then Result.AddPair('reason','Evaluation did not complete synchronously; no value is asserted');
       Exit;

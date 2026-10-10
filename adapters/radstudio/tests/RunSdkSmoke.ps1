@@ -23,7 +23,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\ExternalBuildFixture.d
 $project=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'fixtures\ExternalBuildFixture.dproj'))
 $project=$project.Replace('..\..\bin\$(Platform)\ide-dev\external-fixture','bin')
 [IO.File]::WriteAllText((Join-Path $externalRoot 'ExternalBuildFixture.dproj'),$project,[Text.UTF8Encoding]::new($false))
-foreach($test in @('EditorOffsetsSmoke','OwnedProcessSmoke','ExternalBuildSmoke','DesignerJournalSmoke','DesignerPropertiesSmoke','DesignerRelationsSmoke','DUnitXRunnerSmoke','ProcessCpuSmoke','RequestRetirementSmoke','DesignerAuthoringGuardsSmoke')){
+foreach($test in @('EditorOffsetsSmoke','OwnedProcessSmoke','ExternalBuildSmoke','DesignerJournalSmoke','DesignerPropertiesSmoke','DesignerFmxPropertiesSmoke','DesignerRelationsSmoke','DUnitXRunnerSmoke','ProcessCpuSmoke','RequestRetirementSmoke','DesignerAuthoringGuardsSmoke')){
  Compile ($test+'.dpr') $PSScriptRoot
  $arguments=@()
  if($test -eq 'ExternalBuildSmoke'){$arguments=@((Join-Path $externalRoot 'ExternalBuildFixture.dproj'),$bdsRoot)}

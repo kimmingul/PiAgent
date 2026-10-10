@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "rad132-piagent-kai-v1",
+  "mode": "product-default",
+  "status": "deferred at user request; KAI availability and comparison runs not verified",
+  "products": ["PiAgent", "KAI"],
+  "repetitions": 5,
+  "suites": [
+    {
+      "ide": "RAD13.2",
+      "tasks": [
+        "rad-context",
+        "rad-symbols",
+        "rad-completion",
+        "rad-next-edit",
+        "rad-build-repair",
+        "rad-refactor",
+        "rad-test-repair",
+        "rad-debug",
+        "rad-profile",
+        "rad-designer",
+        "rad-recovery",
+        "rad-deploy"
+      ]
+    }
+  ],
+  "taskSpecification": "tests/fixtures/ide-benchmark/tasks.json",
+  "protocol": "docs/IDE-BENCHMARK.md"
+}

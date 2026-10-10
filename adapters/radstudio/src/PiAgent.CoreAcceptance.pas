@@ -13,6 +13,7 @@ private
   FReport: TJSONObject;
   FSteps: TJSONArray;
   FRoot,FWorkspace,FSession,FOriginal,FProposal,FRevision,FCheckpoint: string;
+  FFramework,FCreateCheckpoint,FScalarBefore,FCollectionBefore,FScalarProperty: string;
   FPhase,FAuditLines,FNativeActions,FApprovals: Integer;
   FAt: UInt64;
   FInTick,FConnected,FWaiting: Boolean;
@@ -24,6 +25,7 @@ private
   procedure Tick(Sender: TObject);
   function ResultPayload: TJSONObject;
   function Module: IOTAModule;
+  function SnapshotProperty(const ComponentName,PropertyName: string): string;
 public
   constructor Create(AOwner: TComponent); override;
   destructor Destroy; override;
@@ -44,6 +46,25 @@ function TCoreFixture.Module: IOTAModule;
 begin
   Result:=(BorlandIDEServices as IOTAModuleServices).CurrentModule;
   if (Result=nil) or not SameText(Result.FileName,TPath.Combine(FRoot,'Main.pas')) then raise Exception.Create('Core fixture designer module changed');
+end;
+function TCoreFixture.SnapshotProperty(const ComponentName,PropertyName: string): string;
+var View,Args,Component,Row: TJSONObject; Components,Properties: TJSONArray; I,J: Integer;
+begin
+  Result:=''; Args:=TJSONObject.Create;
+  try View:=ExecuteDesigner('inspect',Args,FWorkspace); finally Args.Free; end;
+  try
+    Components:=View.GetValue('components') as TJSONArray;
+    for I:=0 to Components.Count-1 do begin
+      Component:=Components.Items[I] as TJSONObject;
+      if Component.GetValue<string>('id','')<>ComponentName then Continue;
+      Properties:=Component.GetValue('properties') as TJSONArray;
+      for J:=0 to Properties.Count-1 do begin
+        Row:=Properties.Items[J] as TJSONObject;
+        if Row.GetValue<string>('name','')=PropertyName then Exit(Row.GetValue<string>('value',''));
+      end;
+    end;
+    raise Exception.Create('Live Core fixture property disappeared: '+ComponentName+'.'+PropertyName);
+  finally View.Free; end;
 end;
 procedure TCoreFixture.Save;
 begin TFile.WriteAllText(TPath.Combine(FRoot,'core-acceptance.json'),FReport.ToJSON,TEncoding.UTF8); end;
@@ -90,20 +111,46 @@ begin
       2: begin Name:='build_approved_live_route'; if not Payload.GetValue<Boolean>('success',False) or (FNativeActions<>1) or (FApprovals<>1) then raise Exception.Create('Approved Core native build did not complete'); end;
       3: begin Name:='designer_preview_live_route'; FProposal:=Payload.GetValue<string>('proposalId',''); FRevision:=Payload.GetValue<string>('revision','');
         if (FProposal='') or (FRevision='') or (DesignerFileRevision(Module)<>FOriginal) then raise Exception.Create('Core preview mutated files or omitted proposal'); end;
-      4: begin Name:='designer_approved_apply_live_route'; FCheckpoint:=Payload.GetValue<string>('checkpointId','');
-        if not Payload.GetValue<Boolean>('applied',False) or (FCheckpoint='') or (FApprovals<>1) or (FNativeActions<>1) then raise Exception.Create('Core approved creation did not apply'); end;
-      5: begin Name:='designer_restore_preview_live_route'; FProposal:=Payload.GetValue<string>('proposalId',''); FRevision:=Payload.GetValue<string>('revision','');
+      4: begin Name:='designer_approved_apply_live_route'; FCreateCheckpoint:=Payload.GetValue<string>('checkpointId','');
+        if not Payload.GetValue<Boolean>('applied',False) or (FCreateCheckpoint='') or (FApprovals<>1) or (FNativeActions<>1) then raise Exception.Create('Core approved creation did not apply'); end;
+      5: begin Name:='font_preview_live_route'; FProposal:=Payload.GetValue<string>('proposalId',''); FRevision:=Payload.GetValue<string>('revision','');
+        if (FProposal='') or (FRevision='') or not Payload.GetValue<string>('diff','').Contains(FScalarProperty) or
+          (FNativeActions<>0) or (FApprovals<>0) then raise Exception.Create('Core Font preview mutated state or omitted review'); end;
+      6: begin Name:='font_approved_apply_live_route'; FCheckpoint:=Payload.GetValue<string>('checkpointId','');
+        if not Payload.GetValue<Boolean>('applied',False) or (FCheckpoint='') or (FApprovals<>1) or (FNativeActions<>1) or
+          (SnapshotProperty('CoreFixtureButton',FScalarProperty)<>'Courier New') then raise Exception.Create('Core Font apply did not persist'); end;
+      7: begin Name:='font_restore_preview_live_route'; FProposal:=Payload.GetValue<string>('proposalId',''); FRevision:=Payload.GetValue<string>('revision','');
+        if (FProposal='') or (FRevision='') or not Payload.GetValue<string>('diff','').Contains('restoreText') then raise Exception.Create('Core Font restore review missing'); end;
+      8: begin Name:='font_approved_restore_live_route';
+        if not Payload.GetValue<Boolean>('restored',False) or (FApprovals<>1) or (FNativeActions<>1) or
+          (SnapshotProperty('CoreFixtureButton',FScalarProperty)<>FScalarBefore) then raise Exception.Create('Core Font restore did not reload prior value'); end;
+      9: begin Name:='designer_restore_preview_live_route'; FProposal:=Payload.GetValue<string>('proposalId',''); FRevision:=Payload.GetValue<string>('revision','');
         if (FProposal='') or (FRevision='') or not Payload.GetValue<string>('diff','').Contains('restoreText') then raise Exception.Create('Core restore preview omitted concrete source/form review'); end;
-      6: begin Name:='designer_approved_restore_live_route';
+      10: begin Name:='designer_approved_restore_live_route';
         if not Payload.GetValue<Boolean>('restored',False) or (FApprovals<>1) or (FNativeActions<>1) or
           (DesignerFileRevision(Module)<>FOriginal) then raise Exception.Create('Core restoration did not restore exact source/form bytes'); end;
-      7: begin Name:='designer_single_use_replay_rejected';
+      11: begin Name:='designer_single_use_replay_rejected';
         if not Payload.GetValue<Boolean>('fixtureToolError',False) or (FNativeActions<>0) or (FApprovals<>0) then raise Exception.Create('Consumed restore proposal was accepted twice'); end;
+      12: begin Name:='collection_preview_live_route'; FProposal:=Payload.GetValue<string>('proposalId',''); FRevision:=Payload.GetValue<string>('revision','');
+        if (FProposal='') or (FRevision='') or not Payload.GetValue<string>('diff','').Contains('Columns[0].Caption') or
+          (FNativeActions<>0) or (FApprovals<>0) then raise Exception.Create('Core collection preview mutated state or omitted review'); end;
+      13: begin Name:='collection_approved_apply_live_route'; FCheckpoint:=Payload.GetValue<string>('checkpointId','');
+        if not Payload.GetValue<Boolean>('applied',False) or (FCheckpoint='') or (FApprovals<>1) or (FNativeActions<>1) or
+          (SnapshotProperty('AgentFixtureListView','Columns[0].Caption')<>'Core Changed') then raise Exception.Create('Core collection apply did not persist'); end;
+      14: begin Name:='collection_restore_preview_live_route'; FProposal:=Payload.GetValue<string>('proposalId',''); FRevision:=Payload.GetValue<string>('revision','');
+        if (FProposal='') or (FRevision='') or not Payload.GetValue<string>('diff','').Contains('restoreText') then raise Exception.Create('Core collection restore review missing'); end;
+      15: begin Name:='collection_approved_restore_live_route';
+        if not Payload.GetValue<Boolean>('restored',False) or (FApprovals<>1) or (FNativeActions<>1) or
+          (SnapshotProperty('AgentFixtureListView','Columns[0].Caption')<>FCollectionBefore) or
+          (DesignerFileRevision(Module)<>FOriginal) then raise Exception.Create('Core collection restore did not reload prior value'); end;
     else raise Exception.Create('Unexpected Core fixture phase'); end;
     FSteps.AddElement(TJSONObject.Create.AddPair('operation',Name).AddPair('passed',TJSONBool.Create(True))
       .AddPair('nativeActions',TJSONNumber.Create(FNativeActions)).AddPair('approvals',TJSONNumber.Create(FApprovals)).AddPair('actualCoreResult',TJSONValue(Payload.Clone)));
     Inc(FPhase); FWaiting:=False; Save;
-    if FPhase=8 then begin FReport.AddPair('passed',TJSONBool.Create(True)).AddPair('completedAt',DateToISO8601(Now,False)); Save; FTimer.Enabled:=False; Send(TJSONObject.Create.AddPair('action','disconnectWorkspace')); end;
+    if (FFramework='fmx') and (FPhase=12) or (FFramework='vcl') and (FPhase=16) then begin
+      FReport.AddPair('passed',TJSONBool.Create(True)).AddPair('completedAt',DateToISO8601(Now,False)); Save;
+      FTimer.Enabled:=False; Send(TJSONObject.Create.AddPair('action','disconnectWorkspace'));
+    end;
   finally Payload.Free; end;
 end;
 procedure TCoreFixture.Event(Data: TJSONObject);
@@ -118,12 +165,14 @@ begin
   if Kind='ide_cancel' then begin FHost.Cancel(Frame.GetValue<string>('id','')); Exit; end;
   if Kind='designer_cancel' then Exit;
   if Kind='designer_approval' then begin
-    if not (FPhase in [1,2,4,6]) or not FWaiting then raise Exception.Create('Unexpected live Core approval');
+    if not (FPhase in [1,2,4,6,8,10,13,15]) or not FWaiting then raise Exception.Create('Unexpected live Core approval');
     if FApprovals<>0 then raise Exception.Create('Repeated live Core approval');
     Diff:=Frame.GetValue<string>('diff','');
     if (Diff='') or (Length(Diff)>131072) then raise Exception.Create('Core approval review is missing');
     if (FPhase=4) and not Diff.Contains('CoreFixtureButton') then raise Exception.Create('Core approval does not describe the exact fixture change');
-    if (FPhase=6) and not Diff.Contains('restoreText') then raise Exception.Create('Core recovery review is incomplete');
+    if (FPhase=6) and not Diff.Contains(FScalarProperty) then raise Exception.Create('Core Font approval lacks the reviewed property');
+    if (FPhase=13) and not Diff.Contains('Columns[0].Caption') then raise Exception.Create('Core collection approval lacks the reviewed column');
+    if (FPhase in [8,10,15]) and not Diff.Contains('restoreText') then raise Exception.Create('Core recovery review is incomplete');
     FSteps.AddElement(TJSONObject.Create.AddPair('operation','actual_core_approval').AddPair('data',TJSONValue(Frame.Clone)));
     Inc(FApprovals); Approved:=FPhase<>1;
     Send(TJSONObject.Create.AddPair('action','designerDecide').AddPair('proposalId',Frame.GetValue<string>('proposalId','')).AddPair('approved',TJSONBool.Create(Approved)));
@@ -146,7 +195,7 @@ begin
   finally Reply.Free; end;
 end;
 procedure TCoreFixture.Tick(Sender: TObject);
-var Json: string; Msg,Data,State: TJSONObject; I: Integer;
+var Json: string; Msg,Data,State,Args: TJSONObject; I: Integer;
 begin
   if FInTick then Exit; FInTick:=True;
   try
@@ -163,10 +212,17 @@ begin
           State:=TJSONObject.ParseJSONValue(TFile.ReadAllText(TPath.Combine(FRoot,'ide-acceptance.json'),TEncoding.UTF8)) as TJSONObject;
           try if State.GetValue('passed')=nil then Exit; if not State.GetValue<Boolean>('passed',False) then raise Exception.Create('SDK acceptance failed; live Core route not started'); finally State.Free; end;
         end;
-        FOriginal:=DesignerFileRevision(Module); FWorker:=TPiChatWorker.Create; FWorker.Start; FAt:=GetTickCount64;
+        FOriginal:=DesignerFileRevision(Module);
+        Args:=TJSONObject.Create;
+        try State:=ExecuteDesigner('inspect',Args,FWorkspace); finally Args.Free; end;
+        try FFramework:=State.GetValue<string>('framework',''); finally State.Free; end;
+        if not ((FFramework='vcl') or (FFramework='fmx')) then raise Exception.Create('Core fixture requires VCL or FMX form');
+        if FFramework='vcl' then FScalarProperty:='Font.Name'
+        else FScalarProperty:='TextSettings.Font.Family';
+        FWorker:=TPiChatWorker.Create; FWorker.Start; FAt:=GetTickCount64;
         Send(TJSONObject.Create.AddPair('action','connect').AddPair('workspaceUri',FWorkspace).AddPair('ideCatalog',FHost.Catalog(FWorkspace))); Exit;
       end;
-      if GetTickCount64-FAt>180000 then raise Exception.Create('Live Core fixture phase timed out');
+      if GetTickCount64-FAt>360000 then raise Exception.Create('Live Core fixture phase timed out');
       for I:=1 to 64 do begin
         Json:=FWorker.Pop; if Json='' then Break;
         Msg:=TJSONObject.ParseJSONValue(Json) as TJSONObject;
@@ -178,7 +234,7 @@ begin
       end;
       Msg:=FHost.Poll;
       if Msg<>nil then try if FWorker.MayReplySdk(Msg.GetValue<string>('requestId','')) then Send(TJSONObject(Msg.Clone)); finally Msg.Free; end;
-      if not FConnected or FWaiting or (FPhase>=8) then Exit;
+      if not FConnected or FWaiting or ((FFramework='fmx') and (FPhase>=12)) or (FPhase>=16) then Exit;
       Send(TJSONObject.Create.AddPair('action','ideCatalog').AddPair('catalog',FHost.Catalog(FWorkspace)));
       case FPhase of
         0: Prompt('ide_context',TJSONObject.Create);
@@ -187,8 +243,16 @@ begin
           .AddPair('name','CoreFixtureButton').AddPair('parent','MainForm').AddPair('x',TJSONNumber.Create(16)).AddPair('y',TJSONNumber.Create(16))
           .AddPair('width',TJSONNumber.Create(100)).AddPair('height',TJSONNumber.Create(30)));
         4: Prompt('ide_designer_apply_change',TJSONObject.Create.AddPair('proposalId',FProposal).AddPair('revision',FRevision));
-        5: Prompt('ide_designer_preview_restore',TJSONObject.Create.AddPair('checkpointId',FCheckpoint));
-        6,7: Prompt('ide_designer_restore_change',TJSONObject.Create.AddPair('proposalId',FProposal).AddPair('revision',FRevision));
+        5: begin FScalarBefore:=SnapshotProperty('CoreFixtureButton',FScalarProperty);
+          Prompt('ide_designer_preview_change',TJSONObject.Create.AddPair('changeOperation','setScalarProperty')
+            .AddPair('component','CoreFixtureButton').AddPair('property',FScalarProperty).AddPair('value','Courier New')); end;
+        6,13: Prompt('ide_designer_apply_change',TJSONObject.Create.AddPair('proposalId',FProposal).AddPair('revision',FRevision));
+        7,14: Prompt('ide_designer_preview_restore',TJSONObject.Create.AddPair('checkpointId',FCheckpoint));
+        9: Prompt('ide_designer_preview_restore',TJSONObject.Create.AddPair('checkpointId',FCreateCheckpoint));
+        8,10,11,15: Prompt('ide_designer_restore_change',TJSONObject.Create.AddPair('proposalId',FProposal).AddPair('revision',FRevision));
+        12: begin FCollectionBefore:=SnapshotProperty('AgentFixtureListView','Columns[0].Caption');
+          Prompt('ide_designer_preview_change',TJSONObject.Create.AddPair('changeOperation','setCollectionProperty')
+            .AddPair('component','AgentFixtureListView').AddPair('property','Columns[0].Caption').AddPair('value','Core Changed')); end;
       end;
     except on E:Exception do begin
       FTimer.Enabled:=False; FHost.Cancel('');

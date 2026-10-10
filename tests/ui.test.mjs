@@ -20,9 +20,102 @@ function fixture() {
  const c=new Controller(f=>sent.push(f),{emit:f=>shown.push(f),list:(_t,items)=>{menu=items;},capabilities:()=>{}});
  const receive=f=>c.receive(f),action=f=>c.action(f);
  receive({type:'session',sessionId:'s',writeEnabled:true,sessionsEnabled:true,usageEnabled:true});let sequence=0;
- const event=(kind,extra={})=>receive({type:'event',data:{sessionId:'s',turnId:'t',sequence:++sequence,kind,...extra}});
+ let activeTurn=null;
+ const event=(kind,extra={})=>{if(kind==='started')activeTurn='t';receive({type:'event',data:{sessionId:'s',turnId:activeTurn,sequence:++sequence,kind,...extra}});if(['completed','cancelled','error','closed'].includes(kind))activeTurn=null;};
  return {sent,shown,receive,action,event,menu:()=>menu};
 }
+
+test('closed sessions ignore late extension actions and cannot resurrect approval or editor text',()=>{
+ const f=fixture();f.event('started');f.event('closed');
+ const shown=f.shown.length,sent=f.sent.length;
+ for(const frame of [{type:'designer_approval',proposalId:'late'},{type:'extension_ui_request',method:'set_editor_text',text:'stale draft'},{type:'extension_ui_request',method:'open_url',url:'https://example.com'}])
+  f.event('omp_event',{frame});
+ f.event('started',{turnId:'late-turn'});
+ assert.equal(f.shown.length,shown);assert.equal(f.sent.length,sent);
+});
+
+test('completed turns cannot change the draft, launch a URL or approve through late OMP events',()=>{
+ const f=fixture();f.event('started');f.event('completed');
+ const shown=f.shown.length,sent=f.sent.length;
+ for(const frame of [{type:'designer_approval',proposalId:'late'},{type:'extension_ui_request',method:'set_editor_text',text:'stale draft'},{type:'extension_ui_request',method:'open_url',url:'https://example.com'}])
+  f.event('omp_event',{turnId:'t',frame});
+ for(const frame of [{type:'designer_approval',proposalId:'late-null'},{type:'extension_ui_request',method:'set_editor_text',text:'stale null draft'},{type:'extension_ui_request',method:'open_url',url:'https://example.com'}])
+  f.event('omp_event',{turnId:null,frame});
+ assert.equal(f.shown.length,shown);assert.equal(f.sent.length,sent);
+ f.event('omp_event',{turnId:null,frame:{type:'extension_ui_request',method:'notify',message:'session notice'}});
+ assert.equal(f.shown.at(-1).text,'session notice');
+});
+
+test('project switch retires pending queued drafts and busy controls before a new session opens',()=>{
+ const f=fixture();f.receive({type:'session',sessionId:'s',ompProfile:'native',ompControlsEnabled:true,btwEnabled:true});
+ f.event('started');
+ f.action({t:'submit',id:'queue-draft',text:'follow up'});
+ f.action({t:'btw',id:'btw-draft',composer:true,text:'question'});
+ f.receive({type:'workspaceChanging',workspaceUri:'file:///D:/next'});
+ for(const id of ['queue-draft','btw-draft'])assert.deepEqual(f.shown.filter(m=>m.t==='submitted'&&m.id===id).map(m=>m.ok),[false]);
+ assert.equal(f.shown.filter(m=>m.t==='turnEnd').length,1);
+ f.receive({type:'workspaceDisconnected'});
+ assert.equal(f.shown.at(-1).busy,false);
+ assert.equal(f.sent.filter(m=>m.action==='prompt').length,0);
+});
+
+test('direct workspace loss retires the live turn and ignores late session replies',()=>{
+ const f=fixture();f.receive({type:'session',sessionId:'s',ompProfile:'native',ompControlsEnabled:true,btwEnabled:true});
+ f.event('started');f.action({t:'submit',id:'queued',text:'follow up'});f.action({t:'btw',id:'side',composer:true,text:'question'});
+ f.event('approval_requested',{approval:{proposalId:'pending',reason:'edit',diff:'-a\n+b'}});
+ f.receive({type:'workspaceDisconnected'});
+ assert.equal(f.shown.filter(m=>m.t==='turnEnd').length,1);
+ assert.deepEqual(['queued','side'].map(id=>f.shown.filter(m=>m.t==='submitted'&&m.id===id).map(m=>m.ok)),[[false],[false]]);
+ assert.ok(f.shown.some(m=>m.t==='approvalResult'&&m.id==='pending'&&m.ok===false));
+ assert.equal(f.shown.at(-1).busy,false);
+ const sent=f.sent.length,approvalCount=f.shown.filter(m=>m.t==='approval').length;
+ for(const frame of [
+  {type:'messageRestorePreview',data:{messageRestoreId:'late'}},
+  {type:'restorePreview',data:{checkpointId:'late'}},
+  {type:'queueAccepted',id:'queued'},
+  {type:'btwAccepted',id:'side'},
+  {type:'ompControl',command:'get_state',data:{model:{provider:'stale',id:'old'}}},
+  {type:'preferences',values:{notifications:true}}
+ ])f.receive(frame);
+ f.event('omp_event',{frame:{type:'extension_ui_request',method:'set_editor_text',text:'stale'}});
+ f.action({t:'approval',id:'pending',ok:true});
+ assert.equal(f.sent.length,sent);
+ assert.equal(f.shown.filter(m=>m.t==='approval').length,approvalCount);
+ f.receive({type:'operationError',action:'connect',message:'temporary connection failure'});
+ assert.equal(f.shown.at(-1).reconnectAvailable,true);
+ f.receive({type:'session',sessionId:'new'});assert.equal(f.shown.filter(m=>m.t==='status').at(-1).connected,true);
+});
+
+test('global language preference still updates after workspace loss without reviving settings callbacks',()=>{
+ const sent=[],shown=[],results=[],settings=[];
+ const c=new Controller(frame=>sent.push(frame),{emit:frame=>shown.push(frame),list:()=>{},capabilities:()=>{},settings:(_frame,save)=>settings.push(save),settingsResult:(ok)=>results.push(ok)});
+ c.receive({type:'session',sessionId:'s',preferencesEnabled:true});c.action({t:'settings'});
+ c.receive({type:'preferences',ownerSessionId:'s',values:{language:'en'}});
+ assert.equal(settings.length,1);settings[0]({language:'en'});
+ c.receive({type:'workspaceDisconnected'});
+ assert.deepEqual(results,[false]);const sentBefore=sent.length;
+ c.receive({type:'preferences',ownerSessionId:'other',values:{language:'stale'}});
+ c.receive({type:'preferences',ownerSessionId:'s',values:{language:'ko'}});
+ assert.equal(shown.filter(frame=>frame.t==='preferences').at(-1).values.language,'ko');
+ assert.equal(settings.length,1);assert.deepEqual(results,[false]);assert.equal(sent.length,sentBefore);
+ c.receive({type:'session',sessionId:'new'});
+ c.receive({type:'preferences',ownerSessionId:'s',values:{language:'old'}});
+ assert.equal(shown.filter(frame=>frame.t==='preferences').at(-1).values.language,'ko');
+});
+
+test('retired interaction callbacks cannot answer a new turn or a reconnected session',()=>{
+ const sent=[],callbacks=[];
+ const c=new Controller(f=>sent.push(f),{emit:()=>{},list:()=>{},capabilities:()=>{},interaction:(_f,answer)=>callbacks.push(answer),accountEvent:(_f,answer)=>callbacks.push(answer)});
+ c.receive({type:'session',sessionId:'s'});let sequence=0;
+ const event=(kind,extra={})=>c.receive({type:'event',data:{sessionId:'s',turnId:'t',sequence:++sequence,kind,...extra}});
+ event('started');event('omp_event',{frame:{type:'extension_ui_request',id:'question',method:'input'}});
+ callbacks[0]({value:'current'});assert.equal(sent.filter(m=>m.action==='ompRespond').length,1);
+ event('cancelled');callbacks[0]({value:'late'});
+ event('omp_event',{turnId:null,frame:{type:'extension_ui_request',id:'login',login:true}});
+ c.receive({type:'disconnected'});c.receive({type:'session',sessionId:'s'});
+ callbacks[1]({value:'old login'});
+ assert.deepEqual(sent.filter(m=>m.action==='ompRespond'),[{action:'ompRespond',requestId:'question',answer:{value:'current'}}]);
+});
 test('plan execution failure reports the real error to the pending original card',()=>{
  const f=fixture();f.receive({type:'session',sessionId:'s',approvalMode:'plan'});
  f.action({t:'proceedPlan',path:'docs/plans/example.md'});
@@ -37,6 +130,18 @@ test('disconnected controls report connection recovery instead of unsupported fe
  f.action({t:'settings'});f.menu()[0].run();assert.equal(f.sent.at(-1).action,'connect');
  f.receive({type:'session',sessionId:'s'});f.action({t:'unsupported'});
  assert.equal(f.shown.at(-1).text,'현재 연결에서 지원하지 않는 기능입니다.');
+});
+test('direct transport loss closes an active card exactly once and preserves an unstarted draft',()=>{
+ const active=fixture();active.event('started');active.receive({type:'disconnected'});
+ assert.equal(active.shown.filter(frame=>frame.t==='assistantEnd').length,1);
+ assert.deepEqual(active.shown.filter(frame=>frame.t==='turnEnd').map(frame=>frame.stopped),[true]);
+ active.event('completed');active.receive({type:'disconnected'});
+ assert.equal(active.shown.filter(frame=>frame.t==='turnEnd').length,1);
+ const waiting=fixture();waiting.action({t:'submit',id:'unsent',text:'keep this draft'});
+ waiting.receive({type:'disconnected'});
+ assert.deepEqual(waiting.shown.filter(frame=>frame.t==='submitted'&&frame.id==='unsent').map(frame=>frame.ok),[false]);
+ assert.equal(waiting.shown.filter(frame=>frame.t==='user'&&frame.text==='keep this draft').length,0);
+ assert.equal(waiting.shown.filter(frame=>frame.t==='turnEnd').length,0);
 });
 test('draft accepted only after host starts; failure preserves draft',()=>{
  const f=fixture();f.action({t:'submit',id:'draft',text:'안녕'});

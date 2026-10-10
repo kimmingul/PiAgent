@@ -4,6 +4,54 @@ Installer hash `8A3A…FD09` identifies the cycle-tested upgrade/rollback/restor
 
 [한국어](IDE-AGENT-ROADMAP.md) · **English** · [Documentation](README.md)
 
+## Follow-up implementation, 2026-10-10
+
+After the 0.11.0 prerelease, the user requested three **GPT-6-sol** subagents,
+working through session/editor stability, IDE/designer expansion, practical
+validation and comparison preparation. **The four-hour test and measured competitor
+comparison are deferred** at the user's request; original failed soak records remain unchanged. These source
+changes are not features of the already published 0.11.0 installer.
+
+- Closing or changing a session retires old approvals, queued messages and IDE
+  catalogs. Late prior-turn events cannot change drafts or resurrect approval UI.
+  New requests distinguish historical cancellation/errors from current evidence;
+  mutations are never automatically replayed.
+  Transport loss closes the running card once. Late idle requests cannot change
+  the draft, launch a URL or revive approval UI; idle login and notices still work.
+- VS suggestions recheck generation, document, caret, IME and buffer during
+  asynchronous display and acceptance. Read failures during multi-file save
+  recovery no longer hide the original error or partial restoration. RAD checks
+  changed selection/read-only state and the complete buffer after applying.
+- Reviewed RAD property transactions now cover standard VCL/FMX `TButton`
+  `Font.Name`/`TextSettings.Font.Family` and VCL `TListView.Columns[0..31]`
+  `Caption`. Live property/operation gates and explicit approval
+  apply. This does not add arbitrary components or collection insertion,
+  deletion or reordering.
+  FMX checks cover the stored Font value after reopening. With the default
+  `StyledSettings.Family` enabled, the style controls the displayed font; clear
+  that setting in the IDE to enable the override. Automatically changing that
+  setting and observing the FMX runtime font are outside this validation scope.
+- Actual VCL testing found restored files could disagree with the open designer's
+  Font. The fix closes/reopens the saved form and verifies file bytes, live values
+  and clean buffers. VCL passed 11 steps, FMX 9; authenticated Core routes passed
+  16 VCL and 12 FMX scenarios. Receipt row totals, including approvals, are 24/18;
+  approval rows are not counted as extra test scenarios.
+- VS adds a separate CLI/TRX path for projects explicitly opting into
+  Microsoft.Testing.Platform. An explicit framework is required; MTP filters and
+  runsettings are unsupported in this path. This does not control Test Explorer.
+- The [comparison protocol](IDE-BENCHMARK.en.md) defines 12 tasks × 5 repetitions
+  per IDE and checks missing/failed/unsupported attempts and mismatched conditions.
+  No formal comparison runs or superiority result are claimed.
+
+Remaining: RAD native ghost/Tab, semantic refactoring, native compiler message
+enumeration, test discovery, locals/frame selection; modern .NET WinForms public
+designer automation; inherited/third-party forms and general collection editing;
+broader physical IME/busy-UI usage; clean Windows/physical x64 installation;
+remote deployment, broader profiling and matched Copilot/KAI comparison. Unified
+result-envelope migration also remains incomplete. See [validation](VALIDATION.md)
+for final counts and binary identities. The following body retains the original
+milestone definitions and earlier validation records.
+
 Date: 2026-10-09; latest evidence 2026-10-10 KST. Historical baseline: **0.10.0**; current source: **0.11.0 scoped prerelease candidate**. Status: **M0–M6 validation in progress; scoped native recovery and replacement payload checks passed; actual upgrade/rollback/restoration passed; both original soaks strict FAIL.**
 
 Latest full Core run: 212 total, **211 PASS, 0 FAIL, 1 optional native-RAD receipt skip** (159,524.7573 ms); final both-architecture adapter integration passed 18/18. Native WebView passed 91, including 12 transitions and recovery/Stop/draft-preservation checks. Core now drains checkpoint/timeline persistence on Stop; explicit Retry connection uses existing native Connect/resumeLast without prompt replay or policy changes. Independent Stop/composer Escape preserve unsent drafts; focused UI 36/36 passed. Recovery VSIX SHA256 `28904BA981EA0C85C08A5BA1E27042D53760BCB3D7EAB81BDAAB39C286345DEF` retains native DLL (SHA256 begins 6A3141) and RAD BPL bytes; six UI files changed from guidance. Actual native Stop→Retry preserved the draft/saved conversation and a fresh explicitly approved IDE context call passed. The intervening tiny turn's historical-error answer remains a separate content failure. Replacement installer `setup-20261009-154200`, SHA256 `8A3A5FAEC53F607A1B5932BBEB536BB699622C859D13478EE8903FF2468CFD09`, passed signed payload/runtime/policy checks; actual upgrade/rollback/restoration passed with 1,056/1,029/1,056 verified payload files respectively. Original benchmark 01/02 passed and 03 remains an operator-interrupted failure with two web-search scope violations. Formal comparison remains pending. Earlier evidence retains its original identity; no whole-plan completion is claimed.

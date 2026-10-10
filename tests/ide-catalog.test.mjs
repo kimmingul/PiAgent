@@ -33,6 +33,15 @@ test('catalog filters model operations and plan tools while legacy adapters reta
   bridge.catalogEnabled=false;assert.ok(bridge.registeredTools().some(t=>t.name==='ide_tests'));assert.ok(!bridge.registeredTools().some(t=>t.name==='ide_refactor'));bridge.close();
 });
 
+test('closing an IDE session discards its catalog before the next adapter binds',()=>{
+  const bridge=new IdeBridge(()=>{});bridge.enabled=true;bridge.catalogEnabled=true;bridge.publish(catalog());
+  assert.ok(bridge.registeredTools().some(t=>t.name==='ide_build')===false);
+  bridge.controlsEnabled=true;assert.ok(bridge.registeredTools().some(t=>t.name==='ide_build'));
+  bridge.close();bridge.bindCatalog(undefined,uri);
+  assert.equal(bridge.snapshot,undefined);
+  assert.deepEqual(bridge.registeredTools().map(t=>t.name),['ide_catalog']);
+});
+
 test('fresh action consent binds adapter revision and forwards expected state outside arguments',async()=>{
   const frames=[];let bridge;
   bridge=new IdeBridge(frame=>{frames.push(frame);if(frame.type==='ide_request'&&frame.operation==='ide_catalog')bridge.reply(frame.id,catalog());});

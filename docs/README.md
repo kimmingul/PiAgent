@@ -2,8 +2,8 @@
 
 [한국어 README](../README.md) · [English README](../README.en.md)
 
-소스 버전: **0.11.0 후보**, 서명/게시와 최종 설치·4시간 soak 대기 중. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
-Source version: **0.11.0 candidate**, signing/publication, final installation and four-hour soak pending. Main guides are available in Korean and English.
+배포 버전: **0.11.0 사전 릴리즈**. 후속 소스 개선은 별도 검증 중이며, 사용자의 요청으로 4시간 검증과 경쟁 제품 실측 비교는 차후 진행한다. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
+Published version: **0.11.0 prerelease**. Follow-up source improvements are being verified separately; the four-hour test and measured competitor comparison are deferred at the user's request. Main guides are available in Korean and English.
 
 | 문서 / Guide | 한국어 | English |
 |---|---|---|
@@ -14,8 +14,9 @@ Source version: **0.11.0 candidate**, signing/publication, final installation an
 | VS IDE 도구·코드 제안 / VS tools and suggestions | [사용 안내](VS-INTELLIGENCE.md) | [User guide](VS-INTELLIGENCE.en.md) |
 | IDE 전체 활용 개발 계획 / Comprehensive IDE integration plan | [단계·병렬 개발·검증 기준](IDE-AGENT-ROADMAP.md) | [Milestones, parallel development and acceptance](IDE-AGENT-ROADMAP.en.md) |
 | IDE 통합 개발 후보 사용 / IDE integration candidate usage | [가용성·승인·복구·범위](IDE-AGENT-INTEGRATION.md) | [Availability, approval, recovery and scope](IDE-AGENT-INTEGRATION.en.md) |
+| IDE 제품 비교 실행 규약 / IDE product comparison protocol | [과제·반복·증거·판정](IDE-BENCHMARK.md) | [Tasks, repetitions, evidence and eligibility](IDE-BENCHMARK.en.md) |
 | 언어 설정 / Language settings | [언어 지원](LOCALIZATION.md) | [Language support](LOCALIZATION.en.md) |
-| 미출시 후보 / Unreleased candidate | [0.11.0](RELEASE-0.11.0.md) | [0.11.0](RELEASE-0.11.0.en.md) |
+| 사전 릴리즈 / Prerelease | [0.11.0](RELEASE-0.11.0.md) | [0.11.0](RELEASE-0.11.0.en.md) |
 | 이전 릴리즈 / Previous release | [0.10.0](RELEASE-0.10.0.md) | [0.10.0](RELEASE-0.10.0.en.md) |
 | 이전 장시간 대화 수정 / Previous long-running chat fixes | [0.9.20](RELEASE-0.9.20.md) | [0.9.20](RELEASE-0.9.20.en.md) |
 | 이전 언어 지원 / Previous language support | [0.9.19](RELEASE-0.9.19.md) | [0.9.19](RELEASE-0.9.19.en.md) |

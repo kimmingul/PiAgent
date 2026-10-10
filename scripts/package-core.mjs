@@ -36,6 +36,8 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await mkdir(join(output, 'docs'));
   for(const document of ['GETTING-STARTED.ko.md','GETTING-STARTED.en.md']) await cp(join(repository,'docs',document),join(output,'docs',document));
   await cp(join(repository,'docs/images'),join(output,'docs/images'),{recursive:true});
+  for(const document of ['IDE-BENCHMARK.md','IDE-BENCHMARK.en.md'])
+    await cp(join(repository,'docs',document),join(output,'docs',document));
   for(const document of ['IDE-AGENT-INTEGRATION.md','IDE-AGENT-INTEGRATION.en.md','IDE-AGENT-ROADMAP.md','IDE-AGENT-ROADMAP.en.md','IDE-CATALOG-CONTRACT.md','VS-INTELLIGENCE.md','VS-INTELLIGENCE.en.md','README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md','RELEASE-0.9.19.md','RELEASE-0.9.19.en.md','RELEASE-0.9.20.md','RELEASE-0.9.20.en.md','RELEASE-0.10.0.md','RELEASE-0.10.0.en.md',`RELEASE-${version}.en.md`])
     await cp(join(repository,'docs',document),join(output,'docs',document));
   // Transitive historical references from architecture and validation remain usable offline.
@@ -46,6 +48,9 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await mkdir(join(output, 'scripts'));
   for(const name of ['install-core.ps1','start-core.ps1','uninstall-core.ps1']) await cp(join(repository,'scripts',name),join(output,'scripts',name));
   for(const name of ['measure-editor-context.mjs','validate-designer-contract.mjs','ide-benchmark.mjs']) await cp(join(repository,'scripts',name),join(output,'scripts',name));
+  for(const name of ['ide-benchmark-plan.json','ide-benchmark-plan-rad.json']) await cp(join(repository,'scripts',name),join(output,'scripts',name));
+  await mkdir(join(output,'tests/fixtures/ide-benchmark'),{recursive:true});
+  await cp(join(repository,'tests/fixtures/ide-benchmark/tasks.json'),join(output,'tests/fixtures/ide-benchmark/tasks.json'));
   await mkdir(join(output,'tests/helpers'),{recursive:true});
   await cp(join(repository,'tests/helpers/designer-contract.mjs'),join(output,'tests/helpers/designer-contract.mjs'));
   await cp(join(repository, 'docs/VALIDATION.md'), join(output, 'docs/VALIDATION.md'));

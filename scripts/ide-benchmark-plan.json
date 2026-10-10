@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "vs2026-piagent-copilot-v1",
+  "mode": "product-default",
+  "status": "deferred at user request; no comparison runs recorded",
+  "products": ["PiAgent", "Copilot"],
+  "repetitions": 5,
+  "suites": [
+    {
+      "ide": "VS2026",
+      "tasks": [
+        "vs-context",
+        "vs-symbols",
+        "vs-completion",
+        "vs-next-edit",
+        "vs-build-repair",
+        "vs-refactor",
+        "vs-test-repair",
+        "vs-debug",
+        "vs-profile",
+        "vs-designer",
+        "vs-recovery",
+        "vs-deploy"
+      ]
+    }
+  ],
+  "taskSpecification": "tests/fixtures/ide-benchmark/tasks.json",
+  "protocol": "docs/IDE-BENCHMARK.md"
+}

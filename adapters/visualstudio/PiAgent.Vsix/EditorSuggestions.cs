@@ -148,31 +148,43 @@ internal sealed class EditorState : SuggestionProviderBase
             }
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellation.Token);
             documents.TryGetTextDocument(view.TextBuffer,out document);
-            if(closed||sequence!=generation||view.TextSnapshot!=snapshot||view.Caret.Position.BufferPosition!=position||composing||document?.FilePath!=documentPath)return;
+            if(!Current(sequence,snapshot,position,documentPath)||cancellation.IsCancellationRequested)return;
             if((string?)result["requestId"]!=(string?)parameters["requestId"]||(string?)result["revision"]!=Revision(text))throw new IOException("Stale editor suggestion");
             if((bool?)result["empty"]==true){if(manual)EditorSuggestions.Status("PiAgent: No suggestion / 제안 없음");return;}
             var start=(int?)result["start"]??-1;var length=(int?)result["length"]??-1;var replacement=(string?)result["text"]??throw new IOException("Invalid suggestion text");
             if(start<0||length<0||start>snapshot.Length-length||mode=="completion"&&(start!=position.Position||length!=0))throw new IOException("Invalid suggestion range");
             manager??=await service.TryRegisterProviderAsync(this,view,"PiAgent",cancellation.Token);
+            if(!Current(sequence,snapshot,position,documentPath)||cancellation.IsCancellationRequested)return;
             if(manager==null)throw new IOException("Visual Studio suggestions are unavailable in this view");
-            var proposal=Proposal.TryCreateProposal("PiAgent",new[]{new ProposedEdit(new SnapshotSpan(snapshot,start,length),replacement)},new VirtualSnapshotPoint(position),null,ProposalFlags.DisableInIntelliSense|ProposalFlags.SingleTabToAccept,()=>Commit(snapshot,start,length,replacement),Guid.NewGuid().ToString("N"),null,null,null);
+            var proposal=Proposal.TryCreateProposal("PiAgent",new[]{new ProposedEdit(new SnapshotSpan(snapshot,start,length),replacement)},new VirtualSnapshotPoint(position),null,ProposalFlags.DisableInIntelliSense|ProposalFlags.SingleTabToAccept,()=>Commit(sequence,snapshot,position,documentPath,start,length,replacement),Guid.NewGuid().ToString("N"),null,null,null);
             if(proposal==null)throw new IOException("Visual Studio rejected this suggestion range");
             var suggestion=new AiSuggestion(mode=="next-edit",()=>{if(sequence==generation)Accepted(mode);},()=>{if(sequence==generation)session=null;});
-            session=await manager.TryDisplaySuggestionAsync(suggestion,cancellation.Token);
-            if(session!=null)await session.DisplayProposalAsync(proposal,cancellation.Token);
+            var shown=await manager.TryDisplaySuggestionAsync(suggestion,cancellation.Token);
+            if(!Current(sequence,snapshot,position,documentPath)||cancellation.IsCancellationRequested){if(shown!=null)await shown.DismissAsync(ReasonForDismiss.DismissedBySession,CancellationToken.None);return;}
+            session=shown;
+            if(shown!=null){
+                try{await shown.DisplayProposalAsync(proposal,cancellation.Token);}
+                catch{if(ReferenceEquals(session,shown))session=null;await shown.DismissAsync(ReasonForDismiss.DismissedBySession,CancellationToken.None);throw;}
+                if(!Current(sequence,snapshot,position,documentPath)||cancellation.IsCancellationRequested){if(ReferenceEquals(session,shown))session=null;await shown.DismissAsync(ReasonForDismiss.DismissedBySession,CancellationToken.None);return;}
+            }
             if(manual)EditorSuggestions.Status(session==null?"PiAgent: Another suggestion provider is active / 다른 제안 공급자가 활성화되어 있습니다.":"PiAgent: Review suggestion, Tab to accept / 제안을 확인하고 Tab으로 수락하세요.");
         }catch(OperationCanceledException){}catch(Exception error){await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();if(manual&&!closed)EditorSuggestions.Status("PiAgent: "+error.Message);}
         finally{if(ReferenceEquals(request,cancellation))request=null;}
     }
-    private bool Commit(ITextSnapshot snapshot,int start,int length,string replacement)
+    private bool Commit(int sequence,ITextSnapshot snapshot,SnapshotPoint caret,string? documentPath,int start,int length,string replacement)
     {
-        ThreadHelper.ThrowIfNotOnUIThread();if(closed||composing||view.TextSnapshot!=snapshot)return false;
+        ThreadHelper.ThrowIfNotOnUIThread();if(!Current(sequence,snapshot,caret,documentPath))return false;
         if(!undo.TryGetHistory(view.TextBuffer,out var history))history=undo.RegisterHistory(view.TextBuffer);
         accepting=true;
         try{using var transaction=history.CreateTransaction("PiAgent suggestion / 코드 제안");using var edit=view.TextBuffer.CreateEdit();if(!edit.Replace(new Span(start,length),replacement)){transaction.Cancel();return false;}edit.Apply();if(edit.Canceled){transaction.Cancel();return false;}transaction.Complete();view.Caret.MoveTo(new SnapshotPoint(view.TextSnapshot,start+replacement.Length));return true;}
         finally{accepting=false;}
     }
     private void Accepted(string mode){session=null;if(mode=="completion"&&EditorOptions.Current.AutomaticNextEdit&&!closed)factory.RunAsync(async()=>await RequestAsync("next-edit",false,CancellationToken.None)).FileAndForget("PiAgent/NextEdit");}
+    private bool Current(int sequence,ITextSnapshot snapshot,SnapshotPoint caret,string? documentPath)
+    {
+        ThreadHelper.ThrowIfNotOnUIThread();documents.TryGetTextDocument(view.TextBuffer,out var currentDocument);
+        return EditorSuggestionValidity.IsCurrent(closed,composing,sequence,generation,view.TextSnapshot==snapshot,view.Caret.Position.BufferPosition==caret,currentDocument?.FilePath==documentPath);
+    }
     internal static string Revision(string text){using var hash=SHA256.Create();return BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(text))).Replace("-","").ToLowerInvariant();}
 }
 

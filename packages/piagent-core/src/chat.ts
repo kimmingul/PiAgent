@@ -363,8 +363,11 @@ export class ChatSession {
       if(this.turn||this.writeToolActive)throw new ChatError(-32013,'Wait until the turn finishes');
       if(!this.lease)throw new ChatError(-32005,'Private saved session required');
       const savedSessionId=this.lease.record.savedSessionId;
+      // This is an in-connection access-mode transition, with the same adapter.
+      // An explicit close/open must obtain a new catalog from its caller.
+      const ideCatalog=this.ide.snapshot;
       await this.closeSession();
-      return this.handle('chat.open',{savedSessionId,approvalMode:params['mode']},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated,catalogNegotiated,editorContextNegotiated,gitNegotiated);
+      return this.handle('chat.open',{savedSessionId,approvalMode:params['mode'],...(ideCatalog?{ideCatalog}:{})},workspaceNegotiated,writesNegotiated,sessionsNegotiated,usageNegotiated,batchNegotiated,controlsNegotiated,designerNegotiated,timelineNegotiated,false,ideNegotiated,editorNegotiated,catalogNegotiated,editorContextNegotiated,gitNegotiated);
     }
     if(method==='ide.reply') {
       if(!ideNegotiated||Object.keys(params).some(k=>!['sessionId','requestId','result','error'].includes(k)))throw new ChatError(-32602,'Invalid IDE reply');
@@ -487,6 +490,8 @@ export class ChatSession {
     if(!message.trimStart().startsWith('/')){
       prompt=designerPrompt(prompt,this.designer.enabled,this.designer.writesEnabled);
       if(this.ide.enabled)prompt='PiAgent connected IDE workflow: Use advertised IDE context, semantic and diagnostic tools for actual IDE state. Respect unsaved buffers. Consult ide_catalog when available for supported operations and blocking reasons; do not invent unavailable tools. Use supported build/test tools to verify changes; execution requires user approval. A debugger snapshot requires a paused debugger, and control/evaluation requires approval. Only claim tests or profiling ran when results confirm it. Unsupported SDK/language/tool availability is a limitation, never a successful result.\n\n'+prompt;
+      const recovery=this.recoveryContext();
+      if(recovery)prompt=recovery+'\n\n'+prompt;
     }
     turnId = randomUUID(); this.turn = turnId; this.cancelling = false; this.providerError=undefined; this.closeReason=undefined; this.seenTools.clear();
     this.turnStarted=Date.now();
@@ -540,6 +545,15 @@ export class ChatSession {
     this.progress?.observe(frame);
     if(this.interactions){const projected=uiEvent(frame);if(projected){this.flushAnswer();this.lease?.appendEvent(projected);this.sendOmp({type:'ui_event',event:projected});}}
     if(frame['type']==='extension_ui_request'&&this.interactions) {
+      const method=String(frame['method']);
+      // A settled turn can still deliver buffered extension frames. Keep idle
+      // notices/cancellation, but never revive a draft, browser launch or tool
+      // approval from work that has already ended. Login uses its own child.
+      if(!this.turn&&!['notify','setStatus','cancel'].includes(method)){
+        if(['select','confirm','input','editor'].includes(method)&&typeof frame['id']==='string')
+          void this.omp?.uiResponse(frame['id'],{cancelled:true}).catch(()=>{});
+        return;
+      }
       try{if(!this.id&&['select','confirm','input','editor'].includes(String(frame['method']))) {
         void this.omp?.uiResponse(String(frame['id']),{cancelled:true}).catch(()=>{});
       } else this.interactions.accept(frame);}catch(error){this.finish('error',error instanceof Error?error.message:'Invalid OMP interaction');void this.closeSession();}return;
@@ -647,6 +661,16 @@ export class ChatSession {
   private sendOmp(frame:Record<string,unknown>):void {
     if(!this.id||this.disposed)return;
     this.send({sessionId:this.id,turnId:this.turn??null,sequence:++this.sequence,kind:'omp_event',frame});
+  }
+  private recoveryContext():string|undefined {
+    const transcript=this.lease?.record.transcript;
+    if(!transcript?.length)return;
+    const lastUser=transcript.findLastIndex(line=>line.role==='user');
+    if(lastUser<0)return;
+    const settled=transcript.slice(lastUser+1).findLast(line=>line.role==='status');
+    if(settled?.text==='cancelled')return 'PiAgent recovery context: The previous user turn was cancelled. That cancellation is historical, not the result of this new request. Answer the current request from current evidence. Do not replay any previous mutation; inspect its present state before proposing a retry.';
+    if(settled?.text.startsWith('error:'))return 'PiAgent recovery context: The previous user turn ended with an error. That error is historical, not the result of this new request. Answer the current request from current evidence. Do not replay any previous mutation; inspect its present state before proposing a retry.';
+    if(!settled)return 'PiAgent recovery context: The previous user turn has no recorded completion, so its outcome is uncertain. Answer this new request from current evidence. Do not replay any previous mutation; inspect its present state before proposing a retry.';
   }
   private reportProgress(): void {
     if(!this.turn||!this.progress||this.finishing||this.retiring)return;

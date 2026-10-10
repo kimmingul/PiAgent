@@ -61,14 +61,29 @@ internal static class IdeRefactoringTools
             }catch(Exception failure){
                 // Compensate only when every disk/buffer still equals an owned before/after state.
                 // Never save over a watcher, user or external process's intervening changes.
-                var safe=true;
-                foreach(var file in (JArray)preview.Result["files"]!){try{var path=IdeTools.ResolveFile(uri,(string)file["path"]!);var disk=File.ReadAllText(path);safe&=disk==(string)file["before"]!||disk==(string)file["after"]!;foreach(var targetId in workspace.CurrentSolution.GetDocumentIdsWithFilePath(path)){var document=workspace.CurrentSolution.GetDocument(targetId)!;safe&=document.TryGetText(out var text)&&(text.ToString()==(string)file["before"]!||text.ToString()==(string)file["after"]!);}}catch{safe=false;}}
-                var unchanged=true;
-                foreach(var file in reviewed){var targetPath=IdeTools.ResolveFile(uri,(string)file["path"]!);unchanged&=File.ReadAllText(targetPath)==(string)file["before"]!;foreach(var targetId in workspace.CurrentSolution.GetDocumentIdsWithFilePath(targetPath))unchanged&=workspace.CurrentSolution.GetDocument(targetId)!.TryGetText(out var unchangedText)&&unchangedText.ToString()==(string)file["before"]!;}
+                var states=new List<(string? Disk,string? Buffer,string Before,string After)>();
+                foreach(var file in reviewed){
+                    var before=(string)file["before"]!;var after=(string)file["after"]!;
+                    try{
+                        var path=IdeTools.ResolveFile(uri,(string)file["path"]!);
+                        var disk=File.ReadAllText(path);
+                        var ids=workspace.CurrentSolution.GetDocumentIdsWithFilePath(path).ToArray();
+                        if(ids.Length==0)states.Add((disk,null,before,after));
+                        foreach(var targetId in ids){var target=workspace.CurrentSolution.GetDocument(targetId);states.Add((disk,target!=null&&target.TryGetText(out var text)?text.ToString():null,before,after));}
+                    }catch{states.Add((null,null,before,after));}
+                }
+                var recovery=RecoveryState(states);var safe=recovery.Safe;var unchanged=recovery.Unchanged;
                 if(unchanged)throw new IOException("Visual Studio refused the reviewed refactoring; target buffers and files remain unchanged",failure);
                 var rolledBack=false;
                 if(safe){try{rolledBack=workspace.TryApplyChanges(RebaseReviewed(workspace.CurrentSolution,reviewed,uri,true));}catch(IOException){rolledBack=false;}}
-                if(rolledBack)foreach(var file in (JArray)preview.Result["files"]!){try{var path=IdeTools.ResolveFile(uri,(string)file["path"]!);var disk=File.ReadAllText(path);if(disk!=(string)file["before"]!&&disk!=(string)file["after"]!){rolledBack=false;continue;}foreach(EnvDTE.Document document in dte.Documents)if(string.Equals(document.FullName,path,StringComparison.OrdinalIgnoreCase))document.Save();rolledBack&=File.ReadAllText(path)==(string)file["before"]!;}catch{rolledBack=false;}}
+                if(rolledBack)foreach(var file in (JArray)preview.Result["files"]!){try{
+                    var path=IdeTools.ResolveFile(uri,(string)file["path"]!);var before=(string)file["before"]!;var after=(string)file["after"]!;var disk=File.ReadAllText(path);
+                    if(disk!=before&&disk!=after){rolledBack=false;continue;}
+                    var ids=workspace.CurrentSolution.GetDocumentIdsWithFilePath(path).ToArray();
+                    if(ids.Length==0||ids.Any(targetId=>{var target=workspace.CurrentSolution.GetDocument(targetId);return target==null||!target.TryGetText(out var text)||text.ToString()!=before;})){rolledBack=false;continue;}
+                    foreach(EnvDTE.Document document in dte.Documents)if(string.Equals(document.FullName,path,StringComparison.OrdinalIgnoreCase))document.Save();
+                    rolledBack&=File.ReadAllText(path)==before;
+                }catch{rolledBack=false;}}
                 throw new IOException(rolledBack?"Refactoring save failed; original files restored":"Refactoring save failed and rollback was incomplete; inspect target buffers and files before retrying",failure);
             }finally{dte.UndoContext.Close();}
             return new JObject{["executed"]=true,["applied"]=true,["saved"]=true,["operation"]=preview.Result["operation"],["files"]=new JArray(((JArray)preview.Result["files"]!).Select(x=>x["path"])),["backend"]="Roslyn / Visual Studio workspace",["undoMechanism"]="DTE.UndoContext with opened target editors",["nativeUndoVerified"]=false};
@@ -108,6 +123,15 @@ internal static class IdeRefactoringTools
             }
         }
         return result;
+    }
+    internal static (bool Safe,bool Unchanged) RecoveryState(IEnumerable<(string? Disk,string? Buffer,string Before,string After)> states)
+    {
+        var safe=true;var unchanged=true;
+        foreach(var state in states){
+            safe&=state.Disk!=null&&state.Buffer!=null&&(state.Disk==state.Before||state.Disk==state.After)&&(state.Buffer==state.Before||state.Buffer==state.After);
+            unchanged&=state.Disk==state.Before&&state.Buffer==state.Before;
+        }
+        return(safe,unchanged);
     }
     private static async Task<(Solution Solution,string State)> QuiescentAsync(VisualStudioWorkspace workspace,CancellationToken token)
     {

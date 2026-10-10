@@ -6,6 +6,7 @@ import {mkdtemp,rm,readFile,writeFile,unlink,link} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {setTimeout as delay} from 'node:timers/promises';
 import {SessionStore,ChatSession} from '@piagent/core';
 const windows={skip:process.platform!=='win32',timeout:20000};
 const worker=fileURLToPath(new URL('./fixtures/session-owner.mjs',import.meta.url));
@@ -73,3 +74,43 @@ test('disconnect during asynchronous lease acquisition waits for startup cleanup
   await acquiring;const disposal=chat.dispose();proceed();await Promise.all([rejected,disposal]);
   assert.equal((await store.list())[0].active,false);
 }));
+
+test('a new prompt after cancellation carries current recovery context without replaying the old request',{timeout:10000},()=>fixture(async(store,root)=>{
+  const events=[];
+  const chat=new ChatSession({executable:process.execPath,executableArgs:[fileURLToPath(new URL('./fixtures/chat-omp.mjs',import.meta.url))],cwd:root},event=>events.push(event),undefined,undefined,{sessions:store});
+  try{
+    const opened=await chat.handle('chat.open',{},false,false,true);
+    const first=await chat.handle('chat.prompt',{sessionId:opened.sessionId,message:'wait'},false,false,true);
+    await chat.handle('chat.cancel',{sessionId:opened.sessionId,turnId:first.turnId},false,false,true);
+    for(let i=0;i<200&&!events.some(e=>e.kind==='cancelled');i++)await delay(10);
+    assert.ok(events.some(e=>e.kind==='cancelled'));
+    const second=await chat.handle('chat.prompt',{sessionId:opened.sessionId,message:'PIAGENT_ECHO_PROMPT current task'},false,false,true);
+    for(let i=0;i<200&&!events.some(e=>e.kind==='completed'&&e.turnId===second.turnId);i++)await delay(10);
+    const prompt=events.filter(e=>e.kind==='delta'&&e.turnId===second.turnId).map(e=>e.text).join('');
+    assert.match(prompt,/previous user turn was cancelled/);
+    assert.match(prompt,/PIAGENT_ECHO_PROMPT current task/);
+    assert.match(prompt,/Do not replay any previous mutation/);
+    const failed=await chat.handle('chat.prompt',{sessionId:opened.sessionId,message:'provider-error'},false,false,true);
+    for(let i=0;i<200&&!events.some(e=>e.kind==='error'&&e.turnId===failed.turnId);i++)await delay(10);
+    assert.ok(events.some(e=>e.kind==='error'&&e.turnId===failed.turnId));
+    const fresh=await chat.handle('chat.prompt',{sessionId:opened.sessionId,message:'PIAGENT_ECHO_PROMPT fresh task'},false,false,true);
+    for(let i=0;i<200&&!events.some(e=>e.kind==='completed'&&e.turnId===fresh.turnId);i++)await delay(10);
+    const afterError=events.filter(e=>e.kind==='delta'&&e.turnId===fresh.turnId).map(e=>e.text).join('');
+    assert.match(afterError,/previous user turn ended with an error/);
+    assert.match(afterError,/PIAGENT_ECHO_PROMPT fresh task/);
+  }finally{await chat.dispose();}
+}));
+
+test('late idle extension frames cannot change the draft or launch a URL', {timeout:5000},async()=>{
+  const events=[];
+  const chat=new ChatSession({executable:process.execPath,executableArgs:[fileURLToPath(new URL('./fixtures/chat-omp.mjs',import.meta.url))],cwd:process.cwd()},event=>events.push(event));
+  try{
+    const opened=await chat.handle('chat.open',{},false,false,false,false,false,true);
+    const turn=await chat.handle('chat.prompt',{sessionId:opened.sessionId,message:'late-idle-ui'},false,false,false,false,false,true);
+    for(let i=0;i<200&&!events.some(event=>event.kind==='completed'&&event.turnId===turn.turnId);i++)await delay(10);
+    assert.ok(events.some(event=>event.kind==='completed'&&event.turnId===turn.turnId));
+    await delay(80);
+    const requests=events.filter(event=>event.kind==='omp_event'&&event.frame?.type==='extension_ui_request').map(event=>event.frame.method);
+    assert.deepEqual(requests,['notify']);
+  }finally{await chat.dispose();}
+});

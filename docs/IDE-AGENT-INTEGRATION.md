@@ -4,6 +4,31 @@
 
 **한국어** · [English](IDE-AGENT-INTEGRATION.en.md) · [문서 목록](README.md)
 
+2026-10-10 후속 소스 변경은 배포된 0.11.0 설치파일과 별개다. 세션/프로젝트 전환 시
+이전 승인·대기 요청·IDE 기능 목록을 폐기하고 이전 턴의 늦은 이벤트를 무시한다.
+VS 코드 제안은 표시/수락 시 문서·커서·IME·버퍼를 다시 확인한다.
+
+후속 RAD 후보는 표준 VCL/FMX 버튼의 `Font.Name`/`TextSettings.Font.Family`,
+VCL `TListView.Columns[0..31].Caption`을 검토형 트랜잭션으로 변경한다.
+`ide_designer_preview_change`의 `changeOperation`은 각각 `setScalarProperty`,
+`setCollectionProperty`이고 `component`, `property`, 문자열 `value`를 전달한다.
+먼저 inspect에서 실제 지원 작업과 속성을 확인한다. 적용과 복원은 각각 별도 검토·승인이
+필요하며 폼을 닫고 다시 열어 저장된 상태를 확인한다. 복원 후 디자이너를 다시 열지 못하면
+파일 복원 여부와 live 검증 실패를 구분해 보고한다. 임의 컬렉션 삽입·삭제·정렬은 미지원이다.
+
+FMX의 `TextSettings.Font.Family`는 저장·재열기 후 속성 값까지 검증했다.
+기본 `StyledSettings.Family`가 켜져 있으면 표시 글꼴은 스타일을 따르므로 해당 항목을
+IDE에서 해제해야 Font 설정이 화면에 반영된다. PiAgent는 이 추가 설정을 자동으로
+변경하지 않으며, FMX 런타임 화면의 글꼴 변화까지 검증한 것은 아니다.
+
+VS의 후속 테스트 경로는 CLI 작업 폴더에서 찾은 `global.json`의
+`test.runner=Microsoft.Testing.Platform` 설정을 인식한다. 이 경우 .NET 10 호환 SDK,
+복원된 테스트 의존성과 TRX reporter, 명시적 `framework`가 필요하다.
+`filter`/`settings`는 이 경로에서 거절한다. 실제 TRX의 실행 수와 실패 수로 판정하며,
+0개 테스트·알 수 없는 탐색 출력·여러 assembly의 혼합 결과를 성공으로 표시하지 않는다.
+VSTest 경로는 기존 옵션을 유지하며 어느 경로도 IDE Test Explorer 제어를 뜻하지 않는다.
+[검증 기록](VALIDATION.md)과 [제품 비교 실행 규약](IDE-BENCHMARK.md)을 참고한다.
+
 이 문서는 2026-10-10 KST 작업 트리에서 검증 중인 구현을 설명한다. 소스는 현재 0.11.0
 후보를 표시하며 이전 검증 receipt의 실제 0.10.0 바이너리 식별자는 유지한다. 서명 릴리즈나
 모든 설치 IDE 시나리오의 검증 완료를 선언하지 않는다. [개발 계획](IDE-AGENT-ROADMAP.md)의

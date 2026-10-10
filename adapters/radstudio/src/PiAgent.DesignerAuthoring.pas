@@ -9,11 +9,11 @@ procedure AddDesignerAuthoringSchema(const Snapshot: TJSONObject; const Module: 
   const Editor: IOTAFormEditor; CanWrite: Boolean);
 function DesignerAuthoringEnabled(const Module: IOTAModule): Boolean;
 implementation
-uses System.SysUtils, System.DateUtils, System.Classes, System.IOUtils, System.Hash,
+uses System.SysUtils, System.DateUtils, System.Classes, System.IOUtils, System.Hash, System.Variants,
   System.TypInfo, System.RegularExpressions, System.Generics.Collections, Winapi.Windows,
   DesignIntf,
   PiAgent.IdeContext, PiAgent.DesignerJournal, PiAgent.DesignerRelations, PiAgent.EditorOffsets,
-  PiAgent.DesignerAuthoringGuards;
+  PiAgent.DesignerAuthoringGuards, PiAgent.DesignerProperties;
 var Previews: TObjectDictionary<string,TJSONObject>;
 function DesignerAuthoringEnabled(const Module: IOTAModule): Boolean;
 var Files: TArray<string>; FileName: string;
@@ -112,9 +112,23 @@ begin
     TRegEx.IsMatch(Name,'^(begin|end|class|type|unit|uses|function|procedure|property|var|const|interface|implementation|object|inherited|nil|self|create|destroy)$',[roIgnoreCase]) then
     raise Exception.Create('Invalid or reserved designer identifier');
 end;
+function InspectedProperty(Item: TComponent; const Path: string; RequireDirectWrite: Boolean): Boolean;
+var Rows: TJSONArray; Row: TJSONObject; I: Integer;
+begin
+  Result:=False; Rows:=TJSONArray.Create;
+  try
+    DescribeDesignerProperties(Item,Rows,True);
+    for I:=0 to Rows.Count-1 do begin
+      Row:=Rows.Items[I] as TJSONObject;
+      if SameText(Row.GetValue<string>('name',''),Path) then
+        Exit(not RequireDirectWrite or Row.GetValue<Boolean>('writable',False));
+    end;
+  finally Rows.Free; end;
+end;
 procedure ValidateChange(Args: TJSONObject; const Editor: IOTAFormEditor);
 var Change,Name,Kind,Framework: string; Root,Item,Other,Parent: TComponent; Ancestor: TClass;
   TypeName: string; Allowed: Boolean; Prop: PPropInfo; I,J,Count: Integer; List: PPropList;
+  PropertyTarget: TPersistent;
   Finder: TClassFinder; Candidate: TPersistentClass;
 begin
   Root:=NativeComponent(Editor.GetRootComponent); if Root=nil then raise Exception.Create('Form root unavailable');
@@ -151,7 +165,32 @@ begin
   Item:=NativeComponent(Editor.FindComponent(Args.GetValue<string>('component','')));
   if (Item=nil) or (Item=Root) or (Item.Owner<>Root) or (csAncestor in Item.ComponentState) then
     raise Exception.Create('Target component is missing/inherited/root-owned deletion is forbidden');
+  if Change='setCollectionProperty' then begin
+    Name:=Args.GetValue<string>('property','');
+    if (Framework<>'vcl') or (Item.ClassType.UnitName<>'Vcl.ComCtrls') or
+      (Item.ClassName<>'TListView') or
+      not SupportedColumnCaptionPath(Name) or
+      (Length(Args.GetValue<string>('value',''))>256) then
+      raise Exception.Create('Only a bounded VCL TListView column caption is supported');
+    Prop:=ResolveDesignerProperty(Item,Name,PropertyTarget);
+    if (Prop=nil) or (Prop.SetProc=nil) or not (PropertyTarget is TCollectionItem) then
+      raise Exception.Create('Collection scalar property is unavailable or read-only');
+    if not InspectedProperty(Item,Name,False) then raise Exception.Create('Collection property is outside the inspected schema');
+    Exit;
+  end;
   if not StandardDesignerClass(Framework,Item.ClassType) then raise Exception.Create('Target component class is outside the exact standard unit allowlist');
+  if Change='setScalarProperty' then begin
+    Name:=Args.GetValue<string>('property','');
+    if (Item.ClassName<>'TButton') or
+      not (((Framework='vcl') and (Name='Font.Name')) or
+           ((Framework='fmx') and (Name='TextSettings.Font.Family'))) or
+      (Length(Args.GetValue<string>('value',''))>256) then
+      raise Exception.Create('Only a bounded standard button Font name is supported');
+    Prop:=ResolveDesignerProperty(Item,Name,PropertyTarget);
+    if (Prop=nil) or (Prop.SetProc=nil) then raise Exception.Create('Button Font property is unavailable or read-only');
+    if not InspectedProperty(Item,Name,True) then raise Exception.Create('Font property is outside the inspected writable schema');
+    Exit;
+  end;
   if Change='bindEvent' then begin
     Prop:=GetPropInfo(Item,Args.GetValue<string>('property',''));
     if (Prop=nil) or (Prop.PropType^.Kind<>tkMethod) or (Prop.SetProc=nil) then raise Exception.Create('Target is not a writable event');
@@ -184,6 +223,7 @@ procedure AddDesignerAuthoringSchema(const Snapshot: TJSONObject; const Module: 
 var Operations,Types,Components,Events: TJSONArray; Obj: TJSONObject; Item: TComponent;
   Kind,Reason: string; List: PPropList; Count,I,J: Integer; Prop: PPropInfo;
   Root,Base: TComponent; Finder: TClassFinder; Candidate: TPersistentClass; Diagnostic: TJSONObject; Packages: IOTAPackageServices; PackageRows: TJSONArray; PackageInfo: IOTAPackageInfo;
+  HasColumns,HasButton: Boolean; CollectionObject: TObject; PropertyTarget: TPersistent;
   function ClassNameOf(const ClassType: TPersistentClass): string;
   begin Result:=''; if ClassType<>nil then Result:=ClassType.QualifiedClassName; end;
 begin
@@ -195,6 +235,28 @@ begin
   if CanWrite then begin
     Operations.Add('previewChange').Add('applyChange').Add('createComponent').Add('deleteComponent').Add('bindEvent')
       .Add('previewRestoreChange').Add('restoreChange');
+    HasColumns:=False; HasButton:=False;
+    for I:=0 to Root.ComponentCount-1 do
+      if StandardDesignerClass(Snapshot.GetValue<string>('framework',''),Root.Components[I].ClassType) and
+        (Root.Components[I].ClassName='TButton') then begin
+        if Snapshot.GetValue<string>('framework','')='vcl' then
+          Prop:=ResolveDesignerProperty(Root.Components[I],'Font.Name',PropertyTarget)
+        else Prop:=ResolveDesignerProperty(Root.Components[I],'TextSettings.Font.Family',PropertyTarget);
+        if (Prop<>nil) and (Prop.SetProc<>nil) then HasButton:=True;
+      end;
+    if HasButton then Operations.Add('setScalarProperty');
+    if Snapshot.GetValue<string>('framework','')='vcl' then
+      for I:=0 to Root.ComponentCount-1 do begin
+        Item:=Root.Components[I];
+        if (Item.ClassType.UnitName<>'Vcl.ComCtrls') or (Item.ClassName<>'TListView') then Continue;
+        Prop:=GetPropInfo(Item,'Columns');
+        if Prop=nil then Continue;
+        CollectionObject:=GetObjectProp(Item,Prop);
+        if (CollectionObject is TCollection) and (TCollection(CollectionObject).Count>0) then begin
+          HasColumns:=True; Break;
+        end;
+      end;
+    if HasColumns then Operations.Add('setCollectionProperty');
   end else Snapshot.AddPair('authoringUnavailable',Reason);
   Types:=TJSONArray.Create; Snapshot.AddPair('creatableTypes',Types);
   if (GetEnvironmentVariable('PIAGENT_RAD_FIXTURE_PATH')<>'') and DesignerAuthoringEnabled(Module) then begin
@@ -243,9 +305,12 @@ begin
 end;
 function ExecuteDesignerAuthoring(const Operation,Revision,Workspace: string;
   Args: TJSONObject; const Module: IOTAModule; const Editor: IOTAFormEditor): TJSONObject;
-var Saved,Change,Restore: TJSONObject; Id,Checkpoint,Name,Kind,FileName,Diff: string;
+var Saved,Change,Restore,Mutation: TJSONObject; Id,Checkpoint,Name,Kind,FileName,Diff,RestoredDiskRevision: string;
   Guid: TGUID; Created,Component: IOTAComponent; Item: TComponent; Prop: PPropInfo;
   Method: TMethod; NativeEditor: INTAFormEditor; PriorGroup: TPersistentClass; NewHandler: Boolean;
+  PropertyTarget: TPersistent; I: Integer; Services: IOTAModuleServices;
+  Reopened: IOTAModule; ReopenedEditor: IOTAFormEditor;
+  DiskRestoreStarted,DiskRestored: Boolean;
 begin
   RequireIdeThread; NativeEditor:=Native(Editor);
   if not DesignerAuthoringEnabled(Module) then raise Exception.Create('Authoring requires bounded saved Delphi source and form files');
@@ -276,9 +341,68 @@ begin
       not SameText(Saved.GetValue<string>('document',''),Module.FileName) then raise Exception.Create('Designer restore preview expired');
     Previews.Remove(Id);
     // Journal hashes guard both files; module dirty state is checked by the caller.
-    RestoreDesignerJournal(Args.GetValue<string>('checkpointId',''),Module.FileName,Args.GetValue<string>('revision',''),DesignerFiles(Module));
-    Module.Refresh(True);
-    Exit(TJSONObject.Create.AddPair('restored',TJSONBool.Create(True)).AddPair('document',Module.FileName).AddPair('scope','source_and_form'));
+    Checkpoint:=Args.GetValue<string>('checkpointId','');
+    Mutation:=DesignerJournalMutation(Checkpoint,Module.FileName);
+    DiskRestoreStarted:=False; DiskRestored:=False;
+    try
+    try
+      DiskRestoreStarted:=True;
+      RestoreDesignerJournal(Checkpoint,Module.FileName,Args.GetValue<string>('revision',''),DesignerFiles(Module));
+      DiskRestored:=True;
+      RestoredDiskRevision:=DesignerFileRevision(Module);
+      // Refresh(True) does not reconstruct a VCL component that already has a
+      // Font/ParentFont override. Close the clean form and reopen saved bytes.
+      for I:=0 to Module.ModuleFileCount-1 do
+        if Module.ModuleFileEditors[I].Modified then
+          raise Exception.Create('Restored form became dirty before reopening');
+      NativeEditor:=nil; Item:=nil; Component:=nil;
+      if not Module.CloseModule(False) then
+        raise Exception.Create('Restored form could not close for live reload');
+      if not Supports(BorlandIDEServices,IOTAModuleServices,Services) then
+        raise Exception.Create('IDE module service unavailable after restoration');
+      Reopened:=Services.OpenModule(Args.GetValue<string>('document',''));
+      if Reopened=nil then raise Exception.Create('Restored form could not reopen');
+      ReopenedEditor:=nil;
+      for I:=0 to Reopened.ModuleFileCount-1 do
+        if Supports(Reopened.ModuleFileEditors[I],IOTAFormEditor,ReopenedEditor) then Break;
+      if (ReopenedEditor=nil) or (ReopenedEditor.GetRootComponent=nil) then
+        raise Exception.Create('Restored form designer did not reload');
+      if DesignerFileRevision(Reopened)<>RestoredDiskRevision then
+        raise Exception.Create('IDE reopen changed restored source/form bytes');
+      for I:=0 to Reopened.ModuleFileCount-1 do
+        if Reopened.ModuleFileEditors[I].Modified then
+          raise Exception.Create('Restored form remains dirty after reopening');
+      if Mutation<>nil then begin
+        Kind:=Mutation.GetValue<string>('kind','');
+        if not ((Kind='setCollectionProperty') or (Kind='setScalarProperty')) then
+          raise Exception.Create('Unsupported checkpoint mutation');
+        Component:=ReopenedEditor.FindComponent(Mutation.GetValue<string>('component',''));
+        Item:=NativeComponent(Component);
+        if Item=nil then raise Exception.Create('Restored designer component disappeared from live form');
+        Prop:=ResolveDesignerProperty(Item,Mutation.GetValue<string>('property',''),PropertyTarget);
+        if (Prop=nil) or (VarToStr(GetPropValue(PropertyTarget,string(Prop.Name),True))<>
+          Mutation.GetValue<string>('beforeValue','')) then
+          raise Exception.Create('Restored designer value differs in the live form');
+        if (Mutation.GetValue('beforeParentFont')<>nil) and
+          (VarToStr(GetPropValue(Item,'ParentFont',True))<>
+           Mutation.GetValue<string>('beforeParentFont','')) then
+          raise Exception.Create('Restored designer parent Font state differs in the live form');
+        Component:=nil;
+      end;
+      ReopenedEditor.Show;
+    except on E:Exception do begin
+      if DiskRestored then
+        raise Exception.Create('Checkpoint bytes were restored, but live designer reload/verification failed: '+E.Message+
+          '. Inspect the saved form and reopen it before further edits')
+      else if DiskRestoreStarted then
+        raise Exception.Create('Designer restore may be partial: '+E.Message+
+          '. Inspect the checkpoint and saved source/form before further edits');
+      raise;
+    end;
+    end;
+    finally Mutation.Free; end;
+    Exit(TJSONObject.Create.AddPair('restored',TJSONBool.Create(True)).AddPair('document',Args.GetValue<string>('document',''))
+      .AddPair('scope','source_and_form').AddPair('liveReloaded',TJSONBool.Create(True)));
   end;
   if Args.GetValue<string>('revision','')<>Revision then raise Exception.Create('Designer revision changed');
   if Operation='previewChange' then begin
@@ -328,6 +452,23 @@ begin
         Component:=Editor.FindComponent(Change.GetValue<string>('component',''));
         if Kind='deleteComponent' then begin
           if not Component.Delete then raise Exception.Create('IDE component deletion failed'); Component:=nil;
+        end else if (Kind='setCollectionProperty') or (Kind='setScalarProperty') then begin
+          Item:=NativeComponent(Component);
+          Prop:=ResolveDesignerProperty(Item,Change.GetValue<string>('property',''),PropertyTarget);
+          if (Prop=nil) or (Prop.SetProc=nil) or
+            ((Kind='setCollectionProperty') and not (PropertyTarget is TCollectionItem)) then
+            raise Exception.Create('Designer property changed before apply');
+          Mutation:=TJSONObject.Create.AddPair('kind',Kind)
+            .AddPair('component',Change.GetValue<string>('component',''))
+            .AddPair('property',Change.GetValue<string>('property',''))
+            .AddPair('beforeValue',VarToStr(GetPropValue(PropertyTarget,string(Prop.Name),True)));
+          try
+            if (Kind='setScalarProperty') and (FrameworkOfComponent(Item)='vcl') then
+              Mutation.AddPair('beforeParentFont',VarToStr(GetPropValue(Item,'ParentFont',True)));
+            SetDesignerJournalMutation(Checkpoint,Mutation);
+          finally Mutation.Free; end;
+          SetPropValue(PropertyTarget,string(Prop.Name),Change.GetValue<string>('value',''));
+          Component:=nil;
         end else begin
           Item:=NativeComponent(Component); Prop:=GetPropInfo(Item,Change.GetValue<string>('property',''));
           Name:=Change.GetValue<string>('eventMethod','');
@@ -349,6 +490,40 @@ begin
       end;
       NativeEditor.FormDesigner.Modified;
       if not Module.Save(False,True) then raise Exception.Create('Designer source/form save failed');
+      if (Kind='setCollectionProperty') or (Kind='setScalarProperty') then begin
+        // Reconstruct the designer from saved bytes; Refresh(True) can retain
+        // a VCL Font override on the old live component.
+        RestoredDiskRevision:=DesignerFileRevision(Module);
+        for I:=0 to Module.ModuleFileCount-1 do
+          if Module.ModuleFileEditors[I].Modified then
+            raise Exception.Create('Saved designer remains dirty before reload');
+        NativeEditor:=nil; Item:=nil; Component:=nil;
+        if not Module.CloseModule(False) then raise Exception.Create('Saved designer could not close for verification');
+        if not Supports(BorlandIDEServices,IOTAModuleServices,Services) then
+          raise Exception.Create('IDE module service unavailable for verification');
+        Reopened:=Services.OpenModule(Change.GetValue<string>('document',''));
+        if Reopened=nil then raise Exception.Create('Saved designer could not reopen for verification');
+        ReopenedEditor:=nil;
+        for I:=0 to Reopened.ModuleFileCount-1 do
+          if Supports(Reopened.ModuleFileEditors[I],IOTAFormEditor,ReopenedEditor) then Break;
+        if (ReopenedEditor=nil) or (ReopenedEditor.GetRootComponent=nil) then
+          raise Exception.Create('Saved form designer did not reload');
+        if DesignerFileRevision(Reopened)<>RestoredDiskRevision then
+          raise Exception.Create('IDE reopen changed saved source/form bytes');
+        for I:=0 to Reopened.ModuleFileCount-1 do
+          if Reopened.ModuleFileEditors[I].Modified then
+            raise Exception.Create('Saved designer is dirty after reopen');
+        Component:=ReopenedEditor.FindComponent(Change.GetValue<string>('component',''));
+        Item:=NativeComponent(Component);
+        if Item=nil then raise Exception.Create('Edited component disappeared after designer reload');
+        Prop:=ResolveDesignerProperty(Item,Change.GetValue<string>('property',''),PropertyTarget);
+        if (Prop=nil) or
+          (VarToStr(GetPropValue(PropertyTarget,string(Prop.Name),True))<>
+           Change.GetValue<string>('value','')) then
+          raise Exception.Create('Saved designer property did not survive IDE reload');
+        Component:=nil;
+        ReopenedEditor.Show;
+      end;
       if Kind='bindEvent' then begin
         Component:=Editor.FindComponent(Change.GetValue<string>('component','')); Item:=NativeComponent(Component);
         if Item=nil then raise Exception.Create('Bound event component disappeared during save');
@@ -359,7 +534,7 @@ begin
       end;
       CompleteDesignerJournal(Checkpoint);
       Result:=TJSONObject.Create.AddPair('applied',TJSONBool.Create(True)).AddPair('checkpointId',Checkpoint)
-        .AddPair('document',Module.FileName).AddPair('recoveryScope','source_and_form');
+        .AddPair('document',Change.GetValue<string>('document','')).AddPair('recoveryScope','source_and_form');
     except on E:Exception do begin
       // Preserve recovery bytes and an observed durable failure snapshot. Unsaved
       // IDE buffers stay dirty; recovery cannot overwrite subsequent user edits.

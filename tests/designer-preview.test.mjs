@@ -20,6 +20,30 @@ test('designer creation/deletion cannot bypass advertised operations, recovery p
  }
  const {bridge}=harness();try{for(const args of [{changeOperation:'createComponent',type:'UnverifiedControl'},{changeOperation:'createComponent',type:'TButton',width:0},{changeOperation:'deleteComponent',component:'absent'},{changeOperation:'bindEvent',component:'button'}])await assert.rejects(bridge.execute('ide_designer_preview_change',args,new AbortController().signal));}finally{bridge.close();}
 });
+test('reviewed scalar and collection changes require live operation and inspected property before apply',async()=>{
+ const state={...snapshot(),components:[{id:'button',properties:[{name:'Font.Name',value:'Arial',writable:true}]},{id:'list',properties:[{name:'Columns[0].Caption',value:'Before',writable:false}]}],supportedOperations:[...snapshot().supportedOperations,'setScalarProperty','setCollectionProperty']};
+ const {bridge,frames}=harness({state,result:preview({operation:'setCollectionProperty',diff:'-Before\n+After'})});
+ try{
+  for(const args of [
+   {changeOperation:'setScalarProperty',component:'list',property:'Columns[0].Caption',value:'After'},
+   {changeOperation:'setCollectionProperty',component:'list',property:'Columns[1].Caption',value:'After'},
+   {changeOperation:'setCollectionProperty',component:'list',property:'Columns[0].Caption',value:'x'.repeat(257)},
+   {changeOperation:'setCollectionProperty',component:'list',property:'Columns[0].Caption',value:'After',type:'TButton'}
+  ])await assert.rejects(bridge.execute('ide_designer_preview_change',args,new AbortController().signal));
+  const args={changeOperation:'setCollectionProperty',component:'list',property:'Columns[0].Caption',value:''};
+  await bridge.execute('ide_designer_preview_change',args,new AbortController().signal);
+  const previewRequest=frames.find(f=>f.operation==='previewChange');assert.equal(previewRequest.args.value,'');
+  const applying=bridge.execute('ide_designer_apply_change',{proposalId:'preview',revision:'token-revision'},new AbortController().signal);
+  await tick();const consent=frames.find(f=>f.type==='designer_approval');assert.match(consent.diff,/Before/);bridge.decide(consent.proposalId,true);
+  await tick();const apply=frames.find(f=>f.operation==='applyChange');assert.ok(apply);bridge.reply(apply.id,{applied:true,checkpointId:'checkpoint'});assert.equal((await applying).applied,true);
+  state.supportedOperations=state.supportedOperations.filter(op=>op!=='setCollectionProperty');
+  await assert.rejects(bridge.execute('ide_designer_preview_change',args,new AbortController().signal),/unsupported/);
+ }finally{bridge.close();}
+ const scalar=harness({state:{...state,supportedOperations:[...state.supportedOperations,'setScalarProperty']},result:preview({operation:'setScalarProperty'})});
+ try{await scalar.bridge.execute('ide_designer_preview_change',{changeOperation:'setScalarProperty',component:'button',property:'Font.Name',value:'Courier New'},new AbortController().signal);
+  assert.equal(scalar.frames.find(f=>f.operation==='previewChange').args.value,'Courier New');
+ }finally{scalar.bridge.close();}
+});
 test('designer state changing during consent blocks mutation and restore requires separate concrete approval',async()=>{
  const {bridge,frames,state}=harness();try{
   await bridge.execute('ide_designer_preview_change',{changeOperation:'createComponent',type:'TButton'},new AbortController().signal);const pending=bridge.execute('ide_designer_apply_change',{proposalId:'preview',revision:'token-revision'},new AbortController().signal);await tick();const approval=frames.find(f=>f.type==='designer_approval');state.revision='edited';bridge.decide(approval.proposalId,true);await assert.rejects(pending,/changed during approval/);assert.equal(frames.some(f=>f.operation==='applyChange'),false);

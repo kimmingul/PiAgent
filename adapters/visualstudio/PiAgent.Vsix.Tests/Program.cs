@@ -101,6 +101,13 @@ internal static class Program
             Check((await rebasedNative.GetDocument(secondId)!.GetTextAsync()).ToString().Contains("Sum(1,2)"),"Approved rename texts rebase onto current native workspace branch");
             var restoredNative=IdeRefactoringTools.RebaseReviewed(rebasedNative,(JArray)rename.Result["files"]!,uri,true);
             Check((await restoredNative.GetDocument(firstId)!.GetTextAsync()).ToString()==firstSource,"Refactor compensation rebases only owned target original text");
+            var partial=IdeRefactoringTools.RecoveryState(new (string? Disk,string? Buffer,string Before,string After)[]{(firstSource,firstSource,firstSource,"changed"),("changed","changed",secondSource,"changed")});
+            Check(partial.Safe&&!partial.Unchanged,"Partial multi-file save is eligible for owned rollback");
+            var external=IdeRefactoringTools.RecoveryState(new (string? Disk,string? Buffer,string Before,string After)[]{("external edit","changed",firstSource,"changed")});
+            Check(!external.Safe&&!external.Unchanged,"External modification prevents refactor rollback");
+            var unreadable=IdeRefactoringTools.RecoveryState(new[]{(Disk:(string?)null,Buffer:(string?)null,Before:firstSource,After:"changed")});
+            Check(!unreadable.Safe&&!unreadable.Unchanged,"Unreadable target cannot mask failed recovery as unchanged");
+            Check(EditorSuggestionValidity.IsCurrent(false,false,3,3,true,true,true)&&!EditorSuggestionValidity.IsCurrent(false,false,3,4,true,true,true)&&!EditorSuggestionValidity.IsCurrent(false,true,3,3,true,true,true)&&!EditorSuggestionValidity.IsCurrent(false,false,3,3,false,true,true)&&!EditorSuggestionValidity.IsCurrent(false,false,3,3,true,false,true)&&!EditorSuggestionValidity.IsCurrent(false,false,3,3,true,true,false),"Cancelled, IME-composing, moved-caret and switched-document suggestions cannot commit");
             var outsideId=DocumentId.CreateNewId(project.Id);var outsideText="class Outside { int Add() => 1; }";
             var duplicateSuffix=refactorSolution.AddDocument(outsideId,"One.cs",Microsoft.CodeAnalysis.Text.SourceText.From(outsideText),filePath:Path.Combine(Path.GetTempPath(),"PiAgentOutsideFixtureScope","One.cs"));
             var scopedRebase=IdeRefactoringTools.RebaseReviewed(duplicateSuffix,(JArray)rename.Result["files"]!,uri,false);
@@ -123,6 +130,33 @@ internal static class Program
             var settings=Path.Combine(root,"Fixture.runsettings");File.WriteAllText(settings,"<RunSettings/>");
             var testArgs=IdeTestTools.Arguments(firstFile,new JObject{["operation"]="run",["configuration"]="Release",["framework"]="net8.0",["settings"]="Fixture.runsettings",["filter"]="FullyQualifiedName~한글"},root,uri);
             Check(testArgs.Contains("--configuration")&&testArgs.Contains("Release")&&testArgs.Contains("net8.0")&&testArgs.Contains(settings)&&testArgs.Contains("FullyQualifiedName~한글"),"Test target/settings arguments retain Unicode without a shell");
+            var runnerRoot=Path.Combine(root,"runner-config");Directory.CreateDirectory(runnerRoot);
+            File.WriteAllText(Path.Combine(runnerRoot,"global.json"),"{\"test\":{\"runner\":\"Microsoft.Testing.Platform\"}}");
+            Check(IdeTestTools.UsesMtpRunner(Path.Combine(runnerRoot,"nested")),"MTP runner is selected only by nearest global.json opt-in");
+            var mtpArgs=IdeTestTools.Arguments(firstFile,new JObject{["operation"]="run",["configuration"]="Release",["framework"]="net10.0"},root,uri,true).ToArray();
+            Check(mtpArgs.Take(4).SequenceEqual(new[]{"test","--project",firstFile,"--no-restore"})&&mtpArgs.Contains("--framework")&&mtpArgs.Skip(mtpArgs.Length-4).SequenceEqual(new[]{"--","--report-trx","--report-trx-filename","results.trx"})&&!mtpArgs.Contains("--logger"),"MTP run binds one framework and uses registered TRX reporter arguments");
+            try{IdeTestTools.Arguments(firstFile,new JObject{["operation"]="run"},root,uri,true);throw new Exception("ambiguous multi-target MTP run accepted");}catch(IOException){Console.WriteLine("PASS MTP target framework required for one-result scope");}
+            try{IdeTestTools.Arguments(firstFile,new JObject{["operation"]="run",["framework"]="net10.0",["filter"]="FullyQualifiedName~Fixture"},root,uri,true);throw new Exception("framework-specific MTP filter accepted");}catch(IOException){Console.WriteLine("PASS MTP framework-specific filter refused");}
+            File.WriteAllText(Path.Combine(runnerRoot,"global.json"),"{\"test\":{\"runner\":\"VSTest\"}}");
+            Check(!IdeTestTools.UsesMtpRunner(runnerRoot),"Explicit VSTest runner remains on VSTest backend");
+            var discovered=IdeTestTools.ParseDiscovery("Test run\nThe following Tests are available:\n    Fixture.Adds\n    Fixture.한글\n");
+            Check(discovered.Parsed&&discovered.Names.Count==2,"VSTest discovery parses two test identities");
+            Check(IdeTestTools.ParseDiscovery("The following Tests are available:\n").Names.Count==0&&!IdeTestTools.ParseDiscovery("MTP output without VSTest listing").Parsed,"Empty and unknown test runners cannot report parsed tests");
+            var mtpEnglish=IdeTestTools.ParseMtpDiscovery("Discovering tests\nDiscovered 2 tests in assembly - MtpConsole.dll\n  UnicodeName\n  SecondTest\n\nDiscovered 2 tests.\n");
+            var mtpKorean=IdeTestTools.ParseMtpDiscovery("어셈블리에서 2개의 테스트가 검색됨 - MtpConsole.dll\n  UnicodeName\n  SecondTest\n\n2개 테스트가 검색됨\n");
+            Check(mtpEnglish.Parsed&&mtpKorean.Parsed&&mtpEnglish.Names.Count==2&&mtpKorean.Names.Count==2,"Actual .NET 10 MTP English and Korean discovery listings parse two display names");
+            Check(!IdeTestTools.ParseMtpDiscovery("Discovered 2 tests in assembly - MtpConsole.dll\n  OnlyOne\n").Parsed,"Incomplete MTP test listing never reports parsed success");
+            Check(!IdeTestTools.ParseMtpDiscovery("Discovered 1 test in assembly - First.dll\n  First\nDiscovered 1 test in assembly - Second.dll\n  Second\n").Parsed,"Multiple MTP module listings cannot masquerade as one complete result");
+            var mtpTrx=Environment.GetEnvironmentVariable("PIAGENT_MTP_TRX");
+            if(!string.IsNullOrEmpty(mtpTrx)){
+                var actual=IdeTools.ReadTrx(mtpTrx);
+                Check((bool?)actual["available"]==true&&(int?)actual["passed"]==2&&(int?)actual["failed"]==0,"Actual MTP TRX is compatible with bounded result parser");
+            }
+            var mtpFailedTrx=Environment.GetEnvironmentVariable("PIAGENT_MTP_FAILED_TRX");
+            if(!string.IsNullOrEmpty(mtpFailedTrx)){
+                var actual=IdeTools.ReadTrx(mtpFailedTrx);
+                Check((bool?)actual["available"]==true&&(int?)actual["passed"]==1&&(int?)actual["failed"]==1,"Actual failing MTP TRX cannot be counted as a successful run");
+            }
             try{IdeTestTools.Arguments(firstFile,new JObject{["operation"]="run",["settings"]="../Outside.runsettings"},root,uri);throw new Exception("outside settings accepted");}catch(IOException){Console.WriteLine("PASS external test settings rejected");}
             var bigSource=new string('가',110000)+"🚀"+new string('b',110000);var cursor=110002;var window=EditorContextWindow.Create(bigSource,cursor);
             Check(System.Text.Encoding.UTF8.GetByteCount(window.Text)<=65536&&window.Start+window.Position==cursor&&window.Text.Contains("🚀"),"Large Unicode editor window stays bounded and maps caret");

@@ -3,6 +3,8 @@ interface
 uses System.JSON, System.SysUtils;
 function BeginDesignerJournal(const Document: string; const Files: TArray<string>): string;
 procedure CompleteDesignerJournal(const Id: string);
+procedure SetDesignerJournalMutation(const Id: string; Mutation: TJSONObject);
+function DesignerJournalMutation(const Id,Document: string): TJSONObject;
 function DesignerRestorePreview(const Id,Document: string; const ExpectedFiles: TArray<string>): TJSONObject;
 procedure RestoreDesignerJournal(const Id,Document,Revision: string; const ExpectedFiles: TArray<string>);
 function DesignerBytesHash(const Bytes: TBytes): string;
@@ -110,6 +112,60 @@ begin
   if (Result=nil) or not SameText(Result.GetValue<string>('document',''),Document) then begin
     Result.Free; raise Exception.Create('Designer checkpoint document mismatch');
   end;
+end;
+procedure ValidateMutation(Mutation: TJSONObject);
+var Kind,Component,Path,BeforeValue: string; HasParentFont: Boolean;
+begin
+  if Mutation=nil then raise Exception.Create('Missing designer mutation metadata');
+  if not (Mutation.GetValue('kind') is TJSONString) or
+    not (Mutation.GetValue('component') is TJSONString) or
+    not (Mutation.GetValue('property') is TJSONString) or
+    not (Mutation.GetValue('beforeValue') is TJSONString) then
+    raise Exception.Create('Malformed designer mutation metadata');
+  Kind:=Mutation.GetValue<string>('kind',''); Component:=Mutation.GetValue<string>('component','');
+  Path:=Mutation.GetValue<string>('property',''); BeforeValue:=Mutation.GetValue<string>('beforeValue','');
+  HasParentFont:=Mutation.GetValue('beforeParentFont')<>nil;
+  if not TRegEx.IsMatch(Component,'^[A-Za-z_][A-Za-z0-9_]{0,62}$') or
+    (Length(BeforeValue)>256) or (Mutation.Count<>4+Ord(HasParentFont)) then
+    raise Exception.Create('Designer mutation metadata exceeds its supported scope');
+  if Kind='setScalarProperty' then begin
+    if not ((Path='Font.Name') or (Path='TextSettings.Font.Family')) or
+      ((Path='Font.Name')<>HasParentFont) then
+      raise Exception.Create('Unsupported designer Font mutation metadata');
+    if HasParentFont and
+      (not (Mutation.GetValue('beforeParentFont') is TJSONString) or
+       not ((Mutation.GetValue<string>('beforeParentFont','')='True') or
+            (Mutation.GetValue<string>('beforeParentFont','')='False'))) then
+      raise Exception.Create('Malformed designer ParentFont metadata');
+  end else if Kind='setCollectionProperty' then begin
+    if HasParentFont or not TRegEx.IsMatch(Path,'^Columns\[(?:[0-9]|[1-2][0-9]|3[0-1])\]\.Caption$') then
+      raise Exception.Create('Unsupported designer collection mutation metadata');
+  end else raise Exception.Create('Unsupported designer mutation metadata kind');
+end;
+procedure SetDesignerJournalMutation(const Id: string; Mutation: TJSONObject);
+var Journal: TJSONObject;
+begin
+  ValidateMutation(Mutation);
+  Journal:=TJSONObject.ParseJSONValue(TFile.ReadAllText(JournalPath(Id),TEncoding.UTF8)) as TJSONObject;
+  try
+    if (Journal=nil) or (Journal.GetValue<string>('state','')<>'prepared') then
+      raise Exception.Create('Designer checkpoint is not prepared');
+    Journal.AddPair('mutation',TJSONValue(Mutation.Clone));
+    WriteJournal(Id,Journal);
+  finally Journal.Free; end;
+end;
+function DesignerJournalMutation(const Id,Document: string): TJSONObject;
+var Journal: TJSONObject; Mutation: TJSONValue;
+begin
+  Result:=nil; Journal:=ReadJournal(Id,Document);
+  try
+    Mutation:=Journal.GetValue('mutation');
+    if Mutation<>nil then begin
+      if not (Mutation is TJSONObject) then raise Exception.Create('Malformed designer checkpoint mutation');
+      ValidateMutation(TJSONObject(Mutation));
+      Result:=TJSONObject(Mutation.Clone);
+    end;
+  finally Journal.Free; end;
 end;
 function BeginDesignerJournal(const Document: string; const Files: TArray<string>): string;
 var Guid: TGUID; Journal,Entry: TJSONObject; Items: TJSONArray; FileName: string; Bytes: TBytes;

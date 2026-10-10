@@ -106,6 +106,9 @@ begin
   EditView:=View;
   if not SameText(ResolveIdeFile(FWorkspace,EditView.Buffer.FileName),FFile) then
     raise Exception.Create('Suggestion document changed');
+  if (EditView.Block<>nil) and EditView.Block.IsValid and (EditView.Block.Size<>0) then
+    raise Exception.Create('Editor selection changed; request a new suggestion');
+  if EditView.Buffer.IsReadOnly then raise Exception.Create('Editor became read-only');
   Current:=ReadEditorText(EditView.Buffer,1048576);
   if (Current<>FText) or (CurrentCaret(EditView,Current)<>FCaret) then
     raise Exception.Create('Suggestion revision or caret changed');
@@ -185,14 +188,20 @@ begin
 end;
 procedure TEditorPreview.ApplySuggestion;
 var EditView: IOTAEditView; Writer: IOTAEditWriter; Start,Count: Integer; Replacement: UTF8String;
+  Expected,ReplacementText: string;
 begin
     CheckSnapshot; EditView:=View;
-    if EditView.Buffer.IsReadOnly then raise Exception.Create('Editor became read-only');
     Start:=FReply.GetValue<Integer>('start',-1); Count:=FReply.GetValue<Integer>('length',-1);
-    ValidateEditRange(FText,Start,Count); Replacement:=UTF8String(FReply.GetValue<string>('text',''));
+    ValidateEditRange(FText,Start,Count); ReplacementText:=FReply.GetValue<string>('text','');
+    Replacement:=UTF8String(ReplacementText);
+    Expected:=Copy(FText,1,Start)+ReplacementText+Copy(FText,Start+Count+1,MaxInt);
+    if TEncoding.UTF8.GetByteCount(Expected)>1048576 then
+      raise Exception.Create('Suggestion would exceed the editor verification limit');
     Writer:=EditView.Buffer.CreateUndoableWriter;
     Writer.CopyTo(Utf16ToByteOffset(FText,Start));
     Writer.DeleteTo(Utf16ToByteOffset(FText,Start+Count)); Writer.Insert(Replacement); Writer:=nil;
+    if ReadEditorText(EditView.Buffer,1048576)<>Expected then
+      raise Exception.Create('Editor write could not be verified; inspect the buffer and native Undo');
     EditView.Buffer.Show;
     Cancel;
 end;

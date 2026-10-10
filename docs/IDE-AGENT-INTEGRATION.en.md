@@ -4,6 +4,36 @@ Installer hash `8A3A…FD09` identifies the cycle-tested upgrade/rollback/restor
 
 [한국어](IDE-AGENT-INTEGRATION.md) · **English** · [Documentation](README.md)
 
+The 2026-10-10 follow-up source changes are separate from the published 0.11.0
+installer. Session/project changes retire old approvals, queued requests and IDE
+catalogs; late prior-turn events are ignored. VS suggestions recheck document,
+caret, IME and buffer during display and acceptance.
+
+The follow-up RAD candidate supports reviewed property transactions for standard
+VCL/FMX button `Font.Name`/`TextSettings.Font.Family` and VCL
+`TListView.Columns[0..31].Caption`. Call `ide_designer_preview_change` with
+`changeOperation` of `setScalarProperty` or `setCollectionProperty`, respectively,
+plus `component`, `property` and a string `value`. Inspect first for live operation
+and property support. Apply and restore need separate review/approval; the form is
+closed and reopened to verify saved state. If reopening fails after restoration,
+the result distinguishes restored files from failed live verification. Arbitrary
+collection insertion, deletion and reordering remain unsupported.
+
+FMX `TextSettings.Font.Family` validation covers the stored value after reopening.
+The default `StyledSettings.Family` makes the style control the displayed font;
+clear that setting in the IDE for the Font override to affect appearance. PiAgent
+does not change this additional setting automatically, and these checks do not
+verify the displayed font in a running FMX application.
+
+The follow-up VS test path detects `test.runner=Microsoft.Testing.Platform` in
+the `global.json` found from the CLI working directory. It requires a .NET 10
+compatible SDK, restored test dependencies/TRX reporter and explicit `framework`.
+This path rejects `filter`/`settings`. Actual TRX execution/failure counts determine
+success; zero tests, unrecognized discovery output and mixed assembly listings do
+not become successful results. VSTest keeps its existing options. Neither path
+controls IDE Test Explorer. See [validation](VALIDATION.md) and the
+[comparison protocol](IDE-BENCHMARK.en.md).
+
 This guide describes the implementation being validated in the working tree on
 2026-10-10 KST. Source now reports 0.11.0 candidate; earlier acceptance receipts retain
 their actual 0.10.0 binary identities. This does not announce a signed release or certify every installed IDE

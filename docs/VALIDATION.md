@@ -1,5 +1,89 @@
 # PiAgent validation history
 
+## Follow-up source validation — 2026-10-10 KST
+
+세션·코드 제안·RAD 디자이너·VS 테스트 실행을 개선한 후속 소스다. 사용자의 요청으로
+**4시간 검증과 경쟁 제품 실측 비교는 보류**한다. 아래 검증은 공개 0.11.0 설치파일의
+새 기능을 의미하지 않으며 일반 IDE 프로필의 설치파일을 교체하지 않았다.
+
+These follow-up changes are separate from the published 0.11.0 prerelease. Three
+GPT-6-sol subagents worked on Core, VS and RAD. **Four-hour validation and measured
+competitor comparison are deferred at the user's request.** No performance ranking,
+new signed release, normal-profile installation or whole-plan completion is claimed.
+
+- Final serial Core regression: **226 total, 225 PASS, 0 FAIL, 1 optional native-RAD
+  skip**, 152,746.7416 ms, `artifacts/continuation-20261010-final-guard-core-tests.log`.
+  It includes the disconnected-language, terminal-card and late idle-event fixes.
+  Focused session/UI checks also passed **29/29**; counts are not added.
+- Adapter integration: **17/17 PASS, zero skips**, 28,603.8103 ms,
+  `artifacts/continuation-20261010-adapters.log`. Short deterministic lifecycle
+  checks cover repeated session/access transitions and child cleanup, not a soak.
+- Final shared WebView: **93 PASS**, including twelve docking/tab/hide transitions,
+  Korean/English preferences while disconnected, reconnection and draft retention,
+  `artifacts/continuation-20261010-accepted-guard-webview.log`. It also verifies
+  late null-turn editor/URL/confirmation requests cannot alter the draft, reach
+  the host or reopen a card. Idle login still works. The preceding failed
+  `final-webview.log` is retained: the new disconnected-frame guard initially
+  discarded global language preferences. It now accepts global preferences while
+  refusing stale session-owned settings callbacks.
+  The later `final-guard-webview.log` failure exposed an invalid smoke sequence
+  that requested turn-owned confirmations without starting a turn. The fixture
+  now starts real turns with ordered IDs; production idle guards remain enabled.
+- VS native safety/test-runner console: **91 PASS**,
+  `.tools/ide-validation/vs-safety-mtp-tests-20261010.log`. Actual MTP fixture runs
+  produced two passing tests/exit 0 and an intentional one-of-two failure/exit 2,
+  with parsed TRX reports in `.tools/ide-validation/mtp-{pass,fail}-results/`.
+  MTP requires explicit framework and opt-in from the CLI working directory;
+  filters/runsettings and IDE Test Explorer control remain unsupported.
+- Actual VS2026 isolated WPF fixture: **8/8 PASS** for context/catalog, targeted
+  build, two-file rename/native Undo, stale refusal, debugger, and designer
+  create/bind/delete with exact restoration. Receipt:
+  `artifacts/continuation-20261010-vs-wpf/piagent-vs-acceptance.receipt.json`.
+  Native DLL SHA-256:
+  `99E3E5ACA700E40DF9F565F9D2982D096217A17C2A4FF570039EFE038273D1FB`.
+  Frozen unsigned VSIX SHA-256:
+  `8B38B0A2C6DB1C6A4F2880BBD8C41578FD252ABF145AA3088948B1DC80E49566`.
+  Only `PiAgentContinue1010` experimental profile was updated. This frozen VSIX
+  predates the final shared-UI language fix; its native acceptance does not certify
+  that later UI file as part of the archive.
+- RAD recovery failures remain preserved: candidate A restored exact disk bytes
+  but left the open VCL Font stale; candidate B's in-place compensation accessed
+  an invalidated component interface. The implementation now closes/reopens a
+  clean saved module through public ToolsAPI, reacquires interfaces and verifies
+  both persisted/live values and clean buffers. Partial restoration errors
+  distinguish recovered files from failed live reload.
+- Review found `Columns[1]` through `Columns[9]` were incorrectly excluded by the
+  original allowlist expression. Both native path validators were corrected;
+  positive indices 0, 1, 9, 10, 31 and negative 32, 99, 01 have regression checks.
+- Final fresh RAD candidate `ide-dev-continue1010g`: **11/11 SDK smoke checks per
+  architecture**. Both Win64 and Win32 actual IDE fixtures passed VCL **11/11**
+  and FMX **9/9** direct designer steps, plus VCL **5/5** and FMX **4/4** generated
+  stage builds. Authenticated Core approval/apply/restore routing was verified on
+  Win64: VCL **16/16 scenarios** (24 rows including approvals), FMX **12/12**
+  (18 rows). Win32 Core routing was not repeated. These use a deterministic tool
+  caller inside real IDE fixtures, not an external-model quality benchmark.
+  Win64 BPL SHA-256:
+  `5339B7C970ABE444136B1E751C3FFC4402D674F2FEF81C5659334D442CEAD400`;
+  Win32:
+  `9B50A204C948E6DA3908329FE53EAB359F95E659DDA7B63754DE65A8D51D18C2`.
+  Receipts live under `adapters/radstudio/bin/{Win64,Win32}/ide-dev-continue1010g/`;
+  aggregate: `artifacts/continuation-20261010-rad-final-summary.json`. Pre-fix F
+  receipts remain separate. Test-owned IDE/daemon/pipe-host processes were stopped.
+- FMX Font evidence covers stored/reopened `TextSettings.Font.Family`. The default
+  `StyledSettings.Family` can override its displayed appearance; manually clearing
+  that setting in the IDE is required for the override. No automatic StyledSettings
+  mutation or FMX runtime-font visual acceptance is claimed. Native screen capture
+  failed in this session; SDK receipts are not reported as visual observation.
+- An initial full regression failed on missing offline benchmark documentation.
+  Packaging now includes both guides, plans and task specification; the corrected
+  full run above passed. Comparison plans/validator are retained for future use,
+  with no competitor measurements executed.
+
+Remaining implementation/platform scope is listed in the bilingual
+[roadmap](IDE-AGENT-ROADMAP.en.md) and [usage guide](IDE-AGENT-INTEGRATION.en.md).
+Local raw evidence is not automatically published as a release asset. Earlier
+records below retain their original versions, hashes and failed-soak status.
+
 ## Published 0.11.0 scoped prerelease — 2026-10-10 KST
 
 [GitHub release](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.0) was published

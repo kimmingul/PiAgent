@@ -11,6 +11,7 @@
     <Compile Include="../PiAgent.Vsix/IdeTestTools.cs" Link="IdeTestTools.cs" />
     <Compile Include="../PiAgent.Vsix/IdeDebugTools.cs" Link="IdeDebugTools.cs" />
     <Compile Include="../PiAgent.Vsix/EditorContextWindow.cs" Link="EditorContextWindow.cs" />
+    <Compile Include="../PiAgent.Vsix/EditorSuggestionValidity.cs" Link="EditorSuggestionValidity.cs" />
     <Compile Include="../PiAgent.Vsix/IdeProfileTools.cs" Link="IdeProfileTools.cs" />
     <Compile Include="../PiAgent.Vsix/IdeRunTools.cs" Link="IdeRunTools.cs" />
     <Compile Include="../PiAgent.Vsix/DesignerTools.cs" Link="DesignerTools.cs" />

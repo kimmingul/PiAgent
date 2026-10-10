@@ -82,12 +82,24 @@ lines.on('line', line => {
   if (command.message === 'ack-timeout') return;
   if (command.message === 'reject') { emit({ type: 'response', id: command.id, command: 'prompt', success: false }); active = false; return; }
   if (command.message === 'local') { response({ agentInvoked: false });if(process.argv.includes('--approval-mode'))emit({type:'prompt_result',agentInvoked:false,status:'completed',sessionSettled:true}); return; }
-  if(command.message==='local-background') {
+  if(command.message==='local-background'||command.message.endsWith('\n\nlocal-background')) {
     response({agentInvoked:false});emit({type:'prompt_result',agentInvoked:false,status:'completed',sessionSettled:false});
     timers.push(setTimeout(()=>{active=false;emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:'Background work completed'}});emit({type:'session_settled',status:'completed'});},250));return;
   }
   if (command.message === 'slow-ack') {setTimeout(()=>{response({});emit({type:'agent_end',isTerminal:true});},6500);return;}
   response({});
+  if(command.message.includes('PIAGENT_ECHO_PROMPT')) {
+    emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:command.message}});
+    emit({type:'agent_end',isTerminal:true});return;
+  }
+  if(command.message==='late-idle-ui') {
+    emit({type:'agent_end',isTerminal:true});
+    timers.push(setTimeout(()=>{
+      emit({type:'extension_ui_request',method:'set_editor_text',text:'stale draft'});
+      emit({type:'extension_ui_request',method:'open_url',url:'https://example.com'});
+      emit({type:'extension_ui_request',method:'notify',message:'idle notice'});
+    },25));return;
+  }
   if(command.message==='abort-resume'||command.message==='abort-settle') {
     emit({type:'auto_compaction_start'});emit({type:'auto_compaction_end',aborted:false});
     emit({type:'message_end',message:{role:'assistant',stopReason:'aborted',errorMessage:'Request was aborted'}});
@@ -130,7 +142,7 @@ lines.on('line', line => {
   }
   const prior=previousMessages.slice(); previousMessages.push(command.message);
   if(sessionFile) appendFileSync(sessionFile,JSON.stringify(command.message)+'\n');
-  if(command.message==='recall') {emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:prior.join('|')}});emit({type:'agent_end',isTerminal:true});return;}
+  if(command.message==='recall'||command.message.endsWith('\n\nrecall')) {emit({type:'message_update',assistantMessageEvent:{type:'text_delta',delta:prior.join('|')}});emit({type:'agent_end',isTerminal:true});return;}
   // New RAD also advertises IDE tools; its IDE prelude wraps the designer prelude.
   // Match the requested fixture command while retaining production instructions.
   if (command.message === 'propose-batch' ||

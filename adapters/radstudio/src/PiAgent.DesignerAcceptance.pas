@@ -29,11 +29,32 @@ end;
 
 procedure RunDesignerFixtureAcceptance;
 var Project: IOTAProject; Module: IOTAModule; Workspace,Root,Original,CheckpointCreate,
-  CheckpointBind,CheckpointDelete,CurrentStep,StageRoot: string; Report,Snapshot,Args,Preview,Applied: TJSONObject;
+  CheckpointBind,CheckpointDelete,CheckpointCollection,CurrentStep,StageRoot,CreatedRevision: string; Report,Snapshot,Args,Preview,Applied: TJSONObject;
   Steps: TJSONArray; Guid: TGUID; Contract: TJSONObject;
   procedure SaveContract;
   begin
     TFile.WriteAllText(TPath.Combine(GetEnvironmentVariable('PIAGENT_RAD_FIXTURE_PATH'),'designer-contract.json'),Contract.ToJSON,TEncoding.UTF8);
+  end;
+  procedure ReopenFixtureForm;
+  var Services: IOTAModuleServices; FormEditor: IOTAFormEditor; I: Integer; FileName: string;
+  begin
+    Services:=BorlandIDEServices as IOTAModuleServices;
+    FileName:=TPath.Combine(GetEnvironmentVariable('PIAGENT_RAD_FIXTURE_PATH'),'Main.pas');
+    Module:=Services.CurrentModule;
+    if (Module=nil) or not SameText(Module.FileName,FileName) then
+      raise Exception.Create('Fixture form changed before close/reopen verification');
+    for I:=0 to Module.ModuleFileCount-1 do
+      if Module.ModuleFileEditors[I].Modified then raise Exception.Create('Fixture form became dirty before reopen');
+    if not Module.CloseModule(False) then raise Exception.Create('Fixture form close was declined');
+    Module:=nil;
+    Module:=Services.OpenModule(FileName);
+    if Module=nil then raise Exception.Create('Fixture form could not reopen');
+    FormEditor:=nil;
+    for I:=0 to Module.ModuleFileCount-1 do
+      if Supports(Module.ModuleFileEditors[I],IOTAFormEditor,FormEditor) then Break;
+    if (FormEditor=nil) or (FormEditor.GetRootComponent=nil) then
+      raise Exception.Create('Fixture form designer did not reload from disk');
+    FormEditor.Show;
   end;
   function Call(const Operation: string; Parameters: TJSONObject): TJSONObject;
   begin try Result:=ExecuteDesigner(Operation,Parameters,Workspace); finally Parameters.Free; end; end;
@@ -114,6 +135,44 @@ var Project: IOTAProject; Module: IOTAModule; Workspace,Root,Original,Checkpoint
       Steps.AddElement(TJSONObject.Create.AddPair('operation','restore').AddPair('checkpointId',Id).AddPair('passed',TJSONBool.Create(True)));
     finally Preview.Free; end;
   end;
+  function PropertyValue(const ComponentName,PropertyName: string): string;
+  var View,Component,PropertyRow: TJSONObject; Components,Properties: TJSONArray; I,J: Integer;
+  begin
+    Result:=''; View:=Call('inspect',TJSONObject.Create);
+    try
+      Components:=View.GetValue('components') as TJSONArray;
+      for I:=0 to Components.Count-1 do begin
+        Component:=Components.Items[I] as TJSONObject;
+        if Component.GetValue<string>('id','')<>ComponentName then Continue;
+        Properties:=Component.GetValue('properties') as TJSONArray;
+        for J:=0 to Properties.Count-1 do begin
+          PropertyRow:=Properties.Items[J] as TJSONObject;
+          if PropertyRow.GetValue<string>('name','')=PropertyName then
+            Exit(PropertyRow.GetValue<string>('value',''));
+        end;
+      end;
+      raise Exception.Create('Fixture property absent from inspected schema: '+ComponentName+'.'+PropertyName);
+    finally View.Free; end;
+  end;
+  procedure SetFixtureFont;
+  var PropertyName,BeforeValue,AfterValue,BeforeBytes,Checkpoint: string;
+  begin
+    CurrentStep:='font save and reload';
+    if Report.GetValue<string>('framework','')='vcl' then begin PropertyName:='Font.Name'; AfterValue:='Courier New'; end
+    else begin PropertyName:='TextSettings.Font.Family'; AfterValue:='Courier New'; end;
+    BeforeValue:=PropertyValue('AgentFixtureButton',PropertyName);
+    BeforeBytes:=DesignerFileRevision((BorlandIDEServices as IOTAModuleServices).CurrentModule);
+    Checkpoint:=Change('setScalarProperty',TJSONObject.Create.AddPair('component','AgentFixtureButton')
+      .AddPair('property',PropertyName).AddPair('value',AfterValue));
+    ReopenFixtureForm;
+    if PropertyValue('AgentFixtureButton',PropertyName)<>AfterValue then raise Exception.Create('Saved Font value did not survive IDE reload');
+    Restore(Checkpoint);
+    ReopenFixtureForm;
+    if PropertyValue('AgentFixtureButton',PropertyName)<>BeforeValue then raise Exception.Create('Font value did not restore after IDE reload');
+    if DesignerFileRevision(Module)<>BeforeBytes then raise Exception.Create('Font restore changed source/form bytes');
+    Steps.AddElement(TJSONObject.Create.AddPair('operation','fontSaveReloadRestore').AddPair('property',PropertyName)
+      .AddPair('passed',TJSONBool.Create(True)));
+  end;
 begin
   Project:=GetActiveProject;
   if Project=nil then raise Exception.Create('Open the isolated fixture project and form first');
@@ -136,6 +195,21 @@ begin
       Args:=TJSONObject.Create.AddPair('type','TButton').AddPair('name','AgentFixtureButton').AddPair('parent',Root)
         .AddPair('x',TJSONNumber.Create(24)).AddPair('y',TJSONNumber.Create(24)).AddPair('width',TJSONNumber.Create(120)).AddPair('height',TJSONNumber.Create(32));
       CheckpointCreate:=Change('createComponent',Args);
+      SetFixtureFont;
+      if Report.GetValue<string>('framework','')='vcl' then begin
+        CreatedRevision:=DesignerFileRevision((BorlandIDEServices as IOTAModuleServices).CurrentModule);
+        CheckpointCollection:=Change('setCollectionProperty',TJSONObject.Create
+          .AddPair('component','AgentFixtureListView').AddPair('property','Columns[0].Caption').AddPair('value','After'));
+        ReopenFixtureForm;
+        if PropertyValue('AgentFixtureListView','Columns[0].Caption')<>'After' then
+          raise Exception.Create('Saved collection value did not survive IDE reload');
+        Restore(CheckpointCollection);
+        ReopenFixtureForm;
+        if PropertyValue('AgentFixtureListView','Columns[0].Caption')<>'Before' then
+          raise Exception.Create('Collection restore did not reload original value');
+        if DesignerFileRevision((BorlandIDEServices as IOTAModuleServices).CurrentModule)<>CreatedRevision then
+          raise Exception.Create('Collection checkpoint restore changed source/form bytes');
+      end;
       CheckpointBind:=Change('bindEvent',TJSONObject.Create.AddPair('component','AgentFixtureButton')
         .AddPair('property','OnClick').AddPair('eventMethod','AgentFixtureClick').AddPair('create',TJSONBool.Create(True)));
       CheckpointDelete:=Change('deleteComponent',TJSONObject.Create.AddPair('component','AgentFixtureButton'));

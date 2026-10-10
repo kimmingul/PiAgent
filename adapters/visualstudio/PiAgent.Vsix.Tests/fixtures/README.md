@@ -1,5 +1,23 @@
 # Visual Studio designer acceptance fixtures
 
+`MtpConsole` is a separate .NET 10 `MSTest.Sdk/4.1.0` CLI/TRX fixture. Its
+`global.json` explicitly opts into Microsoft.Testing.Platform. It is not an
+`IdeAcceptanceHarness` marker and does not certify Test Explorer integration.
+From that fixture directory, restore dependencies and run:
+
+```powershell
+dotnet restore MtpConsole.csproj
+dotnet test --project MtpConsole.csproj --no-restore --framework net10.0 --results-directory ./results-pass -- --report-trx --report-trx-filename results.trx
+```
+
+The normal run must report two executed/passing tests. Run the same command in
+an isolated child process with `PIAGENT_MTP_MODE=fail` and a different result
+directory to require one failed test, exit code 2, and a failing TRX. Preserve
+the caller's environment. `--list-tests` should discover both names; display
+names are not guaranteed unique. PiAgent requires explicit `framework` and
+rejects MTP filters/runsettings, multiple assembly discovery blocks, truncated
+output and zero/unparsed tests. CLI success alone is not a test pass.
+
 Use an experimental VS profile with the candidate extension. Bind Core to the fixture directory, open its solution, and save all documents before tools run.
 
 - `Wpf/Wpf.sln`: open `MainWindow.xaml`. Inspect reports `wpf-xaml` and source buffer backend. Create a Button under Grid (component ID 1), bind Click with `create:true`, apply the concrete preview, build, run, then preview/restore checkpoint and build again. Verify original bytes/comments/spacing/Unicode and generated code-behind source restoration. Source edits do not claim live visual designer control.
