@@ -1,5 +1,55 @@
 # PiAgent validation history
 
+## 0.11.1 signed scoped prerelease — 2026-10-10 KST
+
+서명된 0.11.1의 별도 IDE 프로필 검증과 설치 패키지 검사를 통과했다. 일반 프로필에
+설치하거나 4시간/경쟁 제품 실측 비교를 수행한 것은 아니다. 배포 파일은
+[0.11.1 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.1)와
+동봉 `.exe.sha256`으로 식별한다.
+
+- Final documentation repack SHA-256:
+  `3301708DD0E4A2272443ADA62A824ED9C46E19FA80C02BC8A0CB568FA8C7735C`.
+  This exact signed setup passed all **1,063 embedded payload file hashes**,
+  signature/timestamp, both bundled ARM64/x64 authenticated runtimes and installer
+  policy/language checks in `artifacts/release-0.11.1-final-installer-test.log`.
+  Its native adapter bytes are unchanged from the signed acceptance below.
+  Embedded guides record the pre-publication build snapshot; this final hash and
+  receipt are recorded externally to avoid a self-referential installer hash.
+- Signed VSIX SHA-256:
+  `09DB05A9E02E2ECB8284AE38B4CD481314355E25A0B085C1F21D07FC025976D7`.
+  Its archived native DLL is version 0.11.1.0, SHA-256
+  `D9B65EC2932837B7FC607E3DF610F2068F7F98AD794B9B02AE4BA1309F8A4EF1`.
+  Actual VS2026 WPF **8/8 PASS** used those exact archived DLL bytes in the
+  `PiAgentContinue1010` isolated profile; receipt:
+  `artifacts/release-0.11.1-vs-wpf/piagent-vs-acceptance.receipt.json`.
+  Archive content signatures, signer trust and embedded PE timestamps passed.
+  All **104/104 UI files** match final build inputs. Actual archived UI/DLL
+  WebView verification passed **93 checks**, including twelve transitions;
+  `artifacts/release-0.11.1-webview-smoke/webview.stdout.log`.
+- Exact signed RAD BPLs passed actual isolated VCL **11/11** and FMX **9/9**
+  direct designer checks on **each** of Win32 and Win64. Win64 SHA-256:
+  `287583E15E7E0D331AD57CE37694667C3AE440515136B8CCB8D76C17D8843C8B`;
+  Win32: `6EE934ACC7C46C811011A10114CEEAFB51DEA33B735CEC145B9EF6559897842C`.
+  Summary: `artifacts/continuation-20261010-rad-signed0111-summary.json`.
+  Earlier G-candidate Core-route and stage-build evidence below keeps its own
+  binary identity. Test-owned IDE/daemon processes were stopped after acceptance.
+- Version 0.11.1 adapter integration **17/17 PASS**, no skips,
+  `artifacts/release-0.11.1-adapter-tests.log`. Runtime/offline documentation
+  packaging **3/3 PASS**, `artifacts/release-0.11.1-package-tests.log`.
+  The final source regression before the version bump was **225 PASS, 0 FAIL,
+  1 optional skip**; its source scope and original receipt remain below.
+- First signed installer (before final documentation repack), SHA-256
+  `9EE74DEFADB0ED6EB9A49063E91875B40DAD9F4BACF6B2C1D7A1C8C1380B8931`, passed
+  signature/timestamp, all embedded payload hashes, bundled ARM64 and x64 Node
+  authenticated negotiation/ping, language resources, settings-policy preservation,
+  tamper/path rejection and IDE availability checks. Log:
+  `artifacts/release-0.11.1-installer-test.log`. Later repacks require separate
+  exact-byte verification; this hash does not identify a repacked download.
+
+No normal-profile 0.11.1 installation/upgrade/rollback, physical x64 clean install,
+four-hour soak or competitor measurements were performed. The bilingual
+[release notes](RELEASE-0.11.1.en.md) state the supported scope and deferred work.
+
 ## Follow-up source validation — 2026-10-10 KST
 
 세션·코드 제안·RAD 디자이너·VS 테스트 실행을 개선한 후속 소스다. 사용자의 요청으로

@@ -40,7 +40,7 @@ begin
     .AddPair('requestedMinutes',TJSONNumber.Create(FMinutes)).AddPair('fixture',FRoot)
     .AddPair('kind','automated native context/catalog and build soak')
     .AddPair('limitations','No human usage or editor model inference measurement')
-    .AddPair('implementationVersion','0.11.0').AddPair('errors',FErrors);
+    .AddPair('implementationVersion','0.11.1').AddPair('errors',FErrors);
   FTimer:=TTimer.Create(Self); FTimer.Interval:=500; FTimer.OnTimer:=Tick;
 end;
 destructor TIdeSoak.Destroy;

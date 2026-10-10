@@ -5,12 +5,13 @@ Nanum Space certificate in CurrentUser/My, thumbprint
 `3CE49DE1124F325082FA90BDE4944756D1626251`. Connect the SafeNet USB token.
 Signing failures stop the build; an unsigned release is never reported as successful.
 
-The [0.11.0 candidate](RELEASE-0.11.0.en.md) records the current signed VSIX and
-Win32/Win64 BPL identities. UI-only repackaging preserves the already validated
-native assemblies and signs the updated VSIX container again. Each replacement
-installer must pass its own signature, payload hash and bundled runtime checks;
-an earlier candidate's checks do not certify later bytes. Installation acceptance
-and publication status are recorded separately in the candidate release notes.
+The [published 0.11.0 prerelease](RELEASE-0.11.0.en.md) records its signed VSIX,
+Win32/Win64 BPL and installer identities. The [0.11.1 scoped prerelease](RELEASE-0.11.1.en.md)
+has separate signed VSIX/BPL native acceptance and a first signed installer with
+signature, payload-hash and bundled-runtime checks. Repacking docs changes installer
+bytes, so the final release asset needs its own verification and `.exe.sha256`.
+An earlier package's checks do not certify later bytes. Normal-profile 0.11.1
+installation/recovery was not performed.
 
 ## Register the USB PIN once
 

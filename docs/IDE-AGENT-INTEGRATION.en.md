@@ -1,6 +1,6 @@
-# IDE integration: candidate implementation guide
+# IDE integration: 0.11.1 scoped prerelease guide
 
-Installer hash `8A3A…FD09` identifies the cycle-tested upgrade/rollback/restoration package, not a later repack. Repacked bytes require separate verification; download hashes accompany GitHub release assets (`.exe.sha256`).
+The earlier 0.11.0 installer hash `8A3A…FD09` identifies its cycle-tested upgrade/rollback/restoration package, not the 0.11.1 candidate. New bytes require separate verification; download hashes accompany GitHub release assets (`.exe.sha256`).
 
 [한국어](IDE-AGENT-INTEGRATION.md) · **English** · [Documentation](README.md)
 
@@ -34,10 +34,11 @@ not become successful results. VSTest keeps its existing options. Neither path
 controls IDE Test Explorer. See [validation](VALIDATION.md) and the
 [comparison protocol](IDE-BENCHMARK.en.md).
 
-This guide describes the implementation being validated in the working tree on
-2026-10-10 KST. Source now reports 0.11.0 candidate; earlier acceptance receipts retain
-their actual 0.10.0 binary identities. This does not announce a signed release or certify every installed IDE
-scenario. The [roadmap](IDE-AGENT-ROADMAP.en.md) includes broader goals that remain
+This guide describes the 0.11.1 scoped prerelease implementation on 2026-10-10
+KST. Earlier acceptance receipts retain their actual binary versions and hashes.
+Signed VSIX/BPL isolated-IDE fixtures and the first signed installer package checks
+passed; normal-profile installation/recovery and every project scenario were not
+tested. The [roadmap](IDE-AGENT-ROADMAP.en.md) includes broader goals that remain
 subject to SDK experiments and acceptance. Use the live catalog and the recorded
 acceptance evidence to determine what the connected installation can actually do.
 

@@ -68,7 +68,7 @@ try {
         $name = [IO.Path]::GetRelativePath($payload,$file.FullName).Replace('\','/')
         $hashes[$name] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     }
-    @{version='0.11.0';signed=(!$NoSign);sha256=$hashes} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $payload 'setup-manifest.json') -Encoding utf8
+    @{version='0.11.1';signed=(!$NoSign);sha256=$hashes} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $payload 'setup-manifest.json') -Encoding utf8
     $archive = Join-Path $stage 'payload.zip'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::CreateFromDirectory($payload,$archive)
@@ -79,7 +79,7 @@ try {
     $dist = Join-Path $workspacePath 'dist'
     New-Item -ItemType Directory -Path $dist -Force | Out-Null
     $suffix = if ($NoSign) { '-unsigned-preview' } else { '' }
-    $setup = Join-Path $dist "PiAgent-Setup-0.11.0$suffix.exe"
+    $setup = Join-Path $dist "PiAgent-Setup-0.11.1$suffix.exe"
     Copy-Item -LiteralPath (Join-Path $output 'PiAgent-Setup.exe') -Destination $setup
     ((Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant()+'  '+(Split-Path $setup -Leaf)) | Set-Content "$setup.sha256" -Encoding ascii
     $releaseVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version

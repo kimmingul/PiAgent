@@ -57,7 +57,7 @@ begin
   finally Context.Free; end;
   Entries:=TJSONArray.Create;
   Result:=TJSONObject.Create.AddPair('schemaVersion',TJSONNumber.Create(1))
-    .AddPair('implementationVersion','0.11.0')
+    .AddPair('implementationVersion','0.11.1')
     .AddPair('workspaceUri',Workspace).AddPair('revision',Revision)
     .AddPair('capturedAt',DateToISO8601(Now,False)).AddPair('entries',Entries);
   Add('ide_context','','supported','','ToolsAPI');

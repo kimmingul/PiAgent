@@ -18,7 +18,9 @@ PiAgent IDE UI의 디자인은 유지한다.
 - 시스템/밝은/어두운 테마, 반응형 배치, 키보드 포커스와 reduced-motion을 지원한다.
 - 분석 도구나 외부 폰트, 런타임 API 요청, 빌드 의존성이 없다.
 - 화면 예시는 실제 지원 범위와 구분하여 표시한다.
+- 0.11.1 사전 릴리즈의 기능 범위만 설명한다. 4시간 검증과 Copilot/KAI 실측 비교는 보류되었다.
 - 공개 저장소와 릴리즈: `kimmingul/PiAgent`. 주소: https://kimmingul.github.io/PiAgent/.
+- 0.11.1 홈페이지 변경은 연결한 설치파일·문서 ZIP·SHA256 파일이 릴리즈에 게시된 뒤 배포한다.
 
 `.github/workflows/pages.yml`이 기본 `codex/omp-chat` 브랜치의 홈페이지 변경을 검증하고
 `website/`만 GitHub Pages에 게시한다. Actions에서 수동 실행할 수도 있다.
@@ -39,10 +41,10 @@ https://kimmingul.github.io/NanumCsvViewer/. The PiAgent IDE UI is not redesigne
 - Body text, metadata, accessibility labels and documentation links switch together; switching also works with blocked storage.
 - System/light/dark appearance, responsive layouts, keyboard focus and reduced-motion support.
 - No analytics, external fonts, runtime API requests or build dependencies.
-- Illustrative preview is labeled; features and validation limits reflect PiAgent 0.10.0, including session recovery and Korean/English UI support.
+- Illustrative preview is labeled; feature descriptions and limits are scoped to the PiAgent 0.11.1 prerelease. Four-hour validation and measured Copilot/KAI comparisons are deferred.
 - Public source, releases and website repository: `kimmingul/PiAgent`.
 - Canonical homepage: https://kimmingul.github.io/PiAgent/.
-- Signed installer downloads are public and do not require repository access.
+- Signed installer downloads are public and do not require repository access. Publish the 0.11.1 page update only after its setup, documentation ZIP and SHA256 assets are available at the linked release URLs.
 
 The `.github/workflows/pages.yml` workflow validates and publishes only `website/`
 using GitHub Pages. It runs for website changes on the default `codex/omp-chat`

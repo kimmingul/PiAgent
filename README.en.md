@@ -2,19 +2,19 @@
 
 [한국어](README.md) · **English** · [Documentation / 문서](docs/README.md)
 
-Source version **0.11.0 prerelease** · recovery/installation/rollback passed · strict four-hour soak unmet · documentation updated **2026-10-10 KST**.
+Source version **0.11.1 scoped prerelease** · source, isolated IDE and signed-installer checks passed · four-hour retest deferred · documentation updated **2026-10-10 KST**.
 Developer: **Min-Gul Kim (김민걸)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [Product website](https://kimmingul.github.io/PiAgent/?lang=en) ·
 [Release availability](https://github.com/kimmingul/PiAgent/releases).
-The public `kimmingul/PiAgent` repository contains source and earlier signed releases. Check GitHub Releases for 0.11.0 installer availability.
+The public `kimmingul/PiAgent` repository contains source and signed releases. Check [GitHub Releases](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.1) for the 0.11.1 asset and SHA-256.
 
-0.11.0 adds a live IDE capability catalog, reviewed semantic/designer changes and recovery, bounded editor context, native build/debugger integration, verified external tests, runtime profiling, reviewed local publish and local Git stage/commit. Support follows the connected adapter, language/framework and available tools. Automatic VS suggestions default to off; VS2022 requires 17.14 or later.
-[Candidate usage and scope](docs/IDE-AGENT-INTEGRATION.en.md) · [Unreleased changes and validation](docs/RELEASE-0.11.0.en.md).
+0.11.0 added a live IDE capability catalog, reviewed semantic/designer changes and recovery, native build/debugger integration, external tests, runtime profiling and reviewed local operations. 0.11.1 strengthens stale-event handling across sessions and suggestions, VS multi-file change safety and opt-in MTP/TRX runs, and RAD live-designer recovery. Support depends on the connected adapter, language/framework and available tools. Automatic VS suggestions default to off; VS2022 requires 17.14 or later.
+[Usage and scope](docs/IDE-AGENT-INTEGRATION.en.md) · [0.11.1 changes and validation](docs/RELEASE-0.11.1.en.md).
 
 [VS2026/RAD13.2 comprehensive IDE integration plan](docs/IDE-AGENT-ROADMAP.en.md): milestones, GPT-6.1 sol parallel ownership and acceptance criteria. Planned features are distinguished from current released functionality.
 
-[Candidate implementation guide](docs/IDE-AGENT-INTEGRATION.en.md): `/ide` availability, reviewed changes and recovery, VS/RAD backend scope and context measurements. Checks passed: 211 Core tests (one optional skip), 18/18 adapter tests and 91 WebView checks. Stop now waits for persistence, preserves drafts through Stop/Escape, and offers explicit reconnection. Earlier native evidence retains its actual binary identities. Both automated soaks recorded no errors but missed the strict four-hour UTC requirement by about one second. This is not completion of all M0–M6 gates or a claim of superiority over competing products.
+[Candidate implementation guide](docs/IDE-AGENT-INTEGRATION.en.md): `/ide` availability, reviewed changes and recovery, and VS/RAD backend scope. The 0.11.1 follow-up source passed **225 Core tests with one optional skip**, **17/17 adapter checks**, **93 shared WebView checks** and **91 VS native console checks**. Isolated VS2026 and RAD13.2 IDE-fixture results retain their exact binary identities in the [validation history](docs/VALIDATION.md). The four-hour retest and measured competitor comparison are deferred at the user's request.
 
 ## First-time setup
 
@@ -37,7 +37,7 @@ It preserves RADAgent's WebView UI/UX; the RADAgent repository is not modified.
 
 ## Current use and installation
 
-The local signed prerelease candidate is `dist/PiAgent-Setup-0.11.0.exe`; package/runtime/policy checks passed. Actual 0.11.0 upgrade → 0.10.0 rollback → 0.11.0 restoration passed. The strict four-hour requirement remains unmet. Its release asset path is `releases/download/v0.11.0/PiAgent-Setup-0.11.0.exe`. Building or publishing a release does not automatically replace an installation in a running IDE. Close the target IDEs before installing an available verified package.
+The signed installer is `dist/PiAgent-Setup-0.11.1.exe`, with release asset path `releases/download/v0.11.1/PiAgent-Setup-0.11.1.exe`. The first package passed signature, payload/runtime and policy checks; verify final release bytes against the asset's `.exe.sha256` and [validation history](docs/VALIDATION.md). Normal-profile 0.11.1 installation/recovery was not performed. Close target IDEs before installation.
 Select Core, RAD13.2 32/64-bit, VS2022/2026, and optional OMP installation if OMP is absent.
 [Installation guide](docs/INSTALLATION.en.md) · [Unified installer](docs/UNIFIED-INSTALLER.md).
 
@@ -55,7 +55,7 @@ registrations. Installation records do not prove live testing. Current live vali
 
 Choose `Automatic`, `한국어` or `English` under **Settings → Display → Language**. The default `Automatic` uses Korean on Korean systems and English otherwise. An explicit choice is saved in private settings for the current project and reused on the next launch. Settings, accounts, model roles, execution controls, Git and approval guidance switch together. Model replies, code and external tool text are not automatically translated.
 The installer also offers Korean/English selection at the top right. The website remembers your selection and supports direct [Korean](https://kimmingul.github.io/PiAgent/?lang=ko) / [English](https://kimmingul.github.io/PiAgent/?lang=en) links.
-[0.11.0 candidate changes and validation](docs/RELEASE-0.11.0.en.md).
+[0.11.1 changes and validation](docs/RELEASE-0.11.1.en.md).
 
 ## Current features and validation
 
@@ -65,7 +65,7 @@ Signed RAD `release011b`, including the original Delphi project identity fix, pa
 
 Supported creation/deletion/event binding uses reviewed standard WPF/WinUI3 source edits, public in-process .NET Framework WinForms designer services, or guarded saved standard Delphi VCL/FMX forms. Complete-original restore reviews and exact file hashes precede separate consent. Modern out-of-process WinForms, arbitrary third-party/inherited RAD forms, Delphi semantic refactoring and native RAD compiler-message enumeration are unavailable. General workspace file creation/deletion is unavailable; semantic rename follows the verified VS backend.
 
-The final signed candidate passed full Core checks, both-architecture adapter integration 18/18, package hashes, ARM64/x64 runtime and policy checks. Four-hour automated native context/catalog/build soaks, actual installation/update/recovery and publication remain pending. No formal Copilot benchmark or Kai comparison has been completed; Kai is absent locally. An earlier VS2022 C++ fixture passed 3/3; installed C++Builder compilers and the VS2026 C++ workload are absent, so those hosts have no C++ acceptance. Signed 0.11.0 VS2026 WPF 11/11 and RAD VCL/FMX designer 6/native SDK 26/Core 8 scenarios each passed; shared WebView checks passed 82 (including twelve transitions and three approval-guidance/raw-value preservation checks). See [validation history](docs/VALIDATION.md).
+The 0.11.1 full Core, adapter, shared WebView and VS native-console results are stated above. The final signed VSIX passed isolated VS2026 WPF **8/8** and archived UI **104/104**; signed RAD13.2 Win32/Win64 each passed VCL **11/11** and FMX **9/9**. The first signed installer passed package, runtime and policy checks, but this is not normal-profile 0.11.1 installation/recovery evidence. The four-hour retest and formal Copilot/Kai comparison are deferred, and M0–M6 as a whole is not complete. See the [validation history](docs/VALIDATION.md).
 
 ### Earlier release evidence
 
@@ -76,7 +76,7 @@ recovery guidance. [0.9.18 changes and validation](docs/RELEASE-0.9.18.en.md) ·
 The full regression suite passed **143/143**; C#/Delphi adapter integration passed **17/17**.
 In RAD13.2 64-bit, real model turns inspected, changed, saved and reinspected existing VCL/FMX form properties;
 builds and running application windows were also checked.
-Creation/deletion/event generation was outside that earlier release's native designer surface. The 0.11.0 candidate scope above supersedes that historical limitation.
+Creation/deletion/event generation was outside that earlier release's native designer surface. The current 0.11.1 scope above supersedes that historical limitation.
 
 0.9.17 fixes leftover saved-session locks that prevented reopening the last conversation.
 It rejects actual duplicate connections and safely recovers sessions whose owning Core/OMP has exited.
