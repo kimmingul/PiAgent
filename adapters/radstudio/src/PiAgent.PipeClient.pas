@@ -242,7 +242,7 @@ begin
   if EditorSuggestions then Required.Add('editor.suggestions.v1');
   Params.AddPair('requiredCapabilities', Required);
   Adapter := TJSONObject.Create;
-  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.11.1');
+  Adapter.AddPair('kind', 'rad-studio'); Adapter.AddPair('version', '0.11.2');
   Adapter.AddPair('ideVersion', IdeVersion); Adapter.AddPair('instanceId', InstanceId);
   Adapter.AddPair('capabilities', TJSONArray.Create);
   Params.AddPair('adapter', Adapter);

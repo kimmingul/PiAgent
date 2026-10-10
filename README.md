@@ -2,19 +2,19 @@
 
 **한국어** · [English](README.en.md) · [문서 / Documentation](docs/README.md)
 
-소스 버전 **0.11.1 제한적 사전 릴리즈** · 소스·격리 IDE·서명 설치파일 검사 통과 · 4시간 검증 보류 · 문서 갱신일 **2026-10-10 KST**.
+소스 버전 **0.11.2 제한적 사전 릴리즈** · Core 225 PASS·선택 skip 1, 서명 VSIX WPF 8/8·RAD Win32/Win64 VCL/FMX 11/11·9/9 · 미서명 작업 트리의 자동 240분 시험 3/3 · 문서 갱신일 **2026-10-11 KST**.
 개발자: **김민걸 (Min-Gul Kim)** · [mgkim@jbnu.ac.kr](mailto:mgkim@jbnu.ac.kr).
 
 [제품 홈페이지](https://kimmingul.github.io/PiAgent/) ·
 [릴리즈 게시 상태](https://github.com/kimmingul/PiAgent/releases).
-공개 저장소 `kimmingul/PiAgent`에서 소스와 서명 릴리즈를 제공한다. 0.11.1 설치파일의 자산과 SHA-256은 [GitHub Releases](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.1)에서 확인한다.
+공개 저장소 `kimmingul/PiAgent`에서 소스와 서명 릴리즈를 제공한다. 0.11.2 설치파일의 자산과 SHA-256은 [GitHub Releases](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.2)에서 확인한다.
 
 0.11.0은 실제 IDE 기능 카탈로그, 검토한 의미/디자이너 변경과 복구, 네이티브 빌드/디버거, 외부 테스트, 실행 성능 분석과 로컬 작업을 추가했다. 0.11.1은 세션/제안의 오래된 이벤트 차단, VS 다중 파일 변경 안전성·명시적 MTP/TRX 실행, RAD 열린 디자이너 복구를 보강한다. 지원은 연결된 adapter·언어/프레임워크·도구 설치 상태를 따른다. 자동 VS 제안은 기본으로 꺼져 있으며 VS2022는 17.14 이상이 필요하다.
-[사용 방법과 지원 범위](docs/IDE-AGENT-INTEGRATION.md) · [0.11.1 변경·검증](docs/RELEASE-0.11.1.md).
+[사용 방법과 지원 범위](docs/IDE-AGENT-INTEGRATION.md) · [0.11.2 변경·검증](docs/RELEASE-0.11.2.md).
 
 [VS2026·RAD13.2 전체 IDE 활용 개발 계획](docs/IDE-AGENT-ROADMAP.md): 단계별 기능, GPT-6.1 sol 병렬 개발 분담, 검증 기준을 정리했습니다. 계획된 신규 기능은 현재 출시 기능과 구분합니다.
 
-[사용 안내](docs/IDE-AGENT-INTEGRATION.md): `/ide` 기능 상태, 변경 미리보기·승인·복원과 VS/RAD 도구별 지원 범위를 설명한다. 0.11.1 소스는 Core **225 PASS·선택 skip 1**, 어댑터 **17/17**, 공유 WebView **93**, VS 네이티브 콘솔 **91**을 통과했다. VS2026과 RAD13.2의 격리 프로필 fixture 결과는 [검증 이력](docs/VALIDATION.md)에 실제 바이너리 식별자와 함께 기록한다. 사용자 요청으로 4시간 재검증과 경쟁 제품 실측 비교를 차후 진행한다.
+[사용 안내](docs/IDE-AGENT-INTEGRATION.md): `/ide` 기능 상태, 변경 미리보기·승인·복원과 VS/RAD 도구별 지원 범위를 설명한다. 0.11.2의 Core 전체 회귀 **225 PASS·선택 native RAD skip 1**, 어댑터 통합 **18/18**, VS 네이티브 콘솔 **95 PASS**와 첫 서명 설치파일의 **1,065개 payload 검사**를 통과했다. 별도로 미서명 작업 트리의 RAD13.2 Win64 VCL/FMX·VS2026 WPF 자동 240분 시험은 각각 표본 2,867개·빌드 24회·오류 0건으로 **3/3 PASS**했다. 이 장시간 근거는 새 서명 0.11.2 설치파일 또는 모델 수리 성능의 검증이 아니다. 경쟁 제품 실측 비교는 수행하지 않았다. [검증 이력](docs/VALIDATION.md)을 따른다.
 
 ## 처음 설치하는 분께
 
@@ -36,7 +36,7 @@ Node.js 24 LTS + TypeScript strict/ESM 기반 IDE-neutral Core다. C# VSIX와 De
 
 ## 현재 사용 및 설치
 
-서명 설치파일은 `dist/PiAgent-Setup-0.11.1.exe`이고 릴리즈 자산 경로는 `releases/download/v0.11.1/PiAgent-Setup-0.11.1.exe`다. 첫 패키지의 서명·payload/runtime·정책 검사가 통과했으며 최종 배포 바이트의 해시는 자산의 `.exe.sha256`과 [검증 이력](docs/VALIDATION.md)에서 확인한다. 일반 IDE 프로필의 0.11.1 설치/복구 검증은 수행하지 않았다. 설치 전 대상 IDE를 종료한다.
+배포 설치파일의 릴리즈 자산 경로는 `releases/download/v0.11.2/PiAgent-Setup-0.11.2.exe`다. 완성된 서명 바이트는 동봉 `.exe.sha256`과 [검증 이력](docs/VALIDATION.md)에서 확인한다. 이전 0.11.1 패키지 검사와 미서명 4시간 시험은 0.11.2 설치파일을 인증하지 않는다. 설치 전 대상 IDE를 종료한다.
 Core와 RAD13.2 32/64-bit,
 VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다. 설치 대상 IDE를 먼저 종료한다.
 [설치 안내](docs/INSTALLATION.md) · [통합 설치](docs/UNIFIED-INSTALLER.ko.md).
@@ -55,7 +55,7 @@ VS2022/2026를 선택 설치하며 OMP가 없으면 선택적으로 설치한다
 
 **설정 → 표시 → 언어**에서 `자동`, `한국어`, `English`를 선택한다. 기본값 `자동`은 한국어 시스템에서 한국어, 그 외에는 영어다. 직접 선택한 언어는 현재 프로젝트의 비공개 설정에 저장되며 다음 실행에도 적용한다. 설정·계정·모델 역할·실행 제어·Git·승인 안내가 함께 전환된다. 모델의 답변이나 코드, 외부 도구의 원문을 자동 번역하지 않는다.
 설치프로그램 오른쪽 위에서도 한국어/영어를 선택할 수 있다. 홈페이지는 선택을 저장하고 [한국어](https://kimmingul.github.io/PiAgent/?lang=ko) / [English](https://kimmingul.github.io/PiAgent/?lang=en)로 직접 연결할 수 있다.
-[0.11.1 변경 및 검증](docs/RELEASE-0.11.1.md).
+[0.11.2 변경 및 검증](docs/RELEASE-0.11.2.md).
 
 ## 현재 기능과 검증
 
@@ -65,7 +65,7 @@ Delphi 원본 프로젝트 식별 수정을 포함한 서명 RAD `release011b` V
 
 생성·삭제·이벤트 연결은 검토한 표준 WPF/WinUI3 소스 변경, 공개 in-process .NET Framework WinForms 디자이너 서비스 또는 저장된 표준 Delphi VCL/FMX 폼 조건을 따른다. 완전한 원본 복구 검토와 정확한 파일 hash를 별도로 승인한다. 최신 out-of-process WinForms, 임의 타사/상속 RAD 폼, Delphi 의미 refactor, RAD 네이티브 compiler 메시지 열거는 미지원이다. 일반 workspace 파일 생성/삭제는 미지원이며 의미 rename은 검증한 VS backend를 따른다.
 
-0.11.1의 전체 Core·어댑터·공유 WebView 검증과 VS 네이티브 콘솔 검사 결과는 위와 같다. 최종 서명 VSIX의 격리 VS2026 WPF **8/8**, 보관된 UI **104/104**, 서명 RAD13.2 Win32/Win64의 VCL **11/11**·FMX **9/9**가 통과했다. 첫 서명 설치파일의 패키지·runtime·정책 검사도 통과했지만 일반 IDE 프로필의 0.11.1 설치/복구 근거는 아니다. 4시간 조건 재검증과 정식 Copilot/Kai 비교는 보류하며 M0–M6 전체 완료를 주장하지 않는다. [검증 이력](docs/VALIDATION.md)을 따른다.
+0.11.2 서명 VSIX의 격리 VS2026 WPF **8/8**, 보관된 UI **104/104 해시 일치**·WebView **93 PASS**, 서명 RAD13.2 Win32/Win64 BPL 각각의 VCL **11/11**·FMX **9/9** 및 VCL/FMX 네이티브 SDK 각 **28/28**을 통과했다. 첫 서명 설치파일의 패키지·runtime·정책·언어 검사도 통과했다. 문서를 포함한 최종 배포 설치파일은 별도 해시·검사를 거쳐 릴리즈 자산의 `.exe.sha256`으로 식별한다. 미서명 작업 트리의 자동 240분 IDE 시험 **3/3 PASS**는 새 서명 바이트의 장시간 검증이 아니다. 사람의 4시간 사용, 정식 Copilot/KAI 비교 또는 M0–M6 전체 완료는 주장하지 않는다. [검증 이력](docs/VALIDATION.md)을 따른다.
 
 ### 이전 릴리즈 근거
 
@@ -74,7 +74,7 @@ Delphi 원본 프로젝트 식별 수정을 포함한 서명 RAD `release011b` V
 [0.9.18 변경 및 검증](docs/RELEASE-0.9.18.md) · [RAD 원인과 사용 안내](docs/RAD-DESIGNER-DIAGNOSTICS.md).
 전체 회귀 **143/143**, C#/Delphi adapter 통합 **17/17**을 통과했다.
 RAD13.2 64-bit의 VCL·FMX에서 실제 모델의 기존 폼 속성 변경·저장·재조회와 빌드·실행 화면을 확인했다.
-생성·삭제·이벤트 생성은 해당 이전 릴리즈의 네이티브 도구 범위 밖이었다. 현재 0.11.1 지원 범위는 위 설명을 따른다.
+생성·삭제·이벤트 생성은 해당 이전 릴리즈의 네이티브 도구 범위 밖이었다. 현재 지원 범위는 위 설명을 따른다.
 
 0.9.17은 이전 실행의 저장 세션 잠금이 남아 마지막 대화를 열지 못하던 문제를 수정한다.
 실제 중복 접속은 막고, 소유 Core/OMP가 종료된 세션을 안전하게 복구한다. 세션 시작 실패와

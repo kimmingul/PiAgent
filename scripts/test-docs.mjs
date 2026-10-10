@@ -11,6 +11,7 @@ pairs.push(['docs/IDE-AGENT-INTEGRATION.md','docs/IDE-AGENT-INTEGRATION.en.md'])
 pairs.push(['docs/IDE-BENCHMARK.md','docs/IDE-BENCHMARK.en.md']);
 pairs.push(['docs/RELEASE-0.11.0.md','docs/RELEASE-0.11.0.en.md']);
 pairs.push(['docs/RELEASE-0.11.1.md','docs/RELEASE-0.11.1.en.md']);
+pairs.push(['docs/RELEASE-0.11.2.md','docs/RELEASE-0.11.2.en.md']);
 for(const pair of pairs){
  const blocks=[];
  for(const file of pair){

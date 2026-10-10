@@ -1,9 +1,52 @@
 # PiAgent validation history
 
+## 0.11.2 scoped signed candidate — 2026-10-11 KST
+
+The 0.11.2 source adds distinct multi-target VSTest TRX aggregation with an expected-report-count guard and stricter RAD external-diagnostic invalidation. Current checks are recorded against their actual binaries and receipts:
+
+| Check | Result and identity | Boundary |
+|---|---|---|
+| Full Core regression | 226 total, **225 PASS, 0 FAIL, 1 optional native RAD skip**; 166,110.8782 ms; local `artifacts/release-0.11.2-core-tests.log` | Does not replace native IDE checks |
+| Adapter integration / VS console | Win32 and Win64 adapter integration **18/18 combined**; VS native console **95 PASS** | Source and adapter checks, separate from signed IDE acceptance |
+| Signed VSIX, isolated VS2026 WPF and archived UI | **8/8 PASS**, archived UI **104/104 hash match** with no extra/missing files, actual archived WebView **93 PASS**; VSIX SHA-256 `699F7175AF592002FAE7D0E79C2684DC19DD7C825C626D1A68CD17AA65FD31A8`; archived DLL SHA-256 `0BA36CF9D43552F0AFD225CE0EC0D91F013D98BDE6D3248090CD2B527555C4FC`; local `artifacts/release-0.11.2-vs-wpf/piagent-vs-acceptance.receipt.json` and `artifacts/release-0.11.2-vs-webview.log` | Isolated fixture profile; not normal-profile acceptance |
+| Signed RAD13.2 Win64 BPL | SHA-256 `F2C94DF2BB55E4366AD23A98471D89A6196F29DBD7CFF361F3EEA64771189F91`; Authenticode Valid; VCL designer **11/11** and native SDK **28/28**; FMX designer **9/9** and native SDK **28/28** | Isolated IDE fixtures; final step invalidates external diagnostics after native build |
+| Signed RAD13.2 Win32 BPL | SHA-256 `BC01EADA792BFEA56F27E93ED2B65A37CE411BC79454BFD3939B603A2353E915`; Authenticode Valid; VCL designer **11/11** and native SDK **28/28**; FMX designer **9/9** and native SDK **28/28** | Same scoped isolated IDE fixture; receipts under `adapters/radstudio/bin/Win32/ide-dev-signed0112/` |
+| First signed installer stage | `artifacts/setup-20261010-223751`; **1,065 payload hashes**, x64/ARM64 runtime, policy and language checks passed; local `artifacts/release-0.11.2-installer-test.log` | Documentation repack changes installer bytes; final asset must be retested and identified by its own `.exe.sha256` |
+| Final signed installer | `artifacts/setup-20261010-224426`; **1,065 payload hashes**, x64/ARM64 authenticated runtime handshakes, policy, language and tampering checks passed; local `artifacts/release-0.11.2-final-installer-test.log`; SHA-256 `F7ECF1CD90FB2957675D89A41013BCB5C1904355DA3CE3AAA3F06D1000404737`; Authenticode Valid, Nanum Space Co,. Ltd, timestamp verified | These post-packaging results are in the repository and documentation ZIP; embedded installer documents retain their packaging-time snapshot. Normal-profile upgrade/recovery was not retested |
+
+The signed 0.11.1 results remain historical. The unsigned automated IDE 240-minute results below have different binary identities and do **not** certify a four-hour run of the signed 0.11.2 VSIX, BPLs or installer. Matched Copilot/KAI measurements have not been performed. Normal-profile install/update/recovery and broad model-driven repair remain unverified.
+
+## New 240-minute isolated IDE runs — 3/3 PASS, 2026-10-11 KST
+
+The user lifted the previous four-hour deferral. Three **unreleased, unsigned
+working-tree** automated native IDE observation/build runs completed. Root
+independently ran the **unchanged** `scripts/verify-ide-soak.mjs` against each
+original receipt and matched its adapter hash to the start manifest and actual
+binary. Consolidated results and exact receipt hashes are in
+`artifacts/ide-soak-20261010/verified-results.json`; the original failures below
+remain unchanged. Each new run recorded **2,867 samples, 24 builds and zero
+errors**. Both UTC and monotonic elapsed time cleared 14,400 seconds.
+
+| Isolated run | UTC elapsed / monotonic elapsed | Adapter SHA-256 | Result |
+|---|---:|---|---|
+| RAD13.2 Win64 FMX | 14,400.202 / 14,400.235 s | `9ACEB23B57CA0E3D9F7A7633799E61A2044053785EABB5F757C778644A039AB5` | PASS |
+| RAD13.2 Win64 VCL | 14,400.302 / 14,400.329 s | `9ACEB23B57CA0E3D9F7A7633799E61A2044053785EABB5F757C778644A039AB5` | PASS |
+| VS2026 WPF | 14,401.1484258 / 14,401.1423908 s | `27F2A91C477CDC1AD3E6C4E266103D8310ECF19DFA68B43E891B604730F2C088` | PASS |
+
+Private-byte changes were FMX −21,123,072, VCL −14,503,936 and VS +5,189,632;
+handle changes were −102, −101 and −87 respectively. These endpoint deltas do
+not prove an absence of leaks. The unsigned VS candidate archive SHA-256 is
+`5DB5FA0950CD001AA7F35A5451EC956DF0CCF20C810922A85967271B2050DDB2`;
+the binaries differ from the signed 0.11.1 assets below. This PASS covers
+automated isolated IDE observation and builds, **not** four hours of human use,
+model inference, arbitrary project completion or competitor performance. Matched
+Copilot/KAI measurements remain deferred.
+
 ## 0.11.1 signed scoped prerelease — 2026-10-10 KST
 
-서명된 0.11.1의 별도 IDE 프로필 검증과 설치 패키지 검사를 통과했다. 일반 프로필에
-설치하거나 4시간/경쟁 제품 실측 비교를 수행한 것은 아니다. 배포 파일은
+서명된 0.11.1의 별도 IDE 프로필 검증과 설치 패키지 검사를 통과했다. 이 서명
+바이너리를 일반 프로필에 설치하거나 4시간/경쟁 제품 실측 비교에 사용한 것은 아니다.
+위에서 통과한 후속 4시간 시험은 미배포·미서명 바이너리의 별도 실행이다. 배포 파일은
 [0.11.1 릴리즈](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.1)와
 동봉 `.exe.sha256`으로 식별한다.
 
@@ -46,20 +89,25 @@
   `artifacts/release-0.11.1-installer-test.log`. Later repacks require separate
   exact-byte verification; this hash does not identify a repacked download.
 
-No normal-profile 0.11.1 installation/upgrade/rollback, physical x64 clean install,
-four-hour soak or competitor measurements were performed. The bilingual
-[release notes](RELEASE-0.11.1.en.md) state the supported scope and deferred work.
+No normal-profile 0.11.1 installation/upgrade/rollback or physical x64 clean
+install was performed. The **signed 0.11.1 binaries** were not used for a
+four-hour soak or competitor measurement; the new unsigned source runs above
+are separate. The bilingual [release notes](RELEASE-0.11.1.en.md) record the
+supported scope and the deferrals at publication time.
 
 ## Follow-up source validation — 2026-10-10 KST
 
 세션·코드 제안·RAD 디자이너·VS 테스트 실행을 개선한 후속 소스다. 사용자의 요청으로
-**4시간 검증과 경쟁 제품 실측 비교는 보류**한다. 아래 검증은 공개 0.11.0 설치파일의
+**당시 4시간 검증과 경쟁 제품 실측 비교는 보류**했다. 이후 4시간 검증은 위의 별도
+미서명 시험에서 통과했으며 경쟁 제품 비교는 계속 보류한다. 아래 검증은 공개 0.11.0 설치파일의
 새 기능을 의미하지 않으며 일반 IDE 프로필의 설치파일을 교체하지 않았다.
 
 These follow-up changes are separate from the published 0.11.0 prerelease. Three
 GPT-6-sol subagents worked on Core, VS and RAD. **Four-hour validation and measured
-competitor comparison are deferred at the user's request.** No performance ranking,
-new signed release, normal-profile installation or whole-plan completion is claimed.
+competitor comparison were deferred at that time.** Later user input led to the
+separate passing unsigned four-hour runs above; competitor comparison remains deferred. This
+historical source section does not claim a performance ranking, normal-profile
+installation or whole-plan completion.
 
 - Final serial Core regression: **226 total, 225 PASS, 0 FAIL, 1 optional native-RAD
   skip**, 152,746.7416 ms, `artifacts/continuation-20261010-final-guard-core-tests.log`.
@@ -181,7 +229,7 @@ Source reports 0.11.0 as a scoped prerelease; implementation is recorded at 24c5
 - Original v3 understanding attempts 01/02 passed the unchanged exact-answer/source-preservation validator. Attempt 03 was operator-interrupted while an outer OMP approval remained pending and selected two out-of-scope web searches. It remains a failed attempt in the denominator with its original runtime provenance; no final answer or pure-model timeout is inferred. Formal comparative measurement remains incomplete.
 - Raw local evidence is under artifacts/ide-agent-20261009/ and adapter bin/Win64/ide-dev-wave*/sdk-fixture-*/ directories. Actual signatures, binary identities, failure receipts and generated stages are preserved. Local artifacts are not automatically public release assets.
 
-Remaining M6 gates include strict four-hour soaks, clean-install acceptance, RAD32 UI, physical x64, broader busy-UI fault/IME/nested-property/project acceptance and matched competitor measurements. Current scope-specific native recovery, full Core/adapter/UI, replacement signed payload and actual upgrade/rollback/restoration checks passed. Scope-specific passes do not certify all projects or all M0–M6 goals.
+At this earlier 0.11.0 checkpoint, remaining M6 gates included strict four-hour soaks, clean-install acceptance, RAD32 UI, physical x64, broader busy-UI fault/IME/nested-property/project acceptance and matched competitor measurements. The separate unsigned-source 240-minute runs above later passed; other coverage and comparison gates remain. Scope-specific passes do not certify all projects or all M0–M6 goals.
 
 Benchmark tasks: tests/fixtures/ide-benchmark/tasks.json. Run node scripts/ide-benchmark.mjs <runs.jsonl> <report.json> on independently evaluated measurements; the script groups matching conditions and does not execute tasks or prove correctness. Unknown costs remain unknown, unsuccessful/unsupported attempts remain in the denominator, and p95 requires at least 20 successful comparable samples. No formal comparative performance result has been published.
 

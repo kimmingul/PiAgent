@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Path = (Join-Path $PSScriptRoot '../dist/PiAgent-Setup-0.11.1.exe'))
+param([string]$Path = (Join-Path $PSScriptRoot '../dist/PiAgent-Setup-0.11.2.exe'))
 $ErrorActionPreference = 'Stop'
 $workspacePath = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path $workspacePath ('artifacts/setup-test-' + [guid]::NewGuid().ToString('N'))

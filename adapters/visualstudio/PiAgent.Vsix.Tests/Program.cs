@@ -129,7 +129,19 @@ internal static class Program
             foreach(var corrupted in new[]{nativeForm.Replace("this.AgentButton.Click += new System.EventHandler(this.AgentClick);",""),nativeForm.Replace("this.AgentClick","this.OtherClick")}){try{IdeDesignerChanges.VerifySavedNative(new JObject{["changeOperation"]="bindEvent",["component"]="AgentButton",["property"]="Click",["eventMethod"]="AgentClick"},nativeSource,corrupted);throw new Exception("unpersisted event accepted");}catch(IOException){Console.WriteLine("PASS native event serialization loss refused");}}
             var settings=Path.Combine(root,"Fixture.runsettings");File.WriteAllText(settings,"<RunSettings/>");
             var testArgs=IdeTestTools.Arguments(firstFile,new JObject{["operation"]="run",["configuration"]="Release",["framework"]="net8.0",["settings"]="Fixture.runsettings",["filter"]="FullyQualifiedName~한글"},root,uri);
-            Check(testArgs.Contains("--configuration")&&testArgs.Contains("Release")&&testArgs.Contains("net8.0")&&testArgs.Contains(settings)&&testArgs.Contains("FullyQualifiedName~한글"),"Test target/settings arguments retain Unicode without a shell");
+            Check(testArgs.Contains("--configuration")&&testArgs.Contains("Release")&&testArgs.Contains("net8.0")&&testArgs.Contains(settings)&&testArgs.Contains("FullyQualifiedName~한글")&&testArgs.Contains("trx;LogFilePrefix=results"),"VSTest uses per-framework TRX files while retaining target/settings arguments");
+            var reportA=Path.Combine(root,"results_net8.0.trx");var reportB=Path.Combine(root,"results_net10.0.trx");
+            Check((bool?)IdeTestTools.ReadReports(Array.Empty<string>(),false,2)["available"]==false,"Missing VSTest TRX reports cannot certify a test run");
+            File.WriteAllText(reportA,"<TestRun><ResultSummary><Counters total='2' executed='2' passed='2' failed='0'/></ResultSummary></TestRun>");
+            File.WriteAllText(reportB,"<TestRun><Results><UnitTestResult testName='SecondFramework.Fails' outcome='Failed'><Output><ErrorInfo><Message>repair me</Message></ErrorInfo></Output></UnitTestResult></Results><ResultSummary><Counters total='2' executed='2' passed='1' failed='1'/></ResultSummary></TestRun>");
+            var combined=IdeTestTools.ReadReports(new[]{reportA,reportB},false,2);
+            Check((int?)combined["reportCount"]==2&&(int?)combined["total"]==4&&(int?)combined["passed"]==3&&(int?)combined["failed"]==1&&(string?)combined["failures"]?[0]?["name"]=="SecondFramework.Fails","Multi-target VSTest aggregates both TRX reports and preserves a failing framework");
+            var partialReports=IdeTestTools.ReadReports(new[]{reportA},false,2);
+            Check((bool?)partialReports["available"]==false&&(int?)partialReports["expectedReportCount"]==2&&(int?)partialReports["reportCount"]==1,"One surviving TRX cannot certify a two-framework VSTest run");
+            Check(IdeTestTools.ParseFrameworks("{\"Properties\":{\"TargetFramework\":\"\",\"TargetFrameworks\":\"net9.0;net10.0\",\"TargetFrameworkVersion\":\"\"}}").SequenceEqual(new[]{"net9.0","net10.0"}),"Evaluated multi-target MSBuild property determines required TRX count");
+            Check(IdeTestTools.ParseFrameworks("{\"Properties\":{\"TargetFramework\":\"net8.0\",\"TargetFrameworks\":\"net8.0;net9.0\"}}").SequenceEqual(new[]{"net8.0"}),"Explicit evaluated TargetFramework takes precedence over multi-target property");
+            File.WriteAllText(reportB,"<TestRun/>");
+            try{IdeTestTools.ReadReports(new[]{reportA,reportB},false,2);throw new Exception("incomplete framework report accepted");}catch(IOException){Console.WriteLine("PASS incomplete framework TRX prevents combined success");}
             var runnerRoot=Path.Combine(root,"runner-config");Directory.CreateDirectory(runnerRoot);
             File.WriteAllText(Path.Combine(runnerRoot,"global.json"),"{\"test\":{\"runner\":\"Microsoft.Testing.Platform\"}}");
             Check(IdeTestTools.UsesMtpRunner(Path.Combine(runnerRoot,"nested")),"MTP runner is selected only by nearest global.json opt-in");

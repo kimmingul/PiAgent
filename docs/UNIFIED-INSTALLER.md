@@ -2,14 +2,14 @@
 
 [한국어](UNIFIED-INSTALLER.ko.md) · **English** · [Documentation](README.md)
 
-Documentation updated: 2026-10-10. The first signed installer for the 0.11.1 scoped prerelease passed signature, payload/runtime and policy checks. The final release asset uses its own `.exe.sha256`. Normal-profile installation/recovery was not performed; published 0.11.0 signing/installation receipts retain their original versions.
+Documentation updated: 2026-10-11. Check the final signed 0.11.2 scoped prerelease asset against its own `.exe.sha256` and [validation history](VALIDATION.md). Prior signed 0.11.1 package checks and unsigned working-tree 240-minute runs do not certify this new package. Normal-profile installation/recovery is a separate condition; published 0.11.0 signing/installation receipts retain their original versions.
 The earlier 0.9.18 RAD validation receipt points to `0.9.18-20261007162727` and records VS2022 (17.14+)/2026 and RAD32/64 registrations.
 Core and RAD32/64 were upgraded; old duplicate RAD BPL registrations were consolidated.
 The local Core fix is documented in [session recovery](SESSION-RECOVERY-FIX.md); release publication does not install the new setup automatically.
-Registration is separate from live validation: signed 0.11.1 VS2026 WPF 8/8 and isolated RAD13.2 Win32/Win64 VCL 11/11 and FMX 9/9 fixtures passed. Normal-profile installation and the four-hour retest remain separate.
+Registration is separate from live validation: signed 0.11.1 VS2026 WPF 8/8 and isolated RAD13.2 Win32/Win64 VCL 11/11 and FMX 9/9 fixtures passed. Later automated 240-minute IDE runs on unsigned source passed 3/3. Validation of new signed 0.11.2 assets and normal-profile installation are separate.
 The signed setup includes the idle/long-turn fixes; [validation history](VALIDATION.md) records remaining limits.
 
-Output: `dist/PiAgent-Setup-0.11.1.exe`. Asset path: `releases/download/v0.11.1/PiAgent-Setup-0.11.1.exe`; check the [release asset](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.1) and SHA-256. A single self-contained setup supports Windows
+Output: `dist/PiAgent-Setup-0.11.2.exe`. Asset path: `releases/download/v0.11.2/PiAgent-Setup-0.11.2.exe`; check the [release asset](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.2) and SHA-256. A single self-contained setup supports Windows
 x64 and ARM64. The setup executable uses Windows x64 compatibility on ARM64; installed
 Node.js, .NET and OMP use the host's native architecture. No system PATH or runtime is replaced.
 
@@ -55,7 +55,7 @@ prerequisite; existing installations on this PC already have it. Git is required
 workspace writes. Initial Core settings are read-only, with no workspace and no login autorun.
 
 Per-user destination: `%LOCALAPPDATA%/Programs/PiAgent`. No administrator rights are requested.
-Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. VSIX 0.11.1 and the RAD
+Start Menu contains PiAgent Core, OMP (if available), and uninstall shortcuts. The VSIX and RAD
 adapter automatically start the installed Core when opening chat
 (RAD View/Tools > PiAgent, VS Tools > PiAgent: Open Chat). Configure workspace
 and write permissions in the installed `core/settings.json` only when needed.

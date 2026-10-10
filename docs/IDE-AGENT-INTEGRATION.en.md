@@ -1,15 +1,15 @@
-# IDE integration: 0.11.1 scoped prerelease guide
+# IDE integration: 0.11.2 scoped prerelease guide
 
-The earlier 0.11.0 installer hash `8A3A…FD09` identifies its cycle-tested upgrade/rollback/restoration package, not the 0.11.1 candidate. New bytes require separate verification; download hashes accompany GitHub release assets (`.exe.sha256`).
+The earlier 0.11.0 installer hash `8A3A…FD09` identifies its cycle-tested upgrade/rollback/restoration package, not 0.11.2. New signed bytes require separate verification; download hashes accompany GitHub release assets (`.exe.sha256`). The [release record](RELEASE-0.11.2.en.md) distinguishes signed 0.11.1 evidence from 0.11.2 candidate source tests.
 
 [한국어](IDE-AGENT-INTEGRATION.md) · **English** · [Documentation](README.md)
 
-The 2026-10-10 follow-up source changes are separate from the published 0.11.0
+Version 0.11.1 includes follow-up changes absent from the earlier 0.11.0
 installer. Session/project changes retire old approvals, queued requests and IDE
 catalogs; late prior-turn events are ignored. VS suggestions recheck document,
 caret, IME and buffer during display and acceptance.
 
-The follow-up RAD candidate supports reviewed property transactions for standard
+The 0.11.1 RAD path supports reviewed property transactions for standard
 VCL/FMX button `Font.Name`/`TextSettings.Font.Family` and VCL
 `TListView.Columns[0..31].Caption`. Call `ide_designer_preview_change` with
 `changeOperation` of `setScalarProperty` or `setCollectionProperty`, respectively,
@@ -34,13 +34,23 @@ not become successful results. VSTest keeps its existing options. Neither path
 controls IDE Test Explorer. See [validation](VALIDATION.md) and the
 [comparison protocol](IDE-BENCHMARK.en.md).
 
-This guide describes the 0.11.1 scoped prerelease implementation on 2026-10-10
-KST. Earlier acceptance receipts retain their actual binary versions and hashes.
-Signed VSIX/BPL isolated-IDE fixtures and the first signed installer package checks
-passed; normal-profile installation/recovery and every project scenario were not
+The base tool scope in this guide was verified for the signed 0.11.1 scoped prerelease on 2026-10-10 KST; the follow-up source changes below enter the 0.11.2 candidate. Earlier acceptance receipts retain their actual binary versions and hashes.
+The final signed setup passed checks for 1,063 embedded payload hashes, bundled
+runtimes and policy; signed VSIX/BPL isolated-IDE fixtures also passed.
+Normal-profile 0.11.1 installation/update/rollback and every project scenario were not
 tested. The [roadmap](IDE-AGENT-ROADMAP.en.md) includes broader goals that remain
 subject to SDK experiments and acceptance. Use the live catalog and the recorded
 acceptance evidence to determine what the connected installation can actually do.
+
+**Separate isolated 240-minute runs 3/3 PASS:** after the user lifted the earlier
+four-hour deferral, unreleased unsigned working-tree RAD13.2 Win64 FMX/VCL and
+VS2026 WPF ran in parallel. The unchanged verifier checked original receipts:
+both UTC and monotonic spans exceeded 14,400 seconds, with 2,867 samples,
+24 builds and zero errors per run; adapter hashes matched. Evidence is in
+`artifacts/ide-soak-20261010/verified-results.json`. This PASS covers automated
+IDE observation/builds, not prolonged human use, model repair performance or a
+four-hour retest of the signed 0.11.1 binaries. Measured competitor comparison
+remains deferred.
 
 ## Check availability before work
 
@@ -95,11 +105,65 @@ it does not enumerate the native IDE error window. The external backend requires
 the active original `.dpr`/`.dproj` and `Delphi.Personality` before resolving its
 `.dproj`; polling/cache reuse recheck original path, personality, configuration
 and platform. `.cbproj`, `.dpk` and non-Delphi sidecars are unsupported.
-Supported nested property
-schemas are bounded and do not traverse component references; actual live
-nested scalar fields, including Font, still need actual scenario acceptance.
-A test-only Font loader attempt established inspection only, not mutation/persistence.
-Collection authoring is not implemented.
+Supported nested property schemas are bounded and do not traverse component
+references. Standard-button Font fields and VCL TListView
+`Columns[0..31].Caption` now have a reviewed path that checks live operation/property
+support, then changes, saves, reopens and restores; isolated IDE fixtures passed.
+The earlier test-only Font loader established inspection alone and is not evidence
+for this mutation. Arbitrary collection insertion, deletion, reordering or other
+collection-property editing is not implemented.
+
+## Three practical workflows
+
+**VS understand → edit → build → test → repair:** Begin with one `ide_context snapshot`
+for the solution and active configuration, then request only needed
+C#/VB symbols or diagnostics. Review the changed files and revisions in a preview
+before approval. Check saved state and build target for native build. Run a project
+through VSTest/TRX or explicitly selected MTP CLI/TRX and inspect actual test
+counts, failures and report. On failure, reread current code/diagnostics and make
+a new preview. Old tokens or failed mutations are never replayed automatically.
+An isolated WPF fixture verified the component context, edit/Undo, build, debugger
+and designer steps; it did not measure repeated model-driven repair success on
+general projects.
+
+In the **0.11.2 candidate source**, a VSTest multi-target
+change retains separate TRX files and checks report count against evaluated
+target-framework count. A .NET 9/10 fixture produced two reports with exit 1
+when its failure condition was enabled and two reports with exit 0 when disabled.
+The earlier code already treated a nonzero CLI exit as failure; this evidence
+does not show that the released version falsely reported success, nor does it
+test a model repairing failed code.
+
+**RAD VCL/FMX inspect → change → event → build → restore:** Use
+`ide_designer_inspect` on a saved directly inherited standard form to learn its
+actual components, properties and operations. Preview and separately approve a
+structural or bounded property edit, then review an event binding the same way.
+After saving/reopening, check both files and the live designer. Read native build
+results or an external build log bound to the exact Delphi project, configuration
+and platform. If correction is needed, request a fresh preview against current
+state. Restore a checkpoint only after another preview and separate approval.
+Direct fixture steps passed on Win32 and Win64; they do not prove one complete
+repair loop in arbitrary projects or FMX runtime font appearance.
+
+The **0.11.2 candidate RAD source** invalidates previous
+external diagnostics on the next native/external build and records the request
+ID, log hash and result state. It rejects cached rows after a reported file or
+project changes on disk or any IDE buffer is dirty. Win32/Win64 SDK smoke passed
+11/11 each, including an actual E2003 failure and source-change invalidation.
+An isolated Win64 VCL 28-step fixture observed `available:false` after the next
+native build following external diagnostics.
+The result remains `mayBeStale:true`: this only checks files since result
+collection, not all compiler-time inputs or other dependencies. The signed
+0.11.1 BPL does not contain this fix.
+
+**Stop → reconnect → resume safely:** Stop drains saved state, closes the running
+card and preserves an unsent draft. Retry connection resumes the saved
+conversation without replaying the interrupted prompt. Before a fresh request,
+check current project, IDE catalog and files; any mutation that might already
+have applied needs a new review. Late old approvals/responses are retired. An
+earlier binary passed an actual IDE Stop→Retry→fresh context roundtrip and 0.11.1
+passed WebView/lifecycle regressions. Normal-profile recovery quality across
+varied models and network faults needs separate validation.
 
 ## Review and apply changes
 
@@ -258,6 +322,12 @@ Additional interruption regressions exercise abrupt production ChatSession owner
 death with durable OMP context recovery and no automatic prompt replay, and a
 native turn exceeding the 256 KiB checkpoint budget that warns while preserving
 files/Git state and permitting the next turn. These use deterministic OMP fixtures.
+### Earlier 0.11.0 and 0.10.0 baseline records
+
+The following counts and binary hashes belong to their earlier release/candidate.
+They are not counts for the current signed 0.11.1 binaries. Use the top of
+[validation](VALIDATION.md) for current evidence.
+
 Three Git regressions additionally cover protected contents before consent,
 staged protected commits, rename/deletion endpoints and literal pathspec handling.
 The focused Git/workspace run passed 15/15. The expanded full run completed:
@@ -294,7 +364,9 @@ The original VS soak fails the strict four-hour gate: UTC span 14,399.0635 secon
 
 Original v3 understanding attempts 01/02 passed the unchanged exact-answer/source-preservation validator. Attempt 03 was operator-interrupted while an outer OMP approval remained pending and selected two out-of-scope web searches. It remains a failed attempt in the denominator with its original runtime provenance; no final answer or pure-model timeout is inferred. Formal comparative measurement remains incomplete.
 Availability: [GitHub Releases](https://github.com/kimmingul/PiAgent/releases).
-The deterministic real-pipe lifecycle soak additionally exercises ten distinct
+### Follow-up 0.11.1 deterministic lifecycle fixture
+
+The deterministic real-pipe lifecycle check additionally exercises ten distinct
 project switches and saved-session resumes, ten mode switches across all four
 access modes, thirty cancel/normal-completion cycles and one hundred isolated
 editor requests. It verifies project sentinel reads, rejects cross-project paths,

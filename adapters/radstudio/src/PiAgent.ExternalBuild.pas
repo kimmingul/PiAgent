@@ -8,8 +8,10 @@ type
     FId,FWorkspace,FProject,FNativeProject,FPersonality,FConfiguration,FPlatform,FLog: string;
     FSuppressed: Boolean;
     FLastDiagnostics: TJSONObject;
+    FLastInputHashes: TJSONObject;
   public
     destructor Destroy; override;
+    procedure InvalidateDiagnostics;
     procedure Start(const Id,Workspace: string; Args: TJSONObject);
     function Poll: TJSONObject;
     procedure Cancel(const Id: string);
@@ -18,12 +20,17 @@ type
     function Available(const Workspace: string; out Reason: string): Boolean;
   end;
 implementation
-uses System.SysUtils, System.IOUtils, System.DateUtils, System.RegularExpressions, Winapi.Windows,
-  ToolsAPI, PiAgent.IdeContext, PiAgent.BuildCommand, PiAgent.BuildDiagnostics, PiAgent.ProjectIdentity;
+uses System.SysUtils, System.StrUtils, System.IOUtils, System.DateUtils, System.Hash, Winapi.Windows,
+  ToolsAPI, PiAgent.IdeContext, PiAgent.BuildCommand, PiAgent.BuildDiagnostics,
+  PiAgent.DiagnosticFreshness, PiAgent.ProjectIdentity;
 function TPiExternalBuild.Busy: Boolean;
 begin Result:=FRun<>nil; end;
 destructor TPiExternalBuild.Destroy;
-begin FLastDiagnostics.Free; FRun.Free; inherited; end;
+begin InvalidateDiagnostics; FRun.Free; inherited; end;
+procedure TPiExternalBuild.InvalidateDiagnostics;
+begin
+  FreeAndNil(FLastDiagnostics); FreeAndNil(FLastInputHashes);
+end;
 function TPiExternalBuild.Available(const Workspace: string; out Reason: string): Boolean;
 var Project: IOTAProject; Dproj: string;
 begin
@@ -52,6 +59,15 @@ begin
     (FLastDiagnostics.GetValue<string>('configuration','')<>Project.CurrentConfiguration) or
     (FLastDiagnostics.GetValue<string>('platform','')<>Project.CurrentPlatform) then
     Exit(TJSONObject.Create.AddPair('available',TJSONBool.Create(False)).AddPair('reason','No completed external build diagnostics for the current project/configuration/platform'));
+  if HasUnsavedIdeBuffers then
+    Exit(TJSONObject.Create.AddPair('available',TJSONBool.Create(False))
+      .AddPair('reason','Save edited IDE buffers and rebuild before using diagnostics'));
+  if FLastDiagnostics.GetValue<Boolean>('available',False) and
+    not DiagnosticFilesCurrent(FLastInputHashes,Reason) then begin
+    InvalidateDiagnostics;
+    Exit(TJSONObject.Create.AddPair('available',TJSONBool.Create(False))
+      .AddPair('reason','External build diagnostics are stale: '+Reason+'; rebuild to diagnose the current source'));
+  end;
   Result:=TJSONObject(FLastDiagnostics.Clone);
 end;
 procedure TPiExternalBuild.Cancel(const Id: string);
@@ -83,13 +99,16 @@ begin
   if not FileExists(TPath.Combine(BdsRoot,'bin\CodeGear.Delphi.Targets')) then raise Exception.Create('RAD build targets unavailable');
   Target:='Make'; if (Args.GetValue<string>('operation','build')='rebuild') or Args.GetValue<Boolean>('rebuild',False) then Target:='Build';
   if Args.GetValue<string>('operation','build')='clean' then raise Exception.Create('External clean is not supported');
+  InvalidateDiagnostics; // A new build supersedes every earlier diagnostic receipt.
   CreateGUID(Guid); FLog:=TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'),
     'PiAgent\diagnostics\'+GUIDToString(Guid)+'\build.log'); ForceDirectories(ExtractFileDir(FLog));
   FRun:=TPiOwnedProcess.Create(FindMsBuild,RadBuildArguments(FProject,FConfiguration,FPlatform,BdsRoot,FLog,Target),ExtractFileDir(FProject),120000,['BDS='+BdsRoot]);
-  FId:=Id; FWorkspace:=Workspace; FSuppressed:=False; FRun.Start;
+  FId:=Id; FWorkspace:=Workspace; FSuppressed:=False;
+  try FRun.Start; except FreeAndNil(FRun); raise; end;
 end;
 function TPiExternalBuild.Poll: TJSONObject;
-var Project: IOTAProject; Payload: TJSONObject; Rows: TJSONArray; Log,State,NativeProject,Dproj: string; LogAvailable,Matches: Boolean;
+var Project: IOTAProject; Payload: TJSONObject; Rows: TJSONArray;
+  Log,State,NativeProject,Dproj,Reason,LogDigest: string; LogAvailable,Matches,Fresh: Boolean;
 begin
   RequireIdeThread; Result:=nil; if FRun=nil then Exit;
   Project:=GetActiveProject;
@@ -109,23 +128,30 @@ begin
     if FSuppressed then Exit;
     Log:=''; LogAvailable:=FileExists(FLog) and (TFile.GetSize(FLog)<=1048576);
     if LogAvailable then Log:=TFile.ReadAllText(FLog,TEncoding.UTF8);
+    LogDigest:=''; if LogAvailable then LogDigest:=THashSHA2.GetHashStringFromFile(FLog);
     Rows:=ParseBuildDiagnostics(Log,function(const FileName: string): string
       begin Result:=ResolveIdeFile(FWorkspace,TPath.Combine(ExtractFileDir(FProject),FileName)); end);
-    State:='failed'; if FRun.Code=0 then State:='completed'; if FRun.Cancelled then State:='cancelled'; if FRun.TimedOut then State:='unknown';
+    Fresh:=False; Reason:='External UTF-8 build log unavailable or incomplete';
+    if LogAvailable and (FRun.Error='') and not FRun.Cancelled and not FRun.TimedOut then
+      Fresh:=TryCaptureDiagnosticFiles(FProject,Rows,FLastInputHashes,Reason);
+    State:='failed'; if (FRun.Code=0) and (FRun.Error='') then State:='completed';
+    if FRun.Cancelled then State:='cancelled'; if FRun.TimedOut then State:='unknown';
     Payload:=TJSONObject.Create.AddPair('executed',TJSONBool.Create(FRun.Error=''))
       .AddPair('success',TJSONBool.Create((FRun.Code=0) and (FRun.Error='') and not FRun.TimedOut and not FRun.Cancelled))
       .AddPair('state',State).AddPair('source','external').AddPair('backend','MSBuild / Delphi targets')
       .AddPair('project',FProject).AddPair('configuration',FConfiguration).AddPair('platform',FPlatform)
       .AddPair('nativeProject',FNativeProject).AddPair('personality',FPersonality)
+      .AddPair('buildRequestId',FId).AddPair('logSha256',LogDigest)
       .AddPair('exitCode',TJSONNumber.Create(Int64(FRun.Code))).AddPair('logFile',FLog)
       .AddPair('output',FRun.Output).AddPair('truncated',TJSONBool.Create(FRun.Truncated))
       .AddPair('diagnosticLogAvailable',TJSONBool.Create(LogAvailable)).AddPair('error',FRun.Error).AddPair('diagnostics',Rows);
     FreeAndNil(FLastDiagnostics);
-    FLastDiagnostics:=TJSONObject.Create.AddPair('available',TJSONBool.Create(LogAvailable)).AddPair('source','external')
+    FLastDiagnostics:=TJSONObject.Create.AddPair('available',TJSONBool.Create(Fresh)).AddPair('source','external')
       .AddPair('workspaceUri',FWorkspace).AddPair('project',FProject).AddPair('configuration',FConfiguration).AddPair('platform',FPlatform)
       .AddPair('nativeProject',FNativeProject).AddPair('personality',FPersonality)
+      .AddPair('buildRequestId',FId).AddPair('buildState',State).AddPair('logSha256',LogDigest)
       .AddPair('capturedAt',DateToISO8601(Now,False)).AddPair('mayBeStale',TJSONBool.Create(True))
-      .AddPair('reason','Latest completed external build log; IDE and file changes may make these diagnostics stale')
+      .AddPair('reason',IfThen(Fresh,'Reported files are unchanged since result collection; compiler inputs during the build and other dependencies are unverified',Reason))
       .AddPair('diagnostics',TJSONValue(Rows.Clone));
     try
       Result:=TJSONObject.Create.AddPair('action','ideReply').AddPair('requestId',FId).AddPair('result',Payload);

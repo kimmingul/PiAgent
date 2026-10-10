@@ -13,6 +13,7 @@ private
   FErrors: TJSONArray;
   FRoot,FWorkspace: string;
   FStarted,FNextSample,FNextBuild: UInt64;
+  FStartedUtc: TDateTime;
   FMinutes,FSamples,FBuilds: Integer;
   FInTick,FBuilding,FRunning: Boolean;
   FPeakPrivate: UInt64;
@@ -40,7 +41,7 @@ begin
     .AddPair('requestedMinutes',TJSONNumber.Create(FMinutes)).AddPair('fixture',FRoot)
     .AddPair('kind','automated native context/catalog and build soak')
     .AddPair('limitations','No human usage or editor model inference measurement')
-    .AddPair('implementationVersion','0.11.1').AddPair('errors',FErrors);
+    .AddPair('implementationVersion','0.11.2').AddPair('errors',FErrors);
   FTimer:=TTimer.Create(Self); FTimer.Interval:=500; FTimer.OnTimer:=Tick;
 end;
 destructor TIdeSoak.Destroy;
@@ -78,11 +79,18 @@ begin
   TFile.WriteAllText(TPath.Combine(FRoot,'piagent-rad-soak.receipt.json'),FReport.ToJSON,TEncoding.UTF8);
 end;
 procedure TIdeSoak.Finish(Passed: Boolean; const Reason: string);
+var FinishedUtc: TDateTime; TargetMilliseconds: UInt64;
 begin
   FTimer.Enabled:=False; FHost.Cancel('');
+  FinishedUtc:=TTimeZone.Local.ToUniversalTime(Now);
+  TargetMilliseconds:=UInt64(FMinutes)*60000;
+  if Passed and ((GetTickCount64-FStarted<TargetMilliseconds) or
+    (FinishedUtc<FStartedUtc) or
+    (MilliSecondsBetween(FinishedUtc,FStartedUtc)<Int64(TargetMilliseconds))) then
+    raise Exception.Create('Soak completion requires both UTC and monotonic 240-minute coverage');
   SetValue('passed',TJSONBool.Create(Passed));
-  if Passed then SetValue('completedAt',TJSONString.Create(DateToISO8601(Now,False)))
-  else begin SetValue('stoppedAt',TJSONString.Create(DateToISO8601(Now,False))); SetValue('stopReason',TJSONString.Create(Reason)); end;
+  if Passed then SetValue('completedAt',TJSONString.Create(DateToISO8601(FinishedUtc,True)))
+  else begin SetValue('stoppedAt',TJSONString.Create(DateToISO8601(FinishedUtc,True))); SetValue('stopReason',TJSONString.Create(Reason)); end;
   Resources; Save;
 end;
 procedure TIdeSoak.CompleteBuild(Reply: TJSONObject);
@@ -97,7 +105,7 @@ begin
 end;
 procedure TIdeSoak.Tick(Sender: TObject);
 var State,Catalog,Frame,Reply: TJSONObject; ModuleName: array[0..32767] of Char; Project: IOTAProject;
-  Id: TGUID; Elapsed: UInt64;
+  Id: TGUID; Elapsed,TargetMilliseconds: UInt64; UtcNow: TDateTime;
 begin
   if FInTick then Exit; FInTick:=True;
   try
@@ -125,8 +133,8 @@ begin
             if not State.GetValue<Boolean>('passed',False) then raise Exception.Create('Live Core acceptance failed; soak not started');
           finally State.Free; end;
         end;
-        FStarted:=GetTickCount64; FRunning:=True;
-        SetValue('startedAt',TJSONString.Create(DateToISO8601(Now,False)));
+        FStarted:=GetTickCount64; FStartedUtc:=TTimeZone.Local.ToUniversalTime(Now); FRunning:=True;
+        SetValue('startedAt',TJSONString.Create(DateToISO8601(FStartedUtc,True)));
         GetModuleFileName(HInstance,ModuleName,Length(ModuleName));
         SetValue('adapterSha256',TJSONString.Create(DesignerBytesHash(TFile.ReadAllBytes(ModuleName))));
         Resources; Save;
@@ -138,7 +146,10 @@ begin
       if FileExists(TPath.Combine(FRoot,'piagent-soak.cancel')) then begin Finish(False,'Explicit fixture cancellation marker'); Exit; end;
       if FBuilding then begin Reply:=FHost.Poll; if Reply=nil then Exit; CompleteBuild(Reply); Resources; Save; end;
       Elapsed:=GetTickCount64-FStarted;
-      if Elapsed>=UInt64(FMinutes)*60000 then begin
+      TargetMilliseconds:=UInt64(FMinutes)*60000;
+      UtcNow:=TTimeZone.Local.ToUniversalTime(Now);
+      if (Elapsed>=TargetMilliseconds) and (UtcNow>=FStartedUtc) and
+        (MilliSecondsBetween(UtcNow,FStartedUtc)>=Int64(TargetMilliseconds)) then begin
         Finish((FErrors.Count=0) and (FSamples>=FMinutes*12*9 div 10) and
           (FBuilds>=(FMinutes+9) div 10),'Insufficient sample/build coverage'); Exit;
       end;

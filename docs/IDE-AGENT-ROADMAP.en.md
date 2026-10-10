@@ -1,16 +1,63 @@
 # PiAgent development plan for comprehensive IDE integration
 
-Installer hash `8A3A…FD09` identifies the cycle-tested upgrade/rollback/restoration package, not a later repack. Repacked bytes require separate verification; download hashes accompany GitHub release assets (`.exe.sha256`).
+The current 0.11.2 source and prior signed 0.11.1 validation scope are distinguished in [validation](VALIDATION.md) and the [0.11.2 release record](RELEASE-0.11.2.en.md). Hash `8A3A…FD09` below identifies the **earlier 0.11.0** upgrade/rollback/restoration package. Download hashes accompany each GitHub release asset (`.exe.sha256`).
 
 [한국어](IDE-AGENT-ROADMAP.md) · **English** · [Documentation](README.md)
 
-## Follow-up implementation, 2026-10-10
+## Current status — scoped 0.11.2 prerelease source
+
+The original goal is a **connected workflow** in both IDEs: understand the real project, apply reviewed edits, repair from build/test/debugger evidence, and recover safely. Version 0.11.2 source implements and verifies parts of that workflow in bounded fixtures. It does not meet every M0–M6 exit criterion or establish an automatic repair success rate across ordinary projects. The signed 0.11.1 fixture counts in the table are prior-release evidence; later source tests and validation of new signed assets are separate.
+
+| Original workflow | Implemented and verified within scope | Connection still unproven |
+|---|---|---|
+| VS understand → edit → build → test → repair | An actual VS2026 WPF fixture passed 8/8 for context/catalog, targeted build, two-file rename/native Undo, stale-preview refusal, debugger and designer create/event/delete/restore. C#/VB Roslyn navigation, saved-state checks and reviewed edits exist. VSTest/TRX and an explicitly selected MTP CLI/TRX path exist; actual MTP pass/fail reports were checked. | No measured end-to-end run where a model reads a failure, edits repeatedly, reruns tests and completes a general project. MTP requires a framework; filter/runsettings and Test Explorer control are absent. Modern out-of-process WinForms public designer automation is outside scope. |
+| RAD VCL/FMX inspect → change → event → build → restore | Exact signed Win32 and Win64 BPLs each passed VCL 11/11 and FMX 9/9 direct designer checks. Saved standard forms support reviewed create/delete/event and separately approved restore, bounded button Font changes and VCL TListView column captions. Native build, target-bound external Delphi build/diagnostics and conditional DUnitX execution exist. | Separate fixture steps do not prove one complete model repair loop in an arbitrary project or the FMX runtime font appearance. RAD native ghost/Tab, Delphi semantic refactoring, test discovery, locals/frame selection and general collection editing are absent. |
+| Stop session → reconnect → resume safely | Stop drains persistence; disconnect/project switches retire old approvals, queued requests and catalogs. Late UI requests cannot alter drafts, URLs or approval cards, and a new request never automatically replays mutations. The 0.11.1 archived UI passed 93 WebView checks and deterministic lifecycle regression. An earlier actual IDE Stop→Retry→fresh `ide_context` roundtrip also passed. | That live roundtrip belongs to an earlier binary. Its brief model turn repeated a historical cancellation error, retained as a content failure. Version 0.11.1 has not been exercised across diverse models/network failures in a normal IDE profile. |
+
+**Implemented with limited real-use evidence:** backend-specific profiling/comparison, scoped local publish, long-session recovery, physical IME/busy-UI and multi-file fault paths, and varied IDE workloads. Bounded context experiments do not establish causal speed or cost improvement. **Not implemented/supported:** RAD native ghost/Tab, semantic refactoring, native compiler-message enumeration/test discovery, arbitrary inherited/third-party forms or collection insert/delete/reorder, modern VS out-of-process WinForms designer and Test Explorer control, and remote deployment. An investigation did not find a public RAD compiler-message enumeration/subscription API, so only an explicit external build log is exposed as `source=external`; that does not prove every other missing feature is inherently impossible.
+
+**Isolated 240-minute automated IDE runs 3/3 PASS:** after the user lifted the four-hour deferral, unreleased unsigned working-tree RAD13.2 Win64 FMX/VCL and VS2026 WPF ran in parallel. The unchanged verifier found both UTC and monotonic spans above 14,400 seconds; each run recorded 2,867 samples, 24 builds and zero errors. The consolidated `artifacts/ide-soak-20261010/verified-results.json` matches original receipts and adapter hashes. This covers automated IDE observation/builds, not four hours of human use, model inference/repair performance or the signed 0.11.1 binaries. Earlier 0.10.0 strict soak failures remain unchanged. **Matched Copilot/KAI measurements remain deferred.** Normal-profile 0.11.1 install/update/rollback and clean Windows/physical x64 installation were not performed. There is no formal comparison or all-domain superiority result.
+
+The 0.11.0 counts and baseline table below are **historical records**. They are not added to, or substituted for, the current signed 0.11.1 evidence.
+
+### 0.11.2 candidate source — separate from new signed assets
+
+A VS VSTest multi-target path could overwrite TRX files and omit failing-framework
+details. A source-only fix uses `LogFilePrefix` to retain distinct reports,
+compares report count with the target-framework count evaluated without a build,
+and aggregates test/failure totals. A nonzero CLI exit remains a failure. A .NET
+9/10 fixture with its failure condition enabled produced two TRXs (one failure,
+one pass) and exit 1; disabling it produced two TRXs (one pass each) and exit 0.
+The VS console suite passed 95 checks. Report-count validation does not
+independently verify which framework produced each report, and the fixture does not test a model
+repairing code across a continuous workflow. This change is absent from the
+signed 0.11.1 VSIX.
+
+RAD now invalidates cached external diagnostics when another native or external
+build starts, records a build request ID, log SHA-256 and state, and rejects cached
+rows after a reported source file or project changes on disk or an IDE buffer is
+dirty. Win32 and Win64 SDK smoke passed 11/11 each, including an actual E2003
+failure followed by source-change invalidation/restoration. An isolated Win64 VCL
+IDE fixture passed 28 steps and observed `available:false` for external diagnostics
+after the next native build. This checks only whether files stayed unchanged
+**since result collection**; it does not prove all compiler-time input bytes or
+other dependencies were fresh. This change is absent from the released 0.11.1 BPL.
+
+In the installed RAD13.2 `ToolsAPI.pas`, `IOTACompileNotifier` reports build
+start/finish/result, while `IOTAMessageServices` provides message add/clear and
+group management. No public enumeration/subscription API for existing compiler
+message rows was found in the investigated interfaces. Native build outcome and
+compiler diagnostic rows remain distinct; request an explicit external Delphi
+build log when rows are needed. This is a finding about the investigated SDK
+surface, not proof that every workaround or future API is impossible.
+
+## Follow-up implementation and earlier records, 2026-10-10
 
 After the 0.11.0 prerelease, the user requested three **GPT-6-sol** subagents,
 working through session/editor stability, IDE/designer expansion, practical
-validation and comparison preparation. **The four-hour test and measured competitor
-comparison are deferred** at the user's request; original failed soak records remain unchanged. These source
-changes are not features of the already published 0.11.0 installer.
+validation and comparison preparation. **Both the four-hour test and measured competitor
+comparison were deferred at that time**; three separate unsigned isolated 240-minute runs later passed, while competitor measurements remain deferred. Original failed soak records remain unchanged. These source
+changes were not features of the earlier 0.11.0 installer; they are within the signed 0.11.1 scoped prerelease.
 
 - Closing or changing a session retires old approvals, queued messages and IDE
   catalogs. Late prior-turn events cannot change drafts or resurrect approval UI.
@@ -49,26 +96,26 @@ designer automation; inherited/third-party forms and general collection editing;
 broader physical IME/busy-UI usage; clean Windows/physical x64 installation;
 remote deployment, broader profiling and matched Copilot/KAI comparison. Unified
 result-envelope migration also remains incomplete. See [validation](VALIDATION.md)
-for final counts and binary identities. The following body retains the original
-milestone definitions and earlier validation records.
+for final counts and binary identities. The next dated paragraph and counts refer
+to 0.11.0; the rest retains original milestone definitions and the baseline.
 
-Date: 2026-10-09; latest evidence 2026-10-10 KST. Historical baseline: **0.10.0**; current source: **0.11.0 scoped prerelease candidate**. Status: **M0–M6 validation in progress; scoped native recovery and replacement payload checks passed; actual upgrade/rollback/restoration passed; both original soaks strict FAIL.**
+**Earlier 0.11.0 record (2026-10-09):** the baseline was 0.10.0. That scoped 0.11.0 candidate passed native recovery/replacement payload checks and actual upgrade/rollback/restoration; both original strict soak gates failed. This paragraph and the following 211/18/91 counts are not 0.11.1 results.
 
 Latest full Core run: 212 total, **211 PASS, 0 FAIL, 1 optional native-RAD receipt skip** (159,524.7573 ms); final both-architecture adapter integration passed 18/18. Native WebView passed 91, including 12 transitions and recovery/Stop/draft-preservation checks. Core now drains checkpoint/timeline persistence on Stop; explicit Retry connection uses existing native Connect/resumeLast without prompt replay or policy changes. Independent Stop/composer Escape preserve unsent drafts; focused UI 36/36 passed. Recovery VSIX SHA256 `28904BA981EA0C85C08A5BA1E27042D53760BCB3D7EAB81BDAAB39C286345DEF` retains native DLL (SHA256 begins 6A3141) and RAD BPL bytes; six UI files changed from guidance. Actual native Stop→Retry preserved the draft/saved conversation and a fresh explicitly approved IDE context call passed. The intervening tiny turn's historical-error answer remains a separate content failure. Replacement installer `setup-20261009-154200`, SHA256 `8A3A5FAEC53F607A1B5932BBEB536BB699622C859D13478EE8903FF2468CFD09`, passed signed payload/runtime/policy checks; actual upgrade/rollback/restoration passed with 1,056/1,029/1,056 verified payload files respectively. Original benchmark 01/02 passed and 03 remains an operator-interrupted failure with two web-search scope violations. Formal comparison remains pending. Earlier evidence retains its original identity; no whole-plan completion is claimed.
 
 The original VS soak fails the strict four-hour gate: UTC span 14,399.0635 seconds versus Stopwatch 14,400.176 seconds, with 2,869 samples, 24 builds and no recorded errors. Its unequal timestamp anchors do not justify changing the receipt or verifier; it is near-four-hour evidence, not a four-hour PASS. RAD also fails the unchanged strict gate: UTC 14,399.018 seconds versus monotonic 14,400.203 seconds, 2,871 samples, 24 builds and zero errors. Both receipts retain their original 0.10.0 identities and are not strict four-hour PASS results.
 
-The following reports verified scope, not completion of every original milestone exit criterion.
+The following maps **current 0.11.1 scope** to the original milestones; it does not mark every exit criterion complete.
 
 | Milestone | Scoped implementation/verification | Remaining gate or support boundary |
 |---|---|---|
 | M0 | Catalog/gating, bound approvals/lifecycle, contracts and fixtures | C1 uniform envelope intentionally deferred; retain adapter result shapes |
 | M1 | Actual native context/build in both IDEs; explicit target-bound RAD external diagnostics | Native RAD compiler-message enumeration unsupported; broader workloads unverified |
 | M2 | Revision/preview/apply/undo, bounded editor context and saved-session Stop→Retry→fresh IDE roundtrip | Broader dirty/IME/busy-UI/multi-file fault coverage; RAD ghost/Tab unavailable |
-| M3 | Supported tests/debugger/profile paths have scoped actual receipts | Test Explorer/MTP, Delphi discovery/locals/frame selection and unsupported runtime cases unavailable; no general repair-rate claim |
-| M4 | WPF source, .NET Framework WinForms and direct standard VCL/FMX structural preview/apply/restore | Font mutation/persistence acceptance pending; collections unimplemented; inherited/third-party/modern OOP scopes unsupported |
+| M3 | Supported tests/debugger/profile paths have scoped actual receipts; VS VSTest and explicitly selected MTP CLI/TRX runs | Test Explorer control, MTP filter/runsettings, Delphi test discovery/locals/frame selection unavailable; no general repair-rate claim |
+| M4 | WPF source, .NET Framework WinForms and direct standard VCL/FMX structural preview/apply/restore; reviewed RAD standard-button Font and VCL TListView caption mutation/persistence checks | General collection insert/delete/reorder, inherited/third-party/modern OOP scope unsupported; FMX runtime font appearance unverified |
 | M5 | Backend-specific CPU/GC/counters, local publish, protected local Git and bounded-context measurements | Exploratory measurements do not establish causal speed/cost improvement; broader platforms/deployment deferred |
-| M6 | Core 211 PASS, adapters 18/18, WebView 91, native recovery, signed replacement payload checks and actual upgrade/rollback/restoration | original strict four-hour gates FAIL; formal matched comparison incomplete |
+| M6 | Signed 0.11.1 setup checked 1,063 payload files; isolated VS WPF 8/8, RAD VCL/FMX 11/11 and 9/9 on each architecture, archived WebView 93; separate unsigned isolated 240-minute automated IDE observation/build runs 3/3 PASS | Normal-profile 0.11.1 install/update/rollback and physical x64 clean install unverified; prolonged human use and model repair performance unmeasured; formal comparison deferred. The actual 0.11.0 install cycle remains separate evidence |
 
 ## 1. Objective and principles
 
@@ -83,9 +130,9 @@ Enable agents to use the actual project, language, editor, designer, build, test
 
 ## 2. Historical starting point and current implementation
 
-The table below records the original 0.10.0 starting point, not current unavailability. Current 0.11.0 adds typed catalog/state gating, expiring state-bound approvals, immutable semantic/designer previews, exact source/form recovery, bounded editor context, native RAD build/debugger, verified external DUnitX, CPU comparison, VS EventPipe GC/local publish and shared reviewed Git. RAD native ghost/Tab, Delphi semantic refactoring, native compiler-message enumeration and publish remain unavailable. Modern out-of-process WinForms is unavailable; WinUI3 is a source backend without visual-designer/runtime-app proof. See the candidate guide for exact language/framework bounds.
+The table below records the original 0.10.0 starting point, not current unavailability. Current 0.11.1 adds typed catalog/state gating, expiring state-bound approvals, immutable semantic/designer previews, exact source/form recovery, bounded editor context, native RAD build/debugger, verified external DUnitX, CPU comparison, VS EventPipe GC/local publish and shared reviewed Git. RAD native ghost/Tab, Delphi semantic refactoring, native compiler-message enumeration and publish remain unavailable. Modern out-of-process WinForms is unavailable; WinUI3 is a source backend without visual-designer/runtime-app proof. See the candidate guide for exact language/framework bounds.
 
-C1 preserves existing adapter result shapes, transport/session correlation and explicit provenance/uncertainty. A uniform result envelope is intentionally deferred to a separately negotiated capability and adapter migration; arbitrary reads, acknowledgements, stale diagnostics, `applied:false` or zero tests are never normalized into completed success. RAD nested scalar properties (including bounded Font fields) are implemented with actual Font acceptance pending; the test-only loader attempt established inspection only, not mutation/persistence. Collection authoring is not implemented.
+C1 preserves existing adapter result shapes, transport/session correlation and explicit provenance/uncertainty. A uniform result envelope is intentionally deferred to a separately negotiated capability and adapter migration; arbitrary reads, acknowledgements, stale diagnostics, `applied:false` or zero tests are never normalized into completed success. RAD implements bounded, inspected and separately approved `Font.Name`/`TextSettings.Font.Family` on standard VCL/FMX buttons and `TListView.Columns[0..31].Caption` on VCL, with mutation, persistence, reopen and restore verified in isolated IDEs. The earlier test-only Font loader established inspection alone and is not evidence for the current mutation. Arbitrary collection insert/delete/reorder or other properties remain unimplemented.
 
 | Domain | VS2026 / 0.10.0 | RAD13.2 / 0.10.0 | Next scope |
 |---|---|---|---|

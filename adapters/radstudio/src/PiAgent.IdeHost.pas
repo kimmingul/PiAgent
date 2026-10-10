@@ -57,7 +57,7 @@ begin
   finally Context.Free; end;
   Entries:=TJSONArray.Create;
   Result:=TJSONObject.Create.AddPair('schemaVersion',TJSONNumber.Create(1))
-    .AddPair('implementationVersion','0.11.1')
+    .AddPair('implementationVersion','0.11.2')
     .AddPair('workspaceUri',Workspace).AddPair('revision',Revision)
     .AddPair('capturedAt',DateToISO8601(Now,False)).AddPair('entries',Entries);
   Add('ide_context','','supported','','ToolsAPI');
@@ -137,6 +137,7 @@ begin
     end else if Operation='ide_build' then begin
       if FBuild.Busy or FExternal.Busy or FTests.Busy then raise Exception.Create('PiAgent already owns a build/test');
       if Args.GetValue<string>('backend','native')='external' then begin FExternal.Start(Id,Workspace,Args); Exit(nil); end;
+      FExternal.InvalidateDiagnostics;
       Exit(FBuild.Start(Id,Workspace,Args));
     end
     else if Operation='ide_tests' then begin

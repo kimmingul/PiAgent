@@ -308,6 +308,29 @@ begin
           not SameText(Payload.GetValue<string>('nativeProject',''),TPath.Combine(FRoot,'Fixture.dproj')) or
           (Payload.GetValue<string>('source','')<>'external') then begin Reply.Free; raise Exception.Create('External diagnostics lost exact original Delphi identity'); end;
         FReport.AddPair('externalDelphiDiagnostics',Reply);
+        Advance(19);
+      end;
+      19: begin
+        Reply:=Request('ide_build',TJSONObject.Create.AddPair('operation','build').AddPair('backend','native'),True);
+        if Reply=nil then begin Advance(20); Exit; end;
+        Payload:=Reply.GetValue('result') as TJSONObject;
+        if (Payload=nil) or not Payload.GetValue<Boolean>('success',False) then begin
+          Reply.Free; raise Exception.Create('Native build following external diagnostics failed'); end;
+        RecordStep('native_build_after_external_diagnostics',Reply); Advance(21);
+      end;
+      20: begin
+        Reply:=FHost.Poll; if Reply=nil then Exit;
+        Payload:=Reply.GetValue('result') as TJSONObject;
+        if (Payload=nil) or not Payload.GetValue<Boolean>('success',False) then begin
+          Reply.Free; raise Exception.Create('Asynchronous native build following external diagnostics failed'); end;
+        RecordStep('native_build_after_external_diagnostics',Reply); Advance(21);
+      end;
+      21: begin
+        Reply:=Request('ide_diagnostics',TJSONObject.Create,False);
+        Payload:=Reply.GetValue('result') as TJSONObject;
+        if (Payload=nil) or Payload.GetValue<Boolean>('available',True) then begin
+          Reply.Free; raise Exception.Create('Previous external diagnostics remained available after native build'); end;
+        RecordStep('external_diagnostics_invalidated_by_native_build',Reply);
         FReport.AddPair('passed',TJSONBool.Create(True)); Save; FTimer.Enabled:=False;
       end;
     end;

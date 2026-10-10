@@ -19,6 +19,7 @@ contains
   PiAgent.DesignerJournal in 'PiAgent.DesignerJournal.pas',
   PiAgent.DesignerAuthoring in 'PiAgent.DesignerAuthoring.pas',
   PiAgent.BuildDiagnostics in 'PiAgent.BuildDiagnostics.pas',
+  PiAgent.DiagnosticFreshness in 'PiAgent.DiagnosticFreshness.pas',
   PiAgent.BuildCommand in 'PiAgent.BuildCommand.pas',
   PiAgent.OwnedProcess in 'PiAgent.OwnedProcess.pas',
   PiAgent.ExternalBuild in 'PiAgent.ExternalBuild.pas',

@@ -184,13 +184,13 @@ internal static class IdeAcceptanceHarness
     private static void Require(bool value, string message) { if (!value) throw new IOException(message); }
     private static async Task SoakAsync(DTE dte,JObject policy,string root,string uri,int minutes,CancellationToken token)
     {
-        var path=Path.Combine(root,"piagent-vs-soak.receipt.json");var watch=System.Diagnostics.Stopwatch.StartNew();var lastBuild=TimeSpan.Zero;var samples=0;var builds=0;var errors=new JArray();
-        var report=new JObject{["schemaVersion"]=1,["startedAt"]=DateTime.UtcNow.ToString("o"),["requestedMinutes"]=minutes,["kind"]="automated native context/catalog and optional build soak",["limitations"]="No human usage or editor model inference measurement",["fixture"]=root,["implementationVersion"]=typeof(IdeAcceptanceHarness).Assembly.GetName().Version+"+"+typeof(IdeAcceptanceHarness).Assembly.ManifestModule.ModuleVersionId.ToString("N")};
+        var path=Path.Combine(root,"piagent-vs-soak.receipt.json");var startedUtc=DateTime.UtcNow;var watch=System.Diagnostics.Stopwatch.StartNew();var required=TimeSpan.FromMinutes(minutes);var lastBuild=TimeSpan.Zero;var samples=0;var builds=0;var errors=new JArray();
+        var report=new JObject{["schemaVersion"]=1,["startedAt"]=startedUtc.ToString("o"),["expectedEndAt"]=startedUtc.Add(required).ToString("o"),["requestedMinutes"]=minutes,["kind"]="automated native context/catalog and optional build soak",["limitations"]="No human usage or editor model inference measurement",["fixture"]=root,["implementationVersion"]=typeof(IdeAcceptanceHarness).Assembly.GetName().Version+"+"+typeof(IdeAcceptanceHarness).Assembly.ManifestModule.ModuleVersionId.ToString("N")};
         using(var binaryHash=System.Security.Cryptography.SHA256.Create())using(var binary=File.OpenRead(typeof(IdeAcceptanceHarness).Assembly.Location))report["adapterSha256"]=BitConverter.ToString(binaryHash.ComputeHash(binary)).Replace("-","").ToLowerInvariant();
         long peakPrivate=0;int peakHandles=0;
-        void Save(){report["elapsedSeconds"]=watch.Elapsed.TotalSeconds;report["samples"]=samples;report["builds"]=builds;report["errors"]=errors;File.WriteAllText(path,report.ToString(Formatting.Indented, System.Array.Empty<Newtonsoft.Json.JsonConverter>()));}
+        void Save(){report["elapsedSeconds"]=watch.Elapsed.TotalSeconds;report["utcElapsedSeconds"]=(DateTime.UtcNow-startedUtc).TotalSeconds;report["samples"]=samples;report["builds"]=builds;report["errors"]=errors;File.WriteAllText(path,report.ToString(Formatting.Indented, System.Array.Empty<Newtonsoft.Json.JsonConverter>()));}
         Save();
-        try{while(watch.Elapsed<TimeSpan.FromMinutes(minutes)){
+        try{while(watch.Elapsed<required||DateTime.UtcNow-startedUtc<required){
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(token);
             IdeAcceptanceFixtureGuard.Validate(Environment.GetEnvironmentVariable("PIAGENT_VS_ACCEPTANCE"),root,dte.Solution.FullName,out _,out _);
             try{IdeCatalog.Capture(uri);IdeContextTools.Capture(dte,uri);samples++;
@@ -202,7 +202,7 @@ internal static class IdeAcceptanceHarness
                 peakPrivate=Math.Max(peakPrivate,host.PrivateMemorySize64);peakHandles=Math.Max(peakHandles,host.HandleCount);report["peakPrivateBytes"]=peakPrivate;report["peakHandles"]=peakHandles;
             }
             Save();await Task.Delay(5000,token);
-        }report["completedAt"]=DateTime.UtcNow.ToString("o");report["passed"]=errors.Count==0&&watch.Elapsed>=TimeSpan.FromMinutes(minutes);}
+        }var completedUtc=DateTime.UtcNow;report["completedAt"]=completedUtc.ToString("o");report["passed"]=errors.Count==0&&watch.Elapsed>=required&&completedUtc-startedUtc>=required;}
         catch(Exception error){report["passed"]=false;report["stoppedAt"]=DateTime.UtcNow.ToString("o");report["stopReason"]=error.ToString();throw;}
         finally{Save();}
     }

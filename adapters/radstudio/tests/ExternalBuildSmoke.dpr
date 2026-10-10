@@ -4,8 +4,10 @@ uses System.SysUtils, System.IOUtils, System.JSON,
   PiAgent.OwnedProcess in '..\src\PiAgent.OwnedProcess.pas',
   PiAgent.BuildCommand in '..\src\PiAgent.BuildCommand.pas',
   PiAgent.BuildDiagnostics in '..\src\PiAgent.BuildDiagnostics.pas',
+  PiAgent.DiagnosticFreshness in '..\src\PiAgent.DiagnosticFreshness.pas',
   PiAgent.ProjectIdentity in '..\src\PiAgent.ProjectIdentity.pas';
-var Run: TPiOwnedProcess; Args: TArray<string>; Project,Log,Root,Dproj: string; Rows: TJSONArray; Rejected: Boolean;
+var Run: TPiOwnedProcess; Args: TArray<string>; Project,Log,Root,Dproj,Reason,DiagnosticFile: string;
+  Rows: TJSONArray; Snapshot: TJSONObject; Original: TBytes; Rejected: Boolean;
 begin
   try
     Project:=TPath.GetFullPath(ParamStr(1)); Root:=TPath.GetFullPath(ParamStr(2));
@@ -38,8 +40,23 @@ begin
       try
         if (Rows.Count<>1) or ((Rows.Items[0] as TJSONObject).GetValue<string>('code','')<>'E2003') or
           ((Rows.Items[0] as TJSONObject).GetValue<Integer>('line',0)<>5) then raise Exception.Create('Actual structured diagnostics parsing/deduplication failed');
+        if not TryCaptureDiagnosticFiles(Project,Rows,Snapshot,Reason) then
+          raise Exception.Create('Actual diagnostic provenance unavailable: '+Reason);
+        try
+          if not DiagnosticFilesCurrent(Snapshot,Reason) then
+            raise Exception.Create('Fresh compiler error was marked stale: '+Reason);
+          DiagnosticFile:=(Rows.Items[0] as TJSONObject).GetValue<string>('file','');
+          Original:=TFile.ReadAllBytes(DiagnosticFile);
+          try
+            TFile.WriteAllText(DiagnosticFile,'unit ChangedAfterBuild;',TEncoding.UTF8);
+            if DiagnosticFilesCurrent(Snapshot,Reason) then
+              raise Exception.Create('Edited compiler-error source retained stale diagnostics');
+          finally TFile.WriteAllBytes(DiagnosticFile,Original); end;
+          if not DiagnosticFilesCurrent(Snapshot,Reason) then
+            raise Exception.Create('Exact source restoration did not recover diagnostic provenance');
+        finally Snapshot.Free; end;
       finally Rows.Free; end;
     finally Run.Free; end;
-    Writeln('PASS: actual external Delphi MSBuild success/failure and UTF-8 compiler log');
+    Writeln('PASS: actual external Delphi MSBuild success/failure, UTF-8 compiler log, and source-fingerprint invalidation');
   except on E:Exception do begin Writeln(E.Message); ExitCode:=1; end; end;
 end.

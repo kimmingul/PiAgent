@@ -38,7 +38,7 @@ export async function packageCore(destination, { adapters = false, radPlatforms 
   await cp(join(repository,'docs/images'),join(output,'docs/images'),{recursive:true});
   for(const document of ['IDE-BENCHMARK.md','IDE-BENCHMARK.en.md'])
     await cp(join(repository,'docs',document),join(output,'docs',document));
-  for(const document of ['RELEASE-0.11.0.md','RELEASE-0.11.0.en.md'])
+  for(const document of ['RELEASE-0.11.0.md','RELEASE-0.11.0.en.md','RELEASE-0.11.1.md','RELEASE-0.11.1.en.md'])
     await cp(join(repository,'docs',document),join(output,'docs',document));
   for(const document of ['IDE-AGENT-INTEGRATION.md','IDE-AGENT-INTEGRATION.en.md','IDE-AGENT-ROADMAP.md','IDE-AGENT-ROADMAP.en.md','IDE-CATALOG-CONTRACT.md','VS-INTELLIGENCE.md','VS-INTELLIGENCE.en.md','README.md','INSTALLATION.en.md','UNIFIED-INSTALLER.md','UNIFIED-INSTALLER.ko.md','RAD-DESIGNER-DIAGNOSTICS.en.md','LOCALIZATION.md','LOCALIZATION.en.md','RELEASE-0.9.18.md','RELEASE-0.9.18.en.md','RELEASE-0.9.19.md','RELEASE-0.9.19.en.md','RELEASE-0.9.20.md','RELEASE-0.9.20.en.md','RELEASE-0.10.0.md','RELEASE-0.10.0.en.md',`RELEASE-${version}.en.md`])
     await cp(join(repository,'docs',document),join(output,'docs',document));

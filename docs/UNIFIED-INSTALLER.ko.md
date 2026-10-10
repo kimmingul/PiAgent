@@ -2,12 +2,12 @@
 
 **한국어** · [English](UNIFIED-INSTALLER.md) · [문서](README.md)
 
-문서 갱신: 2026-10-10. 0.11.1 제한적 사전 릴리즈의 첫 서명 설치파일은 서명·payload/runtime·정책 검사를 통과했다. 최종 배포 자산의 해시는 릴리즈 `.exe.sha256`을 따른다. 일반 IDE 프로필 설치/복구는 수행하지 않았으며, 이전 0.11.0의 서명·설치 receipt는 원래 버전과 함께 유지한다.
+문서 갱신: 2026-10-11. 0.11.2 제한적 사전 릴리즈의 최종 서명 자산은 자체 `.exe.sha256`과 [검증 이력](VALIDATION.md)으로 확인한다. 이전 0.11.1의 서명 패키지 검사와 미서명 작업 트리 240분 시험은 새 패키지의 검증 근거가 아니다. 일반 IDE 프로필 설치/복구는 별도 조건이며, 이전 0.11.0의 서명·설치 receipt는 원래 버전과 함께 유지한다.
 이전 0.9.18에서 Core와 RAD32/64를 업데이트하고 중복 RAD BPL 등록을 정리했다.
-설치 기록과 실제 IDE 검증은 구분한다. 0.11.1 서명 VS2026 WPF 8/8과 RAD13.2 Win32/Win64의 VCL 11/11·FMX 9/9 격리 fixture를 통과했다. 일반 프로필 설치와 4시간 재검증은 별도 조건이다.
+설치 기록과 실제 IDE 검증은 구분한다. 이전 0.11.1 서명 VS2026 WPF 8/8과 RAD13.2 Win32/Win64의 VCL 11/11·FMX 9/9 격리 fixture를 통과했다. 후속 미서명 소스의 자동 240분 IDE 시험은 3/3 통과했다. 새 서명 0.11.2 자산의 검증과 일반 프로필 설치는 별도 조건이다.
 [세션 복구](SESSION-RECOVERY-FIX.md)와 [검증 기록](VALIDATION.md)을 참고한다.
 
-출력 파일은 `dist/PiAgent-Setup-0.11.1.exe`이며 asset 경로는 `releases/download/v0.11.1/PiAgent-Setup-0.11.1.exe`다. [릴리즈 자산](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.1)과 SHA-256을 확인한다. 하나의 독립 실행 설치파일로
+출력 파일은 `dist/PiAgent-Setup-0.11.2.exe`이며 asset 경로는 `releases/download/v0.11.2/PiAgent-Setup-0.11.2.exe`다. [릴리즈 자산](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.2)과 SHA-256을 확인한다. 하나의 독립 실행 설치파일로
 Windows x64와 ARM64를 지원한다. ARM64에서는 설치파일이 x64 호환 실행되며,
 설치되는 Node.js, .NET, OMP는 시스템의 네이티브 아키텍처를 사용한다.
 시스템 PATH나 기존 런타임을 교체하지 않는다.

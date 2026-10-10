@@ -1,6 +1,6 @@
 # PiAgent pipe protocol v1
 
-문서 상태: 2026-10-09, 구현 0.11.1 후보. pipe protocol은 v1 및 additive capability 협상을 유지한다.
+문서 상태: 2026-10-11, 구현 0.11.2 후보. pipe protocol은 v1 및 additive capability 협상을 유지한다.
 제품 버전과 protocol 버전은 별개이며 CORE_VERSION은 package 버전에서 생성한다.
 현재 구현의 인증 후 idle 정책과 turn activity/종료 계약은 아래 해당 절을 따른다.
 새 기능을 제공했다고 해서 wire version을 임의로 올리거나 미협상 기능을 활성화하지 않는다.

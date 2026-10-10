@@ -1,4 +1,4 @@
-# Windows 설치 (0.11.1 제한적 사전 릴리즈)
+# Windows 설치 (0.11.2 제한적 사전 릴리즈)
 
 **한국어** · [English](INSTALLATION.en.md) · [문서](README.md)
 
@@ -6,7 +6,7 @@ OMP나 AI 코딩 도구가 처음이라면 [처음 설치하기](GETTING-STARTED
 IDE 준비부터 AI 연결, 첫 답변까지 설치 순서 도식과 단계별 완료 기준을 제공합니다.
 현재 설치파일의 RAD 자동 등록 대상은 13.2이며, RAD11/12는 해당 SDK로 별도 빌드해야 합니다.
 
-문서 갱신일: 2026-10-10 KST. 서명 배포 파일은 `dist/PiAgent-Setup-0.11.1.exe`이며 릴리즈 asset 경로는 `releases/download/v0.11.1/PiAgent-Setup-0.11.1.exe`다. 첫 패키지의 서명·payload/runtime·정책 검사가 통과했다. 최종 배포 파일의 해시는 릴리즈 자산의 `.exe.sha256`과 [검증 이력](VALIDATION.md)을 따른다. [GitHub Releases](https://github.com/kimmingul/PiAgent/releases)에서 자산을 확인한다.
+문서 갱신일: 2026-10-11 KST. 배포 경로는 `releases/download/v0.11.2/PiAgent-Setup-0.11.2.exe`다. 완성된 서명 자산과 동봉 `.exe.sha256`을 [GitHub Releases](https://github.com/kimmingul/PiAgent/releases/tag/v0.11.2)에서 확인한다. 이전 0.11.1의 패키지 검사와 미서명 작업 트리 240분 시험은 새 서명 설치파일을 인증하지 않는다. 새 자산의 검사 근거는 [검증 이력](VALIDATION.md)을 따른다.
 설치 UI에서 Core, RAD13.2 32/64-bit, VS2022 (17.14 이상)/2026와 미설치 OMP의 설치 여부를 선택한다.
 기존 설치에서 선택하지 않은 adapter는 유지되므로 선택 해제가 제거를 뜻하지 않는다.
 
@@ -26,7 +26,7 @@ VS는 Tools → PiAgent: Open Chat, RAD는 View/Tools → PiAgent에서 연다.
 VS2022 (17.14 이상)/2026, RAD32/64 등록을 기록한다. Core와 RAD를 선택 업데이트하여 중복 BPL 등록을 정리했다.
 [0.10.0 릴리즈](RELEASE-0.10.0.md)는 세션 복구와 디자이너 진단 수정을 포함한다.
 릴리즈 빌드·게시는 현재 설치본을 자동 교체하지 않는다.
-0.11.0의 실제 설치/업데이트/복구 기록은 [이전 릴리즈](RELEASE-0.11.0.md)에 보존한다. 0.11.1 소스는 격리 VS2026과 RAD13.2 Win32/Win64 fixture를 통과했지만, 등록만으로 실사용 PASS를 뜻하지 않는다. 일반 IDE 프로필의 0.11.1 설치/업데이트/복구는 수행하지 않았다. [지원 범위](IDE-AGENT-INTEGRATION.md)를 따른다.
+0.11.0의 실제 설치/업데이트/복구 기록은 [해당 릴리즈](RELEASE-0.11.0.md)에 보존한다. 0.11.1의 서명 fixture 근거는 [이전 릴리즈](RELEASE-0.11.1.md)에 있다. 0.11.2 이전 미서명 작업 트리의 격리 240분 IDE 시험은 3/3 통과했지만 일반 IDE 프로필 설치/업데이트/복구나 새 서명 설치파일의 4시간 시험 근거는 아니다. [지원 범위](IDE-AGENT-INTEGRATION.md)를 따른다.
 
 RAD 폼 디자이너에서 권한 관련 메시지가 나오면 [승인과 변경 차단 안내](RAD-DESIGNER-DIAGNOSTICS.md)를 따른다.
 업데이트할 때 모든 RAD IDE를 종료하고 해당 RAD32/64 항목을 선택한다.
@@ -84,7 +84,7 @@ registry로 테스트 프로필을 등록할 경우 64-bit IDE는 `Known Package
 ARM64 Windows의 RAD IDE는 설치된 Win32/Win64 IDE의 호환 실행을 사용하며 ARM64 BPL은 제공하지 않는다.
 RAD [별도 registry profile](https://docwiki.embarcadero.com/RADStudio/Athens/en/IDE_Command_Line_Switches_and_Options)은
 `bds.exe -rPiAgentValidation07`로 실행할 수 있다. 기존 RADAgent profile/package는 그대로 둔다.
-이전 0.11.0 범위의 VS2022 VB 5/5·WinUI3 소스 7/7·WinForms 8/8 기록은 [검증 이력](VALIDATION.md)에 남아 있다. WinUI3 네이티브 visual designer/실행 앱을 검증한 것은 아니며 4시간 재검증은 사용자 요청으로 보류했다. 0.11.1 서명 패키지 검사와 격리 IDE 결과는 [릴리즈 기록](RELEASE-0.11.1.md)에서 구분한다.
+이전 0.11.0 범위의 VS2022 VB 5/5·WinUI3 소스 7/7·WinForms 8/8 기록은 [검증 이력](VALIDATION.md)에 남아 있다. WinUI3 네이티브 visual designer/실행 앱을 검증한 것은 아니다. 후속 미서명 작업 트리의 자동 240분 IDE 시험 3/3은 [0.11.2 릴리즈 기록](RELEASE-0.11.2.md)에 범위를 구분한다. 조건을 맞춘 Copilot/KAI 실측 비교는 수행하지 않았다.
 
 기본 이외의 pipe를 사용하면 IDE를 시작하기 전에 PIAGENT_PIPE_NAME을 설정한다.
 수동 archive만 배포한 환경에서는 daemon을 먼저 실행한다. 통합 설치본의 adapter는 자동 실행을 지원한다.

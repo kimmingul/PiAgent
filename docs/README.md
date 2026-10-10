@@ -2,8 +2,8 @@
 
 [한국어 README](../README.md) · [English README](../README.en.md)
 
-현재 문서 버전: **0.11.1 제한적 사전 릴리즈**. 소스·격리 IDE와 첫 서명 설치파일 검사를 통과했다. 최종 배포 자산의 해시는 릴리즈 `.exe.sha256`을 따른다. 사용자의 요청으로 4시간 재검증과 경쟁 제품 실측 비교는 차후 진행한다. 아래 주요 사용 문서는 한국어와 영어를 제공한다.
-Current documentation version: **0.11.1 scoped prerelease**. Source, isolated IDE and first signed-installer checks passed. The final release asset uses its own `.exe.sha256`. The four-hour retest and measured competitor comparison are deferred at the user's request. Main guides are available in Korean and English.
+현재 문서 버전: **0.11.2 제한적 사전 릴리즈**. 서명된 VSIX와 RAD Win32/Win64 BPL의 격리 IDE 검사를 통과했다. 미서명 작업 트리의 자동 240분 시험은 3/3 통과했으며 새 서명 바이트의 장시간 시험은 아니다. 최종 재포장 설치파일은 자체 해시·검증 기록을 따른다. 경쟁 제품 실측 비교는 수행하지 않았다. 주요 사용 문서는 한국어와 영어를 제공한다.
+Current documentation version: **0.11.2 scoped prerelease**. Signed VSIX and RAD Win32/Win64 BPLs passed isolated IDE checks. Automated 240-minute runs passed 3/3 on unsigned working-tree binaries, separately from long-duration testing of the signed bytes. The final repacked installer requires its own hash and validation record. Matched competitor measurements have not been performed. Main guides are available in Korean and English.
 
 | 문서 / Guide | 한국어 | English |
 |---|---|---|
@@ -16,8 +16,9 @@ Current documentation version: **0.11.1 scoped prerelease**. Source, isolated ID
 | IDE 통합 사용 / IDE integration usage | [가용성·승인·복구·범위](IDE-AGENT-INTEGRATION.md) | [Availability, approval, recovery and scope](IDE-AGENT-INTEGRATION.en.md) |
 | IDE 제품 비교 실행 규약 / IDE product comparison protocol | [과제·반복·증거·판정](IDE-BENCHMARK.md) | [Tasks, repetitions, evidence and eligibility](IDE-BENCHMARK.en.md) |
 | 언어 설정 / Language settings | [언어 지원](LOCALIZATION.md) | [Language support](LOCALIZATION.en.md) |
-| 현재 사전 릴리즈 / Current prerelease | [0.11.1](RELEASE-0.11.1.md) | [0.11.1](RELEASE-0.11.1.en.md) |
-| 이전 사전 릴리즈 / Previous prerelease | [0.11.0](RELEASE-0.11.0.md) | [0.11.0](RELEASE-0.11.0.en.md) |
+| 현재 사전 릴리즈 / Current prerelease | [0.11.2](RELEASE-0.11.2.md) | [0.11.2](RELEASE-0.11.2.en.md) |
+| 이전 사전 릴리즈 / Previous prerelease | [0.11.1](RELEASE-0.11.1.md) | [0.11.1](RELEASE-0.11.1.en.md) |
+| 더 이전 사전 릴리즈 / Earlier prerelease | [0.11.0](RELEASE-0.11.0.md) | [0.11.0](RELEASE-0.11.0.en.md) |
 | 이전 릴리즈 / Previous release | [0.10.0](RELEASE-0.10.0.md) | [0.10.0](RELEASE-0.10.0.en.md) |
 | 이전 장시간 대화 수정 / Previous long-running chat fixes | [0.9.20](RELEASE-0.9.20.md) | [0.9.20](RELEASE-0.9.20.en.md) |
 | 이전 언어 지원 / Previous language support | [0.9.19](RELEASE-0.9.19.md) | [0.9.19](RELEASE-0.9.19.en.md) |
